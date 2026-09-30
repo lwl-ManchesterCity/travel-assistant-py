@@ -6,13 +6,14 @@ httpx 顶掉 RestTemplate，LangChain `create_agent` + `@tool` 顶掉 `PlannerIn
 业务规则、阈值、文案、字段名一律照搬 Java 源码。
 Java 侧的三个接口端点（`/api/trips/plan`、`/api/trips/adjust`、`/api/map/config`）、前端页面与静态资源挂载已全部搬完。
 
-> ## ⚠️ 本版本必须有可用模型
+> ## 取数链路有两条路径
 >
-> 取数链路（候选景点 / 出行天气 / 候选酒店）已经改成 `create_agent` 驱动的模型自主选工具，
-> **不再具备 Java 侧"关掉 LLM 也能纯规则出完整行程"的能力**。
-> 没有可用模型（`TRAVEL_LLM_ENABLED` 未开、或缺 api-key / base-url / model 任一项）时，
-> 请求会直接返回 400 `TRIP_PLANNING_ERROR`，提示"未配置可用模型"。
-> 纯规则取数兜底留到下一轮补，详见 `MIGRATION_NOTES.md` 第三节第 1 条。
+> 配了可用模型（`TRAVEL_LLM_ENABLED=true` 且 api-key / base-url / model 都非空）时，
+> 候选景点 / 出行天气 / 候选酒店由 `create_agent` 驱动的模型自主选工具获取；
+> 没有可用模型时自动退回 Java `PlannerInputBuilder` 的固定顺序（景点 → 天气 → 酒店），
+> 需求解析与结果文案走规则兜底（`需求理解来源：rule`、`结果文案来源：规则文案`），
+> 与 Java 关掉 `travel.llm.enabled` 的行为一致 —— 不配模型也能出完整行程。
+> 详见 `MIGRATION_NOTES.md` 第三节第 1 条。
 
 ## 1. 安装
 
@@ -39,7 +40,7 @@ OpenAI-Compatible 地址 + `qwen-plus`（与 Java 相同），但走的是通用
 
 | 环境变量 | Java `application.yml` | 默认值 |
 | --- | --- | --- |
-| `TRAVEL_LLM_ENABLED` | `travel.llm.enabled` | `false`（本版本必须置为 `true`） |
+| `TRAVEL_LLM_ENABLED` | `travel.llm.enabled` | `false`（置 `true` 才走模型自选工具，否则按 Java 固定顺序纯规则取数） |
 | `TRAVEL_LLM_BASE_URL` | `travel.llm.base-url` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | `TRAVEL_LLM_API_KEY` / `DASHSCOPE_API_KEY` | `travel.llm.api-key` | 空 |
 | `TRAVEL_LLM_MODEL` | `travel.llm.model` | `qwen-plus` |
@@ -227,6 +228,6 @@ MIGRATION_NOTES.md        Java->Python 映射表 + 全部不一致清单
 
 ## 7. 已知差异
 
-凡是与 Java 不一致的地方（必须有可用模型、模型自选工具取代固定顺序、api-key 在日志与异常文案里打码、
+凡是与 Java 不一致的地方（模型自选工具取代固定顺序取数、`/adjust` 的嵌套校验会级联、api-key 在日志与异常文案里打码、
 `TripPlanResponse` 是源项目死类、引用相等语义的移植、配置默认值取 yml 生效值等）
 全部记在 [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)，其中第四节列出了刻意保留、未修的源项目行为。

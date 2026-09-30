@@ -23,6 +23,9 @@ TripAdjustmentRequest/TripAdjustmentResponse、TripPlanningService.adjustTrip）
 至此 Java 侧的对外接口（`/api/trips/plan`、`/api/trips/adjust`、`/api/map/config`）与前端页面全部搬完，
 Java 侧不再有未搬的 controller、model 或静态资源。
 
+本轮补齐：无可用模型时的纯规则取数兜底（`PlanningDataAgent._collect_by_fixed_order`，即 Java 的固定顺序），
+第三节第 1 条由"接受的不一致"改成"已实现的两条路径"；项目初始化 git 仓库并加 `.gitignore`。
+
 ---
 
 ## 二、Java -> Python 文件映射表
@@ -112,22 +115,25 @@ Java 侧不再有未搬的 controller、model 或静态资源。
 
 ## 三、语义不一致清单
 
-### 1. 本版本必须有可用模型（最重要）
+### 1. 取数链路两条路径：有模型走 create_agent，无模型退回 Java 固定顺序
 
 - Java：`travel.llm.enabled=false` 时仍能出完整行程，取数是三个 agent 的固定顺序方法调用，LLM 只用于需求解析和文案润色，
-  两处都有规则兜底（`analysisSource=rule-fallback`、`结果文案来源：规则文案`）。
-- Python：取数链路改成 `create_agent`，必须有可用的 chat model 才能跑通。`OpenAiCompatibleLlmClient.is_available()`
-  为假时，`PlanningDataAgent.collect` 直接抛 `TripPlanningException("未配置可用模型：本版本取数链路依赖 LangChain create_agent，需要先配置 travel.llm（enabled、api-key、base-url、model）")`，
-  由 `api/error_handlers.py` 返回 400 `TRIP_PLANNING_ERROR`。
-- 影响：没有模型 key 就无法规划；`RequirementAnalysisService` / `LlmNarrationService` 的规则兜底逻辑照搬且仍生效，
-  但只在链路已经跑起来之后起作用。
-- 处理：本轮接受，README 顶部显著声明；纯规则取数兜底留到下一轮。
+  两处都有规则兜底（`analysisSource=rule`、`结果文案来源：规则文案`）。
+- Python：该能力已补齐（早先版本这里会直接抛"未配置可用模型"，已删除）。`is_available()` 为真时走
+  `create_agent` 由模型自选工具；为假时 `PlanningDataAgent._collect_by_fixed_order` 按
+  `search_attractions -> query_weather -> recommend_hotels` 顺序逐个 `invoke({})`，就是 Java 的那个顺序；
+  任一源报错立即 `break`，后面的源不再发请求，异常仍由 `data_tools.raise_planning_errors` 冒泡成同一句 400 文案。
+- 与 Java 的剩余差别：Java 是直接调三个 agent 方法、异常当场逃出 `build()`；Python 复用同一批 LangChain 工具对象
+  （工具内部仍是那三个 agent），异常先暂存进 `context.errors`、取数收尾时再抛。对外可见的提示文案、
+  短路位置（第一个失败点之后的源不再被调用）与 Java 一致，只有"抛出时机"晚了几行代码。
+- 判据：`is_available()` 的四个条件（`enabled` + 非空 `api-key` + `base-url` + `model`）任一不满足即走固定顺序，
+  比 Java 只看 `travel.llm.enabled` 一个开关更严格；异常暂存的细节见第 3 条。
 
 ### 2. 取数编排：固定顺序 -> 模型自主选工具
 
 - Java：`PlannerInputBuilder.build()` 里依次 `attractionAgent.search()` -> `weatherAgent.query()` -> `hotelAgent.recommend()`。
 - Python：`create_agent(model, tools=[search_attractions, query_weather, recommend_hotels], system_prompt=...)`，
-  调用顺序和轮次由模型决定。
+  调用顺序和轮次由模型决定。没有可用模型时不走这条路，退回上面那三个工具的固定顺序（见第 1 条）。
 - 为保证事实仍来自数据源而不是模型编造：三个工具都是**零参数**，查询条件从请求级 `PlanningContext`（contextvar）里取，
   取到的结构化结果写回同一个 context；system prompt 明确禁止编造景点/酒店/价格/坐标/天气，只允许复述"数据已就绪"。
   PlannerAgent 只读 context 里的结构化对象，不读模型的自然语言。
@@ -428,7 +434,7 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
 .venv/bin/python -m pytest -q
 ```
 
-共 52 条用例（`52 passed`）。
+共 55 条用例（`55 passed`）。
 
 - `tests/test_planner_agent.py` 对应 `PlannerAgentTest.java`（断言逐条照搬，含
   "ReflectionAgent 已对每日方案完成预算、路线、天气反思评估" 与 `agentName=ReflectionAgent`）。
@@ -500,9 +506,22 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
   `{enabled, jsApiKey, securityJsCode, provider, message}` 且 `jsApiKey` 原样透传（测试用假值，不读 `.env`）、
   未配置与纯空白两种输入都落 `enabled=false` + `jsApiKey=""`（`securityJsCode` 仍按 Java 无条件透传）、
   以及静态挂载不遮 `/api/` 路由（见第三节第 22 条）。
+- `tests/test_planning_data_agent.py` 的 3 条钉住取数两条路径：模型不可用时按
+  `attraction -> weather -> hotel` 各调一次且结果写回 context；景点源抛错时短路（后两个源不被调用）
+  并由 `raise_planning_errors` 抛出同一句文案；模型可用时仍然只走 `create_agent`、不碰固定顺序。
 - 取数顺序由模型决定已单独验证：同一份工具与代码，仅替换 system prompt 的顺序倾向，实际调用序列由
   `['search_attractions', 'query_weather', 'recommend_hotels']` 变成
   `['recommend_hotels', 'query_weather', 'search_attractions']`（三个工具在同一轮模型输出里并行发起）。
+- 关掉模型的真实请求验证（2026-09-30，`TRAVEL_LLM_ENABLED=false SERVER_PORT=8123`，四源仍为 `amap`，密钥只在 `.env`）：
+  与浏览器那次同一份杭州 3 天请求体 → **HTTP 200，`time_total=2.958s`，响应 18846 字节**，
+  `days=3`、`budget={total:2975, requestedBudget:3000, remainingBudget:25, status:"within_budget", withinBudget:true}`、
+  第 1 天景点 `杭州西湖风景名胜区`、`routePlan.providerName=高德地图路线规划` +
+  `高德路线已生成，共 2 段，预计 23.8 公里，通勤约 60 分钟`、`weatherInfo` 全部 `source=amap-live`。
+  零模型调用的证据：`planningNotes` 里是 `需求理解来源：rule` 与 `结果文案来源：规则文案`，
+  `loopIterations` 两条 `critiqueSource=rule`（动作 `REPLACE_OUTDOOR_WITH_INDOOR`、`reflectionScore=50`），
+  整个响应体没有任何含 "LLM" 或 "模型" 字样的备注。
+  服务端日志 8 行、2 条 WARNING 是高德路线逐段请求撞上 `CUQPS_HAS_EXCEEDED_THE_LIMIT`，
+  按 Java 既有的限流保护自动回退规则路线、不影响整体 200；日志里 `key=` 出现 0 次、两把真实密钥出现 0 次。
 - 前端页面的浏览器验收（2026-09-30，真实 Chrome 打开 `http://localhost:8123/`，四源 `amap` + 真实模型）：
   页面自己组装出的请求体为
   `{"city":"杭州","startDate":"2026-09-30","endDate":"2026-10-02","budget":3000,"preferences":["自然风景","美食","轻松节奏"],"transportation":"公共交通","accommodation":"舒适型酒店","extraRequirements":""}`
