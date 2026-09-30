@@ -535,11 +535,20 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
   RouteStep / Budget / WeatherInfo / AgentTrace / LoopExecutionSummary / LoopIterationTrace / MapConfigResponse）
   逐字段与 Python 响应体吐出的驼峰键比对，**页面读取但后端不吐的字段 0 条**，因此 `index.html` 零改动拷贝，
   既没改前端也没改后端序列化。
-- 地图区结论：**卡在缺 `AMAP_WEB_JS_KEY` / `AMAP_SECURITY_JS_CODE`**（`.env` 两项为空）。
+- 地图区结论（当次 `.env` 两项为空时）：**卡在缺 `AMAP_WEB_JS_KEY` / `AMAP_SECURITY_JS_CODE`**。
   `GET /api/map/config` 返回 `enabled=false`，页面走 Java 的 disabled 分支，`.map-box` 内只有
   `map-placeholder`「真实地图待开启 / 尚未配置 AMAP_WEB_JS_KEY，当前地图暂显示占位提示」，
   `#amap-canvas` 不存在、Marker 与 Polyline 数量为 0，未加载高德 SDK，也没有用假底图代替。
   同一份方案里的路线数据本身是真实的（`routePlan.provider=amap`，地图卡右上角显示"高德地图路线规划 / 2段路线"）。
+- 补配 JS key 之后的地图验证（同日，`.env` 填入「Web端(JS API)」类型的 key 与安全密钥，各 32 字符）：
+  启动日志 `amap.webJsEnabled=True`，`GET /api/map/config` 转为
+  `{enabled:true, jsApiKey:<32 字符>, securityJsCode:<32 字符>, provider:"amap-jsapi", message:"高德地图前端配置已就绪"}`；
+  真实 Chrome 重跑一次杭州 3 天后 `.map-box` 变成 `amap-container`：`window.AMap` 已加载、
+  `window._AMapSecurityConfig` 已设、canvas 1 个、`.amap-marker` 2 个（酒店 H 点 + 景点 1 号点）、
+  蓝色 Polyline 按当日 2 段路线绘制、比例尺与"高德地图 © 2026 AutoNavi"水印出现，
+  角标由"真实地图待开启"变为 `真实地图 · 第1天 · 高德地图路线规划`；切到第 2 天后角标与点线全部重绘。
+  控制台只有两条与地图无关的提示（label 用法、AMap 自身的 Canvas2D willReadFrequently 警告），
+  无 `INVALID_USER_KEY` 一类鉴权错误；记录里的 SDK 请求 URL 已按 `key=***` 打码。
 - Agent 轨迹与 loop 区块显示的是第 1 轮的真实数据：`Loop Planning 已启用 / 执行轮次：2 / 最终采用：第1轮方案 /
   停止原因：检测到循环调整重复，保留当前最优方案`；`第1轮循环` 卡片带"最终采用"徽标、动作
   `REPLACE_OUTDOOR_WITH_INDOOR`、`总分 50 / 预算 0 / 路线 0 / 天气 50 / 体验 0`、系统动作与
@@ -547,7 +556,8 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
   `1. LoopPlanningAgent / success / 第 1 轮生成初稿` 开始逐条列出。
 - 截图与 DOM 证据在 `_verify/`：`01-overview.png`、`02-map-section.png`、`03-agent-trace.png`、
   `04-days.png`、`05-fullpage.png`（1440x6410 整页）与 `api-calls.json`、`browser-network.txt`、
-  `render-summary.json`、`loop-block-dom.json`。截图取自一次性 headless Chrome：加载未改动的 `index.html`，
+  `render-summary.json`、`loop-block-dom.json`。补配 JS key 后新增 `06-map-day1-real.png`、`07-map-day2-real.png`
+  （真底图 + 酒店 H 点与景点 1 号点 + 当日 Polyline）与 `map-real-api-calls.json`。截图取自一次性 headless Chrome：加载未改动的 `index.html`，
   调用页面自带的 `renderResult()` 渲染**上面那次真实 200 响应的原样落盘数据**（真实浏览器窗口在另一个 Space，
   macOS `screencapture` 只能拿到缩略图，故改用 headless 出图；页面代码与后端均未为此改动）。
   `browser-network.txt` 里是真实 Chrome 那次的三个接口状态码与服务端访问日志摘录。
