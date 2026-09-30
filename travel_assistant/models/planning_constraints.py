@@ -1,0 +1,18 @@
+from typing import Optional
+
+from .base import CamelModel
+
+
+class PlanningConstraints(CamelModel):
+    relaxed_pace: bool = False
+    avoid_seafood: bool = False
+    wants_landmark_ceremony: bool = False
+    prefers_indoor_backup: bool = False
+    extracted_tags: Optional[list[str]] = None
+    analysis_source: Optional[str] = None
+
+    def __init__(self, **data) -> None:
+        super().__init__(**data)
+        # Java 构造器把 analysisSource 固定成 "rule"，RequirementsService 之后再改写。
+        if self.analysis_source is None:
+            self.analysis_source = "rule"

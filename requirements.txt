@@ -1,0 +1,14 @@
+# 与 Java pom.xml 的依赖角色对照：Spring Boot Web/Validation -> FastAPI + pydantic，
+# RestTemplate -> httpx，Spring AI/OpenAI 兼容调用 -> langchain + langchain-openai。
+# 本机直连 pypi 会超时，安装命令用阿里云镜像：
+#   uv venv .venv && uv pip install -p .venv/bin/python --index-url https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-dotenv==1.2.3
+httpx==0.28.1
+langchain==1.4.2
+langchain-core==1.6.3
+langchain-openai==1.6.2
+pytest==9.1.1
