@@ -249,7 +249,7 @@ MIGRATION_NOTES.md        Java->Python 映射表 + 全部不一致清单
 `test_trip_plan_controller.py` 里追加的 3 条 `/adjust` 用例同样取自 Java 源码：Java 没有对应测试方法。
 `tests/test_map_config_controller.py` 的 4 条取自 `MapConfigController.java` 的两个分支
 （`enabled` 真/假/纯空白，以及静态挂载不遮 `/api/` 路由）：Java 侧没有对应的测试类。
-`tests/test_ask_agent.py` 的 6 条属于扩展能力（Java 无对应物），用一个"按脚本调工具"的假 graph 顶掉模型，
+`tests/test_ask_agent.py` 的 7 条属于扩展能力（Java 无对应物），用一个"按脚本调工具"的假 graph 顶掉模型，
 跑真工具、真上下文、真留痕：钉住"无模型直接 400"、只读工具各调一次的留痕、按天游标、
 景点名对不上时 `not_found` 且不外发请求、联网失败仍出回答并记 `failed`、空白问题挡成 400。
 

@@ -141,6 +141,7 @@
 4. 假模型要求换天 → 断言 `get_day_plan` 被调两次、`day_index` 依次为 0 和 1。
 5. 联网工具抛异常时 → 响应仍是 200，那条 trace `status=failed`，回答改用方案内数据并承认查不到。
 6. 景点名对不上方案时 → 该条 trace `status=not_found`，返回值里带方案内景点清单，且不发起任何外部请求。
+7. 空请求体 → 400 `VALIDATION_ERROR`，details 三条齐全（`question: must not be blank`、`tripPlan: must not be null`、`request: must not be null`）。
 
 真实跑（`SERVER_PORT=8123`，模型开启）10 题，判据是 ≥8 题答案中的数字能在方案里对上：
 
@@ -184,7 +185,10 @@
 ## 11. 实现结果（2026-10-06）
 
 1. 分支 `feature/ask-agent`；新增 8 个文件（3 个 model/context/tools/agent/controller + 1 个测试 + 本文档），改动 5 个（`main.py`、`container.py`、两个 `__init__.py`、`index.html`）。
-2. 单测：`.venv/bin/python -m pytest -q` → **61 passed**（原 55 + 新 6），老用例一条未改。
+2. 单测：`.venv/bin/python -m pytest -q` → **62 passed**（原 55 + 新 7），老用例一条未改。
+   其中第 7 条是启动复查时抓出来的真缺陷：`AskRequest` 少写 `validate_default=True`，
+   导致空请求体绕过字段校验、错误地以 `TRIP_PLANNING_ERROR`「回传的方案里没有可追问的内容」收场；
+   补上后空体正常挡成 400 `VALIDATION_ERROR` 三条 details。
 3. 真实追问 10/10 全部 200，单题耗时 1.3~3.2 秒。取数路径逐题可核对，摘三条：
    - "这趟一共花多少钱" → 只调 `get_plan_overview`，答"总花费 2937 元，预算 3000 元，结余 63 元"，与响应体 `budget` 字段一致。
    - "西溪湿地门票多少钱" → 第一次 `get_attraction_detail`（`not_found`，返回方案内景点清单）→ 第二次改名命中 → 答"60 元、建议停留 180 分钟"。**没有一次外发高德请求**。

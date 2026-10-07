@@ -575,7 +575,7 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
    `agent/ask_tools.py`、`agent/ask_agent.py`、`api/ask_controller.py`、`tests/test_ask_agent.py`、
    `docs/ASK_AGENT_DESIGN.md`；改动 `main.py`、`config/container.py`、两个 `__init__.py` 与 `static/index.html`。
 3. 对既有链路的影响：`/api/trips/plan`、`/api/trips/adjust`、`/api/map/config` 的语义、响应体与错误分支
-   一字未改，原有 55 条用例未作修改且仍全绿（合并后共 61 条）。
+   一字未改，原有 55 条用例未作修改且仍全绿（合并后共 62 条）。
 4. 唯一一处会破坏"与 Java 一致"的地方是前端页面加了追问区块，因此该一致性声明只在 `main` 分支上成立。
 5. 设计与逐题验证：见 `docs/ASK_AGENT_DESIGN.md` 第 11 节（真实 10 题全 200、单题 1.3~3.2 秒、
    护栏命中与留痕形状均有记录）。

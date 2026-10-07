@@ -245,3 +245,22 @@ def test_shouldReturnValidationErrorWhenQuestionIsBlank():
     body = response.json()
     assert body["code"] == "VALIDATION_ERROR"
     assert "question: must not be blank" in body["details"]
+
+
+def test_shouldRejectEmptyBodyWithValidationErrors():
+    class _NeverAsk:
+        def ask(self, request):
+            raise AssertionError("空请求体应在校验层就被挡掉")
+
+    app.dependency_overrides[get_ask_agent] = lambda: _NeverAsk()
+    try:
+        response = TestClient(app).post("/api/trips/ask", json={})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "VALIDATION_ERROR"
+    assert "question: must not be blank" in body["details"]
+    assert "tripPlan: must not be null" in body["details"]
+    assert "request: must not be null" in body["details"]

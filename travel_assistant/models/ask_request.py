@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import field_validator
+from pydantic import ConfigDict, field_validator
 
 from .base import CamelModel
 from .trip_plan_request import TripPlanRequest
@@ -14,6 +14,9 @@ class AskRequest(CamelModel):
     方案里只有排好的行程，偏好、住宿档位、预算上限这些取数参数只在原始请求里，
     追问涉及外部信息（周边景点、实时天气）时要用它们再去打数据源。
     """
+
+    # validate_default：JSON 里缺字段时字段校验器同样要跑，与 TripPlanRequest 一致。
+    model_config = ConfigDict(validate_default=True)
 
     question: Optional[str] = None
     trip_plan: Optional[TripPlan] = None
