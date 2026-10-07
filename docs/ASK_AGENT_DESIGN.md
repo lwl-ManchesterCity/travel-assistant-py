@@ -125,7 +125,9 @@
 1. 结果页底部加一块"追问这份方案"：一个输入框 + 一个按钮。
 2. 点击时把 `currentTripData` 整个回传 + `question`，POST 到 `/api/trips/ask`。
 3. 答案渲染进新加的答案区；把返回的 `traces` 灌进现有的 `renderAgentTraces` 逻辑，替换掉当前那次规划的轨迹显示（或并排加一个"追问轨迹"折叠块，二选一，倾向前者，改动更小）。
-4. 请求进行中禁用按钮，失败沿用现有 `error-toast`。
+4. 请求进行中：按钮禁用并把文案换成「⏳ 追问中...」，下方一行灰色提示"正在读方案并查数据，约需几秒"，
+   答案区先放一个转圈 + "正在思考..."，答完整体替换。三处状态在 `finally` 里统一还原。
+5. 请求进行中禁用按钮，失败沿用现有 `error-toast`。
 
 ---
 
@@ -197,6 +199,10 @@
 4. 前端：headless Chrome 加载改过的页面，用页面自带的 `renderResult` 渲染那份真实方案后点「追问这份方案」，
    `POST /api/trips/ask` 返回 200，答案渲染进 `#ask-answer`，三条留痕渲染进现有"智能体执行轨迹"区块。
    截图 `_verify/08-ask-agent-ui.png`，DOM 证据 `_verify/ask-ui-dom.json`。页面无脚本报错（只有一条来自高德 SDK 的 Canvas2D 性能提示）。
+   加载态另跑一次逐状态核对：点击前按钮可用无动画 → 请求中 `buttonDisabled=true`、
+   文案「⏳ 追问中...」、`.ask-loading-spinner` 存在且 `animation-name=trip-spin`、灰字提示可见 →
+   答完全部还原。截图 `_verify/09-ask-loading.png`（请求中）与 `_verify/10-ask-answered.png`（答完）。
+   过程中修掉一处：提示行原本复用 `.status-text`，那是白字，落在白色卡片上看不见，已改成 `.ask-status` 灰字。
 5. 遗留（都是有意留下的，不是漏）：
    - 追问的留痕会**覆盖**当次规划的 18 条轨迹显示，要回看需重新生成方案——这是"改动最小"的代价，第 2 档落库之后可以做成两份并存。
    - `thread_id` 收下不用，会话那一档再启用。

@@ -389,6 +389,33 @@
             animation: trip-spin 0.9s linear infinite;
         }
 
+        .ask-loading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #60708f;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .ask-status {
+            margin-top: 10px;
+            min-height: 20px;
+            color: #60708f;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .ask-loading-spinner {
+            width: 18px;
+            height: 18px;
+            flex: none;
+            border-radius: 999px;
+            border: 3px solid rgba(101, 117, 230, 0.18);
+            border-top-color: #6575e6;
+            animation: trip-spin 0.9s linear infinite;
+        }
+
         .trip-adjust-title {
             font-size: 22px;
             font-weight: 800;
@@ -1765,7 +1792,7 @@
                         <textarea id="ask-question" class="textarea" rows="2" placeholder="例如：第二天为什么这么赶？西溪湿地要门票吗？预算还剩多少？"></textarea>
                         <div class="action-wrap">
                             <button id="ask-submit" class="primary-button" type="button">追问这份方案</button>
-                            <div id="ask-status" class="status-text"></div>
+                            <div id="ask-status" class="ask-status"></div>
                         </div>
                         <div id="ask-answer" class="agent-trace-meta"></div>
                     </div>
@@ -2099,8 +2126,9 @@
         }
 
         button.disabled = true;
-        status.textContent = '正在思考...';
-        answerBox.textContent = '';
+        button.textContent = '⏳ 追问中...';
+        status.textContent = '正在读方案并查数据，约需几秒';
+        answerBox.innerHTML = '<div class="ask-loading"><span class="ask-loading-spinner"></span>正在思考...</div>';
         try {
             const response = await fetch('/api/trips/ask', {
                 method: 'POST',
@@ -2123,10 +2151,12 @@
             toggleAgentTraceSection(true);
             status.textContent = '';
         } catch (error) {
+            answerBox.innerHTML = '';
             status.textContent = '';
             showError(error.message);
         } finally {
             button.disabled = false;
+            button.textContent = '追问这份方案';
         }
     }
 
