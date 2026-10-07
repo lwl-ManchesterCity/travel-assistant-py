@@ -1639,6 +1639,7 @@
                     <div class="nav-item" data-target="days-section">🗓️ 每日行程 <span>⌄</span></div>
                     <div class="nav-item" data-target="weather-section">🌤️ 天气信息</div>
                     <div class="nav-item" data-target="agent-trace-section">🧠 Agent轨迹</div>
+                    <div class="nav-item" data-target="ask-section">💬 方案追问</div>
                 </div>
             </aside>
 
@@ -1752,6 +1753,23 @@
                     </div>
                     <div id="agent-trace-list" class="card-body agent-trace-list hidden"></div>
                 </div>
+
+                <div id="ask-section" class="card console-section">
+                    <div class="card-head">
+                        <div class="card-head-row">
+                            <span>💬 方案追问</span>
+                            <span class="map-side-meta">只回答，不改方案</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <textarea id="ask-question" class="textarea" rows="2" placeholder="例如：第二天为什么这么赶？西溪湿地要门票吗？预算还剩多少？"></textarea>
+                        <div class="action-wrap">
+                            <button id="ask-submit" class="primary-button" type="button">追问这份方案</button>
+                            <div id="ask-status" class="status-text"></div>
+                        </div>
+                        <div id="ask-answer" class="agent-trace-meta"></div>
+                    </div>
+                </div>
             </main>
         </div>
     </div>
@@ -1821,6 +1839,7 @@
         });
     });
     agentTraceToggle.addEventListener('click', () => toggleAgentTraceSection());
+    document.getElementById('ask-submit').addEventListener('click', askAboutCurrentTrip);
 
     form.noValidate = true;
 
@@ -2063,6 +2082,52 @@
         renderMap(data, payload, 0);
         renderExtraRequirements(payload);
         setActiveNav('overview-section');
+    }
+
+    async function askAboutCurrentTrip() {
+        const question = document.getElementById('ask-question').value.trim();
+        const status = document.getElementById('ask-status');
+        const answerBox = document.getElementById('ask-answer');
+        const button = document.getElementById('ask-submit');
+        if (!question) {
+            showError('请先输入想追问的内容');
+            return;
+        }
+        if (!currentTripData || !currentPayload) {
+            showError('请先生成一次旅行计划，再进行追问');
+            return;
+        }
+
+        button.disabled = true;
+        status.textContent = '正在思考...';
+        answerBox.textContent = '';
+        try {
+            const response = await fetch('/api/trips/ask', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    question: question,
+                    tripPlan: currentTripData,
+                    request: currentPayload
+                })
+            });
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+                console.error('Trip ask request failed:', data);
+                throw new Error(formatErrorMessage(data) || '追问失败');
+            }
+            answerBox.textContent = data.answer || '未返回回答';
+            renderAgentTraces({agentTraces: data.traces || []});
+            toggleAgentTraceSection(true);
+            status.textContent = '';
+        } catch (error) {
+            status.textContent = '';
+            showError(error.message);
+        } finally {
+            button.disabled = false;
+        }
     }
 
     async function adjustCurrentTrip() {

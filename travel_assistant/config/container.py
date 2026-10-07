@@ -6,6 +6,7 @@ Java 靠组件扫描按类型注入，Python 侧没有容器注解，这里按�
 
 from dataclasses import dataclass
 
+from ..agent.ask_agent import AskAgent
 from ..agent.attraction_agent import AttractionAgent
 from ..agent.data_tools import build_planning_tools
 from ..agent.hotel_agent import HotelAgent
@@ -51,6 +52,7 @@ class Container:
     settings: Settings
     llm_client: LlmClient
     trip_planning_service: TripPlanningService
+    ask_agent: AskAgent
 
 
 def build_container(settings: Settings | None = None) -> Container:
@@ -116,10 +118,14 @@ def build_container(settings: Settings | None = None) -> Container:
     # 行程调整（Java agent/TripAdjustmentAgent.java，与 loop 共用同一个策略服务 Bean）
     trip_adjustment_agent = TripAdjustmentAgent(llm_client, request_optimization_strategy_service)
 
+    # 方案 A 的追问 agent（移植基线之外的扩展，复用上面那三个数据 Agent）
+    ask_agent = AskAgent(llm_client, attraction_agent, weather_agent, hotel_agent)
+
     return Container(
         settings=settings,
         llm_client=llm_client,
         trip_planning_service=TripPlanningService(trip_adjustment_agent, loop_planning_agent),
+        ask_agent=ask_agent,
     )
 
 
@@ -146,3 +152,8 @@ def get_trip_planning_service() -> TripPlanningService:
 def get_amap_settings() -> AmapSettings:
     """对应 Spring 按类型注入 TravelProviderProperties 后读取的 Amap 段。"""
     return get_container().settings.providers.amap
+
+
+def get_ask_agent() -> AskAgent:
+    """方案 A 的追问端点按类型注入 AskAgent。"""
+    return get_container().ask_agent

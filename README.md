@@ -183,11 +183,29 @@ curl http://localhost:8080/api/map/config
 两个值只从环境变量或 `.env` 读，不进代码、日志与文档。
 
 前端页面 `travel_assistant/static/index.html` 从 Java 的 `src/main/resources/static/index.html` 原样拷贝
-（2905 行，`diff` 一致，接口地址与字段名无需适配），由 `main.py` 的 `StaticFiles(html=True)` 挂在根路径，
-注册在两个 `include_router` 之后，因此不遮 `/api/` 路由。页面依赖 `/api/trips/plan`、`/api/trips/adjust`、
-`/api/map/config` 三个接口；`enabled=false` 时地图区渲染"真实地图待开启"文字占位，不加载高德 SDK，
-因此要看到真实 Marker 与当日路线 Polyline 必须在 `.env` 填 `AMAP_WEB_JS_KEY`（有安全密钥则一并填
-`AMAP_SECURITY_JS_CODE`）。
+（2905 行，接口地址与字段名无需适配），由 `main.py` 的 `StaticFiles(html=True)` 挂在根路径，
+注册在所有 `include_router` 之后，因此不遮 `/api/` 路由。页面依赖 `/api/trips/plan`、`/api/trips/adjust`、
+`/api/map/config` 三个接口；`enabled=false` 时地图区渲染"真实地图待开启"文字占位、不加载高德 SDK，
+`.env` 里填上 `AMAP_WEB_JS_KEY` 与 `AMAP_SECURITY_JS_CODE`（必须是「Web端(JS API)」类型，与后端那把
+「Web服务」key 不通用）之后才会出真底图、Marker 与当日路线 Polyline。
+`main` 分支上这份页面与 Java 源文件字节级一致；`feature/ask-agent` 分支给它加了"方案追问"区块，见下一段。
+
+`POST /api/trips/ask` 是**移植基线之外的能力扩展**（Java 无对应物，只在 `feature/ask-agent` 分支上）：
+方案生成后，前端把上一次 `/plan` 的响应体与原始请求一起回传，agent 用只读工具回答关于这份方案的追问，不改动行程。
+
+```bash
+curl -X POST http://localhost:8080/api/trips/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"第二天为什么这么赶","tripPlan":{...},"request":{...}}'
+# {"answer":"...","intent":"answer","traces":[{"agentName":"get_day_plan","action":"读某天安排",...}]}
+```
+
+1. 六个工具：`get_plan_overview` / `get_day_plan` / `get_attraction_detail` 只读方案，
+   `search_attractions` / `query_weather` / `recommend_hotels` 复用规划那三个数据 Agent。
+2. 服务端不存方案，所以 `tripPlan` 与 `request` 都要回传（方案里没有偏好与住宿档位这些取数参数）。
+3. 需要可用模型：没有模型直接 400「追问能力需要可用模型」，与 `/plan` 的纯规则路径有意不同。
+4. 联网失败不整体失败：记一条 `status=failed` 的留痕，模型改用方案内数据作答。
+5. 设计、护栏与逐题验证记录在 [`docs/ASK_AGENT_DESIGN.md`](docs/ASK_AGENT_DESIGN.md)。
 
 ## 5. 目录
 
@@ -195,18 +213,24 @@ curl http://localhost:8080/api/map/config
 travel_assistant/
   main.py                 FastAPI 装配 + CORS + StaticFiles 挂载 + 启动（对应 TravelAssistantApplication）
   api/                    trip_controller / map_controller / error_handlers
+                          / ask_controller（扩展，仅 feature/ask-agent）
   config/                 settings（yml 等价，含 travel.loop）/ container（Spring 注入等价）/ runtime_logger
   models/                 Java model 的 pydantic 等价物，字段名对外保持驼峰
-                          （含 loop 四个 model、adjust 两个与 MapConfigResponse）
+                          （含 loop 四个 model、adjust 两个与 MapConfigResponse；
+                           ask_request / ask_response 属扩展）
   clients/                高德四源 + 规则/本地兜底 + selector + LLM + amap_http
   agent/                  attraction/weather/hotel/route/planner + create_agent 取数编排
                           + loop 闭环（loop_planning / reflection / llm_critic / loop_decision_executor）
                           + trip_adjustment（自然语言改计划）
+                          + ask_agent / ask_tools / ask_context（扩展，仅 feature/ask-agent）
   evaluator/              budget/route/weather/daily_plan（含搬过来的 reflect_daily_plan）
   service/                planner_input_builder / requirement_analysis / llm_narration / trip_planning
                           / request_optimization_strategy（loop 与 adjust 共用）
-  static/index.html       Java 前端页面原样拷贝（2905 行，字节级一致）
+  static/index.html       Java 前端页面原样拷贝（2905 行；main 分支与源文件字节级一致，
+                          feature/ask-agent 上多了"方案追问"区块）
 tests/                    Java 两个测试类的等价断言 + loop 四个类、adjust 两个类的等价断言
+                          + test_ask_agent.py（扩展）
+docs/ASK_AGENT_DESIGN.md  方案 A（只读追问 agent）的设计与逐题验证记录
 MIGRATION_NOTES.md        Java->Python 映射表 + 全部不一致清单
 ```
 
@@ -225,6 +249,9 @@ MIGRATION_NOTES.md        Java->Python 映射表 + 全部不一致清单
 `test_trip_plan_controller.py` 里追加的 3 条 `/adjust` 用例同样取自 Java 源码：Java 没有对应测试方法。
 `tests/test_map_config_controller.py` 的 4 条取自 `MapConfigController.java` 的两个分支
 （`enabled` 真/假/纯空白，以及静态挂载不遮 `/api/` 路由）：Java 侧没有对应的测试类。
+`tests/test_ask_agent.py` 的 6 条属于扩展能力（Java 无对应物），用一个"按脚本调工具"的假 graph 顶掉模型，
+跑真工具、真上下文、真留痕：钉住"无模型直接 400"、只读工具各调一次的留痕、按天游标、
+景点名对不上时 `not_found` 且不外发请求、联网失败仍出回答并记 `failed`、空白问题挡成 400。
 
 ## 7. 已知差异
 

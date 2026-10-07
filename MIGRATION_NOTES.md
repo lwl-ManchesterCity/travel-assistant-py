@@ -99,7 +99,7 @@ Java 侧不再有未搬的 controller、model 或静态资源。
 | `service/RequestOptimizationStrategyService.java` | `service/request_optimization_strategy_service.py`（loop 与 adjust 共用同一个实例：`LoopDecisionExecutor` 与 `TripAdjustmentAgent` 都注入它，公开方法 `applyAction`/`mergeExtraRequirement`/`copyRequest` 照搬） |
 | `model/*.java`（37 个） | `models/*.py`（33 个模型，另加新增的 `base.py` 与 `__init__.py`，见下） |
 | （Java 全局工具方法散落在各类中：`Math.round`、保留一位小数、haversine） | `utils.py` 的 `jround` / `round1`；haversine 仍在 `planner_agent.py` 内 |
-| `src/main/resources/static/index.html`（2905 行） | `travel_assistant/static/index.html`（`cp` 原样拷贝，`diff` 与源文件字节级一致，接口地址与字段名无需改动） |
+| `src/main/resources/static/index.html`（2905 行） | `travel_assistant/static/index.html`（`cp` 原样拷贝，`main` 分支上与源文件字节级一致；`feature/ask-agent` 分支多了一块"方案追问"区块，见第六节） |
 | Spring Boot 对 `src/main/resources/static/` 的默认挂载（根路径 + 欢迎页） | `main.py` 末尾 `app.mount("/", StaticFiles(directory=..., html=True))`，注册在两个 `include_router` 之后，见第三节第 22 条 |
 
 未搬的 4 个 model：`TripPlanResponse`（源码里是死类，无人引用）、`BudgetSummary`、`HotelRecommendation`、
@@ -563,3 +563,19 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
   `browser-network.txt` 里是真实 Chrome 那次的三个接口状态码与服务端访问日志摘录。
 - 本轮服务日志 237 行里 `key=` 出现 0 次、`.env` 里三把真实密钥各出现 0 次（脚本按 `.env` 实际值比对，
   值本身不回显）。
+
+---
+
+## 六、移植基线之外的能力扩展（分支 `feature/ask-agent`）
+
+本节内容**不是 Java→Python 的差异**，而是源项目里根本不存在的能力，因此不计入第三节的对照表：
+
+1. `POST /api/trips/ask`：方案生成后的只读追问 agent。Java 侧没有任何对应类或端点。
+2. 新增文件：`models/ask_request.py`、`models/ask_response.py`、`agent/ask_context.py`、
+   `agent/ask_tools.py`、`agent/ask_agent.py`、`api/ask_controller.py`、`tests/test_ask_agent.py`、
+   `docs/ASK_AGENT_DESIGN.md`；改动 `main.py`、`config/container.py`、两个 `__init__.py` 与 `static/index.html`。
+3. 对既有链路的影响：`/api/trips/plan`、`/api/trips/adjust`、`/api/map/config` 的语义、响应体与错误分支
+   一字未改，原有 55 条用例未作修改且仍全绿（合并后共 61 条）。
+4. 唯一一处会破坏"与 Java 一致"的地方是前端页面加了追问区块，因此该一致性声明只在 `main` 分支上成立。
+5. 设计与逐题验证：见 `docs/ASK_AGENT_DESIGN.md` 第 11 节（真实 10 题全 200、单题 1.3~3.2 秒、
+   护栏命中与留痕形状均有记录）。

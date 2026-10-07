@@ -1,5 +1,7 @@
 from .agent_trace import AgentTrace
 from .api_error_response import ApiErrorResponse
+from .ask_request import AskRequest
+from .ask_response import AskResponse
 from .attraction import Attraction
 from .attraction_query import AttractionQuery
 from .attraction_search_result import AttractionSearchResult
@@ -36,6 +38,8 @@ from .weather_query_result import WeatherQueryResult
 __all__ = [
     "AgentTrace",
     "ApiErrorResponse",
+    "AskRequest",
+    "AskResponse",
     "Attraction",
     "AttractionQuery",
     "AttractionSearchResult",
