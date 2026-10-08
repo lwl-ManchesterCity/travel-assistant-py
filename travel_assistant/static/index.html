@@ -409,9 +409,11 @@
         .field-hint {
             display: block;
             margin-top: 6px;
-            color: #60708f;
+            color: #57627b;
+            font-family: inherit;
             font-size: 12px;
-            line-height: 1.5;
+            font-weight: 400;
+            line-height: 1.6;
         }
 
         .ask-confirm {
@@ -1641,9 +1643,9 @@
                     </div>
                     <div class="field">
                         <label for="hotelAnchor">期望住宿位置（可选）</label>
-                        <input id="hotelAnchor" name="hotelAnchor" class="input" type="text"
-                               placeholder="写一个地名即可，例如：西湖、广州塔、虹桥火车站。留空表示全城挑">
-                        <small class="field-hint">填了之后只在它周边 5 公里内挑酒店，同范围内仍按预算与路线择优</small>
+                        <input id="hotelAnchor" name="hotelAnchor" class="input" type="text" autocomplete="off"
+                               spellcheck="false" placeholder="例如：西湖、广州塔">
+                        <small class="field-hint">只在它周边 5 公里内挑酒店，范围内仍按预算与路线择优</small>
                     </div>
                     <div class="field">
                         <label for="hotelContinuity">住宿连续性</label>
