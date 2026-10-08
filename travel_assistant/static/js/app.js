@@ -785,7 +785,7 @@
                 <span>交通策略</span>
                 <strong>${primaryTransportation}</strong>
             </div>
-            <div class="hero-meta-item">
+            <div class="hero-meta-item ${remainingBudget >= 0 ? 'ok' : 'warn'}">
                 <span>预算状态</span>
                 <strong>${remainingBudget >= 0 ? `预计结余 ${remainingBudget} 元` : `超支 ${Math.abs(remainingBudget)} 元`}</strong>
             </div>

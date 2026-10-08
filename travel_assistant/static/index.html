@@ -188,18 +188,24 @@
             <main class="dashboard-main">
                 <section class="dashboard-hero">
                     <div id="summary-section" class="ticket-card">
+                        <!-- 全页唯一的彩色块。圆角由 .ticket-card 的 overflow: hidden 裁出来，
+                             不用自己再写 border-radius。 -->
+                        <div class="ticket-band">
+                            <span id="ticket-route" class="ticket-band-route">--</span>
+                            <span class="ticket-band-facts">
+                                <span id="ticket-days">--</span>
+                                <span class="ticket-band-sep" aria-hidden="true">·</span>
+                                <span id="ticket-budget">--</span>
+                            </span>
+                            <!-- 骑跨色带下缘：垂直中心压在色带底边上，一半蓝带一半纸面 -->
+                            <span class="ticket-stamp">已出票</span>
+                        </div>
                         <div class="ticket">
                             <div class="ticket-fields">
-                                <span class="ticket-stamp">已出票</span>
                                 <div id="summary-title" class="ticket-title">旅行计划</div>
                                 <div class="ticket-no">
                                     <span class="ticket-no-label">TRIP NO.</span>
                                     <strong id="ticket-number" class="ticket-no-value">--</strong>
-                                </div>
-                                <div class="ticket-route">
-                                    <span id="ticket-route" class="ticket-route-value">--</span>
-                                    <span id="ticket-days" class="ticket-fact">--</span>
-                                    <span id="ticket-budget" class="ticket-fact">--</span>
                                 </div>
                             </div>
                             <div class="ticket-barcode" aria-hidden="true"></div>

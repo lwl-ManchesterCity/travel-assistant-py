@@ -85,6 +85,9 @@
     background: var(--rail-blue-tint);
     color: var(--rail-blue);
     font-weight: var(--fw-bold);
+    /* 左侧竖条与票根色带呼应（FRONTEND_FEEDBACK_RESULT_COLOR 修复 3）。
+     * 用 inset 阴影而不是 border-left：不占盒模型宽度，导航项不会因此错位。 */
+    box-shadow: inset 3px 0 0 var(--rail-blue);
 }
 
 .dashboard-main,
@@ -127,10 +130,58 @@
 }
 
 /* 印章一律红底白字：白字对 --stamp-red 为 4.57，过 AA（文档 2.7 定死） */
+/* ---------- 票根顶部色带：全页唯一的彩色块（FRONTEND_FEEDBACK_RESULT_COLOR 修复 1） ----------
+ *
+ * 纠"AI 味"纠过了头 —— 全页只剩白卡灰线，没有色彩锚点。真实票据（登机牌色带、
+ * 火车票红底）恰恰敢用色块。纯色 var(--rail-blue)，不是渐变，白名单不变。
+ * 上侧圆角由 .ticket-card 的 overflow: hidden 裁出，这里不必再写 border-radius。 */
+
+.ticket-band {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    min-height: 64px;
+    padding: var(--sp-4) var(--sp-5);
+    background: var(--rail-blue);
+    color: #fff;
+}
+
+.ticket-band-route {
+    min-width: 0;
+    font-family: var(--font-title);
+    font-size: 28px;
+    font-weight: var(--fw-bold);
+    letter-spacing: -0.02em;
+    color: #fff; /* 白字压 rail-blue = 6.71，过 AA */
+}
+
+.ticket-band-facts {
+    flex: none;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+    color: #fff;
+    white-space: nowrap;
+}
+
+.ticket-band-sep {
+    margin: 0 var(--sp-2);
+    opacity: 0.7;
+}
+
+/* 印章骑跨色带下缘：定高 + 负下偏移的一半，垂直中心正好压在色带底边上 ——
+ * 真印章就是跨边界盖的，不是浮在色带中央。 */
 .ticket-stamp {
-    justify-self: start;
-    margin-bottom: var(--sp-2);
-    padding: 5px 12px;
+    position: absolute;
+    left: var(--sp-5);
+    bottom: -13px;
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 12px;
     border-radius: var(--radius-sm);
     background: var(--stamp-red);
     color: #fff;
@@ -171,29 +222,8 @@
     color: var(--ink);
 }
 
-.ticket-route {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: var(--sp-2) var(--sp-4);
-    margin-top: var(--sp-2);
-    padding-top: var(--sp-3);
-    border-top: 1px solid var(--line);
-}
-
-.ticket-route-value {
-    font-size: var(--fs-md);
-    font-weight: var(--fw-bold);
-    color: var(--ink);
-}
-
-.ticket-fact {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: var(--fs-sm);
-    font-weight: var(--fw-bold);
-    color: var(--rail-blue);
-}
+/* 原 .ticket-route / .ticket-fact 三个规则随结构作废：城市对与 3 DAYS · ¥2976
+ * 已移进顶部色带（见上方 .ticket-band-*）。 */
 
 /* 渐变白名单 #1：票根条码。纯 CSS 重复线性渐变即可，不需要图片。
  * 除本条与下方 .ticket-notch 外，全站不应再有任何 gradient。 */
@@ -297,18 +327,30 @@
     display: block;
     font-size: var(--fs-xs);
     font-weight: var(--fw-bold);
+    letter-spacing: 0.08em;
     color: var(--muted);
 }
 
+/* 值大字化：原为小灰字，读不到重点（FRONTEND_FEEDBACK_RESULT_COLOR 修复 2）。
+ * 20px 取自反馈单明示，不在字阶 token 里 —— 该单不许新增 token。 */
 .hero-meta-item strong {
     display: block;
     margin-top: var(--sp-2);
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-size: var(--fs-lg);
+    font-size: 20px;
     font-weight: var(--fw-bold);
     line-height: 1.5;
     color: var(--ink);
+}
+
+/* 预算状态走语义色：健康绿（对白 5.43 AA）/ 偏紧深红（6.41 AA），均已验 */
+.hero-meta-item.ok strong {
+    color: var(--ok-green);
+}
+
+.hero-meta-item.warn strong {
+    color: var(--stamp-red-ink);
 }
 
 /* 非数值的 meta（如「系统判断：…」）不走等宽 */
