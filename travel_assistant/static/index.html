@@ -2305,12 +2305,12 @@
             <div class="budget-item">
                 <span class="budget-item-label">景点门票</span>
                 <strong>¥${ticketCost}</strong>
-                <small>按已选景点门票估算</small>
+                <small>门票按景点类别估算后累加，非实时票价</small>
             </div>
             <div class="budget-item">
                 <span class="budget-item-label">酒店住宿</span>
                 <strong>¥${stayCost}</strong>
-                <small>按天数与酒店档位累计</small>
+                <small>按天数与酒店档位估算累计</small>
             </div>
             <div class="budget-item">
                 <span class="budget-item-label">餐饮费用</span>
@@ -2533,7 +2533,7 @@
                                     <div class="spot-head">${spot.name}</div>
                                     <div class="spot-image" style="background-image: url('${resolveSpotImage(spot, payload.city)}')">
                                         <div class="spot-index">${spotIndex + 1}</div>
-                                        <div class="spot-price">¥${spot.ticketPrice || 0}</div>
+                                        <div class="spot-price" title="门票价按景点类别估算，不是高德实时票价">¥${spot.ticketPrice || 0}（估算）</div>
                                     </div>
                                     <div class="spot-info">
                                         <div><strong>地址:</strong> ${spot.address || '暂无地址'}</div>
@@ -2549,7 +2549,7 @@
                             <div class="hotel-meta">
                                 <div>地址: ${hotelArea}</div>
                                 <div>类型: ${day.hotel?.type || inferHotelType(hotelName)}</div>
-                                <div>价格范围: ${day.hotel?.priceRange || inferHotelPrice(hotelName)}</div>
+                                <div>价格范围（估算）: ${day.hotel?.priceRange || inferHotelPrice(hotelName)}</div>
                                 <div>评分: ${day.hotel?.rating || `4.${index + 1}`}⭐</div>
                             </div>
                         </div>
@@ -2916,7 +2916,7 @@
                 latitude: spot.location.latitude,
                 markerLabel: String(index + 1),
                 type: 'attraction',
-                detail: `停留约 ${spot.visitDuration || 0} 分钟 · 门票 ¥${spot.ticketPrice || 0}`
+                detail: `停留约 ${spot.visitDuration || 0} 分钟 · 门票 ¥${spot.ticketPrice || 0}（估算）`
             });
         });
         return points;

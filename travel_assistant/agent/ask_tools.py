@@ -56,7 +56,7 @@ def _overview_text(trip_plan: TripPlan) -> str:
 def _day_text(trip_plan: TripPlan, index: int) -> str:
     day = (trip_plan.days or [])[index]
     attractions = "\n".join(
-        f"  - {attraction.name}｜{attraction.category or '未分类'}｜门票 {attraction.ticket_price} 元"
+        f"  - {attraction.name}｜{attraction.category or '未分类'}｜门票 {attraction.ticket_price} 元（按类别估算）"
         f"｜建议停留 {attraction.visit_duration} 分钟｜{attraction.address or '无地址'}"
         for attraction in (day.attractions or [])
     ) or "  - 无"
@@ -163,7 +163,7 @@ def build_ask_tools(attraction_agent: AttractionAgent,
                            miss, status="not_found")
             return miss
         text = "\n".join(
-            f"{attraction.name}｜{attraction.category or '未分类'}｜门票 {attraction.ticket_price} 元"
+            f"{attraction.name}｜{attraction.category or '未分类'}｜门票 {attraction.ticket_price} 元（按类别估算）"
             f"｜建议停留 {attraction.visit_duration} 分钟｜{attraction.address or '无地址'}"
             f"｜坐标{'有' if attraction.location else '无'}"
             f"｜{(attraction.description or '').strip() or '无简介'}"
