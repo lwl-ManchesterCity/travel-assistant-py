@@ -8,6 +8,7 @@
 2. 同列元素边缘对齐：各栅格容器（.grid-four/.grid-three/.grid-two）内
    子元素 left/top 边缘偏差 <= 1px；所有输入控件高度一致（44px）。
 3. 375px 视口无横向滚动：document.documentElement.scrollWidth <= 375。
+   3b. 日期弹层展开后同样无横向滚动 —— 弹层通常比触发它的控件宽，是最容易越界的一类元素。
 4. emoji 为 0：页面 innerText + js/app.js 源码全量扫描。
 
 用法：
@@ -175,6 +176,32 @@ def main() -> int:
         report["checks"]["mobile_375"] = {"pass": scroll_w <= 376, "scrollWidth": scroll_w}
         if scroll_w > 376:
             failures.append(f"375px 横向溢出 scrollWidth={scroll_w}")
+
+        # 判据 3b：弹层展开后同样不得横向溢出。
+        # 原探针不打开任何弹层，日期弹层越出视口右缘（实测 right=390 > 375）就是这么漏掉的 ——
+        # 弹层通常比触发它的控件宽，是最容易越界的一类元素。
+        popup_check = {"pass": True, "skipped": True, "reason": "页面无日期触发器"}
+        popup_trigger = mobile.query_selector("#departureDateTrigger")
+        if popup_trigger:
+            popup_trigger.click()
+            mobile.wait_for_timeout(250)
+            popup_scroll = mobile.evaluate("() => document.documentElement.scrollWidth")
+            popup_rect = mobile.evaluate("""() => {
+                const el = document.querySelector('.date-popup');
+                if (!el) { return null; }
+                const r = el.getBoundingClientRect();
+                return { left: Math.round(r.left), right: Math.round(r.right) };
+            }""")
+            popup_check = {
+                "pass": popup_scroll <= 376,
+                "skipped": False,
+                "scrollWidth": popup_scroll,
+                "popup": popup_rect,
+            }
+            mobile.screenshot(path=str(EVIDENCE_DIR / f"{args.label}-date-popup-375.png"))
+            if popup_scroll > 376:
+                failures.append(f"375px 日期弹层展开后横向溢出 scrollWidth={popup_scroll}")
+        report["checks"]["mobile_375_date_popup"] = popup_check
         browser.close()
 
     # 判据 4b：静态资源 emoji 扫描
