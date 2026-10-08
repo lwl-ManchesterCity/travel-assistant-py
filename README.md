@@ -98,7 +98,10 @@ curl -X POST http://localhost:8080/api/trips/plan \
 
 请求字段：`city`、`startDate`、`endDate`（`yyyy-MM-dd`）、`budget`（`>=1`）、`preferences`（非空数组）、
 `transportation`（可空，为空时 PlannerAgent 自行决定）、`accommodation`、`extraRequirements`（交给
-`RequirementAnalysisService` 解析成约束）。
+`RequirementAnalysisService` 解析成约束）。另有三个 Java 没有的可空字段（见
+[MIGRATION_NOTES.md](MIGRATION_NOTES.md) 第七节）：`hotelAnchor`（期望住宿位置，如「西湖」）、
+`dayHotelAnchors`（`{天数下标: 地名}`，只影响某一天）、`hotelContinuity`（`strict` 表示整趟住同一家，
+留空即各天最优）。三个都不填时，逐天酒店与通勤与 Java 完全一致。
 日期若超出高德天气预报窗口（本机实测约 4 天），对应天会按 Java 同款逻辑逐天落 `source=rule-fallback`
 并写 `高德未返回该日期天气，已使用规则天气补全`，这不是错误。
 
@@ -191,13 +194,15 @@ curl http://localhost:8080/api/map/config
 `main` 分支上这份页面与 Java 源文件字节级一致；`feature/ask-agent` 分支给它加了"方案追问"区块，见下一段。
 
 `POST /api/trips/ask` 是**移植基线之外的能力扩展**（Java 无对应物，只在 `feature/ask-agent` 分支上）：
-方案生成后，前端把上一次 `/plan` 的响应体与原始请求一起回传，agent 用只读工具回答关于这份方案的追问，不改动行程。
+方案生成后，前端把上一次 `/plan` 的响应体与原始请求一起回传，agent 用只读工具回答关于这份方案的追问；
+判出"其实想改"时也只产出一句话，**要用户点确认才发给 `/adjust`**，agent 自己没有任何写权限。
 
 ```bash
 curl -X POST http://localhost:8080/api/trips/ask \
   -H "Content-Type: application/json" \
-  -d '{"question":"第二天为什么这么赶","tripPlan":{...},"request":{...}}'
-# {"answer":"...","intent":"answer","traces":[{"agentName":"get_day_plan","action":"读某天安排",...}]}
+  -d '{"question":"第二天住得离西湖近一点","tripPlan":{...},"request":{...}}'
+# {"answer":"...","intent":"need_change","adjustmentPrompt":"第二天住得离西湖近一点",
+#  "anchorHint":"西湖","anchorDay":1,"traces":[{"agentName":"get_day_plan",...}]}
 ```
 
 1. 六个工具：`get_plan_overview` / `get_day_plan` / `get_attraction_detail` 只读方案，
@@ -205,7 +210,13 @@ curl -X POST http://localhost:8080/api/trips/ask \
 2. 服务端不存方案，所以 `tripPlan` 与 `request` 都要回传（方案里没有偏好与住宿档位这些取数参数）。
 3. 需要可用模型：没有模型直接 400「追问能力需要可用模型」，与 `/plan` 的纯规则路径有意不同。
 4. 联网失败不整体失败：记一条 `status=failed` 的留痕，模型改用方案内数据作答。
-5. 设计、护栏与逐题验证记录在 [`docs/ASK_AGENT_DESIGN.md`](docs/ASK_AGENT_DESIGN.md)。
+5. 模型最后一轮必须输出固定 JSON（`answer` 或 `need_change` 两种）；不是合法 JSON、意图值不认识、
+   说要改却没给那句话，三种情况**一律回落成 `answer`** 并记一条 `status=fallback`。理由是代价不对称：
+   误判成"要改"白烧一次 40~70 秒的重规划，误判成"只是问"用户多点一次编辑就行。
+6. `anchorHint` / `anchorDay` 是用户原话里的地名与天数，属于意图不属于事实，因此不受"事实必须来自工具"
+   那条护栏约束；前端拿到它填进请求，再随确认一起交给 `/adjust`。
+7. 设计、护栏与逐题验证记录在 [`docs/ASK_AGENT_DESIGN.md`](docs/ASK_AGENT_DESIGN.md)，
+   改方案那一轮的设计在 [`docs/ADJUST_AGENT_DESIGN.md`](docs/ADJUST_AGENT_DESIGN.md)。
 
 ## 5. 目录
 
@@ -219,6 +230,7 @@ travel_assistant/
                           （含 loop 四个 model、adjust 两个与 MapConfigResponse；
                            ask_request / ask_response 属扩展）
   clients/                高德四源 + 规则/本地兜底 + selector + LLM + amap_http
+                          + amap_place（地名→坐标，扩展）
   agent/                  attraction/weather/hotel/route/planner + create_agent 取数编排
                           + loop 闭环（loop_planning / reflection / llm_critic / loop_decision_executor）
                           + trip_adjustment（自然语言改计划）
@@ -226,12 +238,14 @@ travel_assistant/
   evaluator/              budget/route/weather/daily_plan（含搬过来的 reflect_daily_plan）
   service/                planner_input_builder / requirement_analysis / llm_narration / trip_planning
                           / request_optimization_strategy（loop 与 adjust 共用）
+                          + hotel_anchor_service（住宿锚点，扩展）
   static/index.html       Java 前端页面原样拷贝（2905 行；main 分支与源文件字节级一致，
-                          feature/ask-agent 上多了"方案追问"区块）
+                          feature/ask-agent 上多了"方案追问"区块与两个住宿输入项）
 tests/                    Java 两个测试类的等价断言 + loop 四个类、adjust 两个类的等价断言
-                          + test_ask_agent.py（扩展）
+                          + test_ask_agent.py / test_hotel_anchor.py（扩展）
 docs/ASK_AGENT_DESIGN.md  方案 A（只读追问 agent）的设计与逐题验证记录
-MIGRATION_NOTES.md        Java->Python 映射表 + 全部不一致清单
+docs/ADJUST_AGENT_DESIGN.md 方案 B（追问驱动改方案）+ 第 9 节（选酒店补格子）的设计与判据
+MIGRATION_NOTES.md        Java->Python 映射表 + 全部不一致清单（第七节记主动偏离）
 ```
 
 ## 6. 测试
@@ -249,9 +263,14 @@ MIGRATION_NOTES.md        Java->Python 映射表 + 全部不一致清单
 `test_trip_plan_controller.py` 里追加的 3 条 `/adjust` 用例同样取自 Java 源码：Java 没有对应测试方法。
 `tests/test_map_config_controller.py` 的 4 条取自 `MapConfigController.java` 的两个分支
 （`enabled` 真/假/纯空白，以及静态挂载不遮 `/api/` 路由）：Java 侧没有对应的测试类。
-`tests/test_ask_agent.py` 的 7 条属于扩展能力（Java 无对应物），用一个"按脚本调工具"的假 graph 顶掉模型，
+`tests/test_ask_agent.py` 的 13 条属于扩展能力（Java 无对应物），用一个"按脚本调工具"的假 graph 顶掉模型，
 跑真工具、真上下文、真留痕：钉住"无模型直接 400"、只读工具各调一次的留痕、按天游标、
-景点名对不上时 `not_found` 且不外发请求、联网失败仍出回答并记 `failed`、空白问题挡成 400。
+景点名对不上时 `not_found` 且不外发请求、联网失败仍出回答并记 `failed`、空白问题挡成 400，
+以及 B 的意图判定三种回落、`need_change` 手上没有任何写动作、归一化那句能被 `/adjust` 的规则路径识别。
+`tests/test_hotel_anchor.py` 的 15 条同理，钉的是"资格"而不是"分数"：不填新字段时候选集合原样不动、
+填了之后圈外被划掉且优先取最近那一档、一档空退一档、圈内空则回落全城并留一句说明、
+没有坐标的酒店不参与远近判断、`strict` 三天同名（含预算被压到必然触发换店那一支时仍同名）、
+按天锚点只改那一天、`strict` 与按天锚点冲突时明写"未生效"、以及改一次行程不会把上次填的位置弄丢。
 
 ## 7. 已知差异
 

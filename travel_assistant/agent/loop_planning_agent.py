@@ -296,6 +296,10 @@ class LoopPlanningAgent:
             transportation=request.transportation,
             accommodation=request.accommodation,
             extra_requirements=request.extra_requirements,
+            # 这三格漏掉的后果很隐蔽：loop 第一轮就把它们丢了，整趟看起来"没填"。
+            hotel_anchor=request.hotel_anchor,
+            day_hotel_anchors=dict(request.day_hotel_anchors) if request.day_hotel_anchors else None,
+            hotel_continuity=request.hotel_continuity,
         )
 
 

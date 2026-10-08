@@ -589,3 +589,34 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
 6. 追问 agent 的提示词同步加了一条：工具返回值里带「估算」的价格，转述时必须保留「估算」二字。
 5. 设计与逐题验证：见 `docs/ASK_AGENT_DESIGN.md` 第 11 节（真实 10 题全 200、单题 1.3~3.2 秒、
    护栏命中与留痕形状均有记录）。
+
+## 七、主动偏离源项目（不是移植差异，是产品扩展）
+
+第三节记的是"不得不的差异"，这一节记的是**故意做得和 Java 不一样**的四处。
+判定基准：请求里不填新字段时，`/api/trips/plan` 的逐天酒店、通勤、预算与留痕条数都必须与 Java 一致，
+这条写成用例钉住（`tests/test_hotel_anchor.py::test_shouldKeepWholeCityCandidatesWhenAnchorIsNotFilled`）。
+
+| 偏离点 | Java 行为 | Python 行为 | 影响范围 |
+| --- | --- | --- | --- |
+| `TripPlanRequest` | 8 个字段，没有住宿位置与连续性 | 多 `hotelAnchor` / `dayHotelAnchors` / `hotelContinuity`，全可空，空串归一成未填 | 请求体向后兼容，老请求照常 |
+| `PlannerAgent` 选酒店 | `_select_hotel(hotels, attractions, dailyBudget)` 三项打分（价位惩罚 0/8/12/24/50 + 到当天景点中心公里数 + 预算≥1600 才有的质量加成），候选就是全城那 10 家 | 打分公式与常数**一字未改**；改的是进入打分的集合——先按锚点半径圈掉远处，再按远近分档（一档 1.5km、二档 3km），最低非空档才交给原打分 | 只在用户填了住宿位置时生效 |
+| `PlannerAgent` 逐天循环 | 每天独立选店、中途换店零代价，`reduce_budget` 分支还会再换一次（`_select_budget_friendly_hotel`） | `hotelContinuity=strict` 时第 1 天定店后逐天沿用，并把两处入口的候选都收成那一家；同时在当天 `optimizationNotes` 写明它比最近的一家远多少公里 | 只在选"整趟同一家"时生效 |
+| 高德调用次数 | 酒店只发 `/v3/place/text`（按关键词相关性返回 10 家） | 填了锚点时多发两类：`/v3/place/text`（地名→坐标）与 `/v3/place/around`（锚点周边酒店，按距离排序） | 每个不同地名各一次，3 天最多 3+3 次；都走既有 curl 兜底与配额重试 |
+
+另外三处小偏离，一并记下：
+
+1. `RequestOptimizationStrategyService.copy_request` 逐项列举字段，Python 侧补上那三格。
+   漏掉的后果不是报错而是静默丢数据：用户改一次行程，上次填的住宿位置就没了。
+2. `AskResponse` 从 A 的 `{answer, traces}` 扩成 `{answer, intent, adjustmentPrompt, anchorHint, anchorDay}`，
+   `AskAgent` 的最后一轮输出改成固定 JSON。Java 没有追问端点，这条只在第六节的扩展范围内递进。
+3. `static/index.html` 在"住宿偏好"下面加了「期望住宿位置」输入框与「住宿连续性」下拉，
+   追问区块下面加了「确认修改 / 算了」一行。前端因此只在 `main` 分支保持字节级一致。
+4. 配置新增 `travel` 的锚点段：`TRAVEL_HOTEL_ANCHOR_RADIUS_KM`（默认 5.0）、
+   `TRAVEL_HOTEL_ANCHOR_NEAR_KM`（1.5）、`TRAVEL_HOTEL_ANCHOR_MID_KM`（3.0）。
+   这三个数只决定谁有资格进打分，不参与任何分数计算。
+
+为什么第 4 行那两类额外请求是必需的，不是锦上添花（2026-10-08 实测）：
+杭州、预算 3000、3 天、舒适型酒店的真实候选池只有 10 家，它们到西湖的距离升序是
+`6.1 6.2 6.3 9.1 10.5 11.1 18.1 22.3 63.3 110.1` 公里——在这种池子里画 5 公里的圈必然圈空，
+"住得离西湖近一点"照样落不了地。换成 `/v3/place/around` 以西湖为圆心、半径 5 公里检索，
+同一时刻返回的是 12m、408m、410m、414m 这一批真实存在的湖边住宿。

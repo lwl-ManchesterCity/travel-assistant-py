@@ -406,6 +406,37 @@
             font-weight: 700;
         }
 
+        .field-hint {
+            display: block;
+            margin-top: 6px;
+            color: #60708f;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .ask-confirm {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid rgba(101, 115, 230, 0.35);
+            border-radius: 12px;
+            background: rgba(101, 115, 230, 0.08);
+        }
+
+        .ask-confirm-text {
+            flex: 1;
+            color: #25314f;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .ask-confirm .ghost-button {
+            padding: 8px 14px;
+            font-size: 13px;
+        }
+
         .ask-loading-spinner {
             width: 18px;
             height: 18px;
@@ -1609,6 +1640,19 @@
                         </select>
                     </div>
                     <div class="field">
+                        <label for="hotelAnchor">期望住宿位置（可选）</label>
+                        <input id="hotelAnchor" name="hotelAnchor" class="input" type="text"
+                               placeholder="写一个地名即可，例如：西湖、广州塔、虹桥火车站。留空表示全城挑">
+                        <small class="field-hint">填了之后只在它周边 5 公里内挑酒店，同范围内仍按预算与路线择优</small>
+                    </div>
+                    <div class="field">
+                        <label for="hotelContinuity">住宿连续性</label>
+                        <select id="hotelContinuity" name="hotelContinuity" class="input">
+                            <option value="">各天最优（默认，可能中途换店）</option>
+                            <option value="strict">整趟住同一家</option>
+                        </select>
+                    </div>
+                    <div class="field">
                         <label for="preferencesDisplay">旅行偏好</label>
                         <div class="choice-group" id="preference-group">
                             <label class="choice-item"><input type="checkbox" value="人文历史"> 🏛️ 历史文化</label>
@@ -1785,7 +1829,7 @@
                     <div class="card-head">
                         <div class="card-head-row">
                             <span>💬 方案追问</span>
-                            <span class="map-side-meta">只回答，不改方案</span>
+                            <span class="map-side-meta">只读；判成要改会先请你确认</span>
                         </div>
                     </div>
                     <div class="card-body">
@@ -1795,6 +1839,11 @@
                             <div id="ask-status" class="ask-status"></div>
                         </div>
                         <div id="ask-answer" class="agent-trace-meta"></div>
+                        <div id="ask-confirm" class="ask-confirm hidden">
+                            <span id="ask-confirm-text" class="ask-confirm-text"></span>
+                            <button id="ask-confirm-yes" class="primary-button" type="button">确认修改</button>
+                            <button id="ask-confirm-no" class="ghost-button" type="button">算了</button>
+                        </div>
                     </div>
                 </div>
             </main>
@@ -1867,6 +1916,8 @@
     });
     agentTraceToggle.addEventListener('click', () => toggleAgentTraceSection());
     document.getElementById('ask-submit').addEventListener('click', askAboutCurrentTrip);
+    document.getElementById('ask-confirm-yes').addEventListener('click', confirmAskChange);
+    document.getElementById('ask-confirm-no').addEventListener('click', hideAskConfirmation);
 
     form.noValidate = true;
 
@@ -1938,7 +1989,9 @@
     }
 
     function buildTripPayload() {
-        return {
+        const hotelAnchor = document.getElementById('hotelAnchor').value.trim();
+        const hotelContinuity = document.getElementById('hotelContinuity').value;
+        const payload = {
             city: document.getElementById('destination').value.trim(),
             startDate: departureDateInput.value,
             endDate: endDateInput.value,
@@ -1948,6 +2001,18 @@
             accommodation: document.getElementById('accommodation').value,
             extraRequirements: document.getElementById('extraRequirements').value.trim()
         };
+        if (hotelAnchor) {
+            payload.hotelAnchor = hotelAnchor;
+        }
+        if (hotelContinuity) {
+            payload.hotelContinuity = hotelContinuity;
+        }
+        // 按天锚点由追问确认后写进 currentPayload，表单里没有对应输入框
+        const dayHotelAnchors = currentPayload ? currentPayload.dayHotelAnchors : null;
+        if (dayHotelAnchors && Object.keys(dayHotelAnchors).length) {
+            payload.dayHotelAnchors = dayHotelAnchors;
+        }
+        return payload;
     }
 
     function validateTripPayload(payload) {
@@ -2127,6 +2192,7 @@
 
         button.disabled = true;
         button.textContent = '⏳ 追问中...';
+        hideAskConfirmation();
         status.textContent = '正在读方案并查数据，约需几秒';
         answerBox.innerHTML = '<div class="ask-loading"><span class="ask-loading-spinner"></span>正在思考...</div>';
         try {
@@ -2150,14 +2216,65 @@
             renderAgentTraces({agentTraces: data.traces || []});
             toggleAgentTraceSection(true);
             status.textContent = '';
+            showAskConfirmation(data);
         } catch (error) {
             answerBox.innerHTML = '';
             status.textContent = '';
+            hideAskConfirmation();
             showError(error.message);
         } finally {
             button.disabled = false;
             button.textContent = '追问这份方案';
         }
+    }
+
+    let pendingAskChange = null;
+
+    function showAskConfirmation(data) {
+        const box = document.getElementById('ask-confirm');
+        const text = document.getElementById('ask-confirm-text');
+        if (data.intent !== 'need_change' || !data.adjustmentPrompt) {
+            hideAskConfirmation();
+            return;
+        }
+        pendingAskChange = {
+            adjustmentPrompt: data.adjustmentPrompt,
+            anchorHint: data.anchorHint || null,
+            anchorDay: Number.isInteger(data.anchorDay) ? data.anchorDay : null
+        };
+        const where = pendingAskChange.anchorHint
+            ? `（位置：${pendingAskChange.anchorHint}${pendingAskChange.anchorDay === null ? '，整趟' : `，第 ${pendingAskChange.anchorDay + 1} 天`}）`
+            : '';
+        text.textContent = `要按这句话重新生成方案吗${where}：${pendingAskChange.adjustmentPrompt}`;
+        box.classList.remove('hidden');
+    }
+
+    function hideAskConfirmation() {
+        pendingAskChange = null;
+        document.getElementById('ask-confirm').classList.add('hidden');
+    }
+
+    function applyAskAnchorToPayload(change) {
+        if (!change.anchorHint) {
+            return;
+        }
+        if (change.anchorDay === null) {
+            currentPayload.hotelAnchor = change.anchorHint;
+            document.getElementById('hotelAnchor').value = change.anchorHint;
+            return;
+        }
+        currentPayload.dayHotelAnchors = Object.assign({}, currentPayload.dayHotelAnchors || {});
+        currentPayload.dayHotelAnchors[change.anchorDay] = change.anchorHint;
+    }
+
+    async function confirmAskChange() {
+        const change = pendingAskChange;
+        if (!change) {
+            return;
+        }
+        hideAskConfirmation();
+        applyAskAnchorToPayload(change);
+        await runTripAdjustment(change.adjustmentPrompt);
     }
 
     async function adjustCurrentTrip() {
@@ -2176,6 +2293,14 @@
             showError('改计划要求不能为空');
             return;
         }
+        await runTripAdjustment(adjustmentPrompt.trim());
+    }
+
+    async function runTripAdjustment(adjustmentPrompt) {
+        if (!currentTripData || !currentPayload) {
+            showError('请先生成一次旅行计划，再进行修改');
+            return;
+        }
 
         clearError();
         setTripAdjustLoading(true);
@@ -2188,7 +2313,7 @@
                 },
                 body: JSON.stringify({
                     originalRequest: currentPayload,
-                    adjustmentPrompt: adjustmentPrompt.trim()
+                    adjustmentPrompt: adjustmentPrompt
                 })
             });
 
@@ -2200,7 +2325,7 @@
 
             const data = await response.json();
             renderResult(data.tripPlan, data.updatedRequest);
-            statusText.textContent = `已按要求完成调整：${adjustmentPrompt.trim()}`;
+            statusText.textContent = `已按要求完成调整：${adjustmentPrompt}`;
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (error) {
             showError(error.message);

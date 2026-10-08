@@ -291,6 +291,19 @@ def test_shouldCarryAnchorsAcrossAdjustCopy():
     assert copied.hotel_continuity == "strict"
 
 
+def test_shouldCarryAnchorsAcrossLoopRoundCopy():
+    """闭环每轮都自己拷一份请求，这一处漏掉的话锚点在第一轮就没了（真实踩过）。"""
+    from travel_assistant.agent.loop_planning_agent import LoopPlanningAgent
+
+    request = _request(hotel_anchor="西湖", day_hotel_anchors={2: "广州塔"}, hotel_continuity="strict")
+
+    copied = LoopPlanningAgent._copy_request(object.__new__(LoopPlanningAgent), request)
+
+    assert copied.hotel_anchor == "西湖"
+    assert copied.day_hotel_anchors == {2: "广州塔"}
+    assert copied.hotel_continuity == "strict"
+
+
 def test_shouldReportUnresolvedPlaceNamesWithoutTouchingTheNetwork():
     """判据 5：地名搜不到（这里用未配 key 模拟）→ 按未填写处理，不抛错、不发第二趟检索。"""
     service = HotelAnchorService(AmapSettings(api_key=""), _amap_hotel_client(), AnchorSettings())
