@@ -30,7 +30,10 @@ EVIDENCE_DIR = ROOT / "scripts" / "evidence"
 STATIC_DIR = ROOT / "travel_assistant" / "static"
 
 # 渐变白名单（见 FRONTEND_REDESIGN_PLAN 验收标准 1）
-GRADIENT_WHITELIST = [".ticket-barcode", ".ticket-notch"]
+# .perforation 是着陆页委托单的打孔分隔线（FRONTEND_FEEDBACK_LANDING_TICKET 修复 1），
+# 与结果页票根同一画法：缺口用 radial-gradient 画，属白名单 #2 的同类用法。
+# 匹配按元素 className 做子串判断，故缺口的类名（.perforation-notch）也含 "perforation"。
+GRADIENT_WHITELIST = [".ticket-barcode", ".ticket-notch", ".perforation"]
 
 EMOJI_RE = re.compile(
     "[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u2700-\u27BF]"

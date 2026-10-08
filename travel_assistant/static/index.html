@@ -15,24 +15,32 @@
 <section id="landing-page" class="landing-page">
     <div class="planner-shell">
         <header class="doc-head">
-            <h1 class="doc-title">智能旅行助手</h1>
-            <p class="doc-subtitle">填好这张委托单，剩下的交给规划引擎。</p>
+            <div class="doc-head-main">
+                <h1 class="doc-title">智能旅行助手</h1>
+                <p class="doc-subtitle">填好这张委托单，剩下的交给规划引擎。</p>
+            </div>
+            <div class="form-serial">TRIP REQUEST FORM<br>NO.20261008</div>
         </header>
+
+        <div class="perforation">
+            <span class="perforation-notch perforation-notch-left"></span>
+            <span class="perforation-notch perforation-notch-right"></span>
+        </div>
 
         <form id="trip-form">
             <section class="form-card">
-                <h2 class="section-title"><span class="section-no">01</span>行程</h2>
+                <h2 class="section-title"><span class="section-no">NO.1</span>行程</h2>
                 <div class="grid-four">
                     <div class="field">
                         <label for="destination"><span class="required">*</span>目的地城市</label>
                         <input id="destination" name="destination" class="input" value="北京" required>
                     </div>
                     <div class="field">
-                        <label for="departureDate"><span class="required">*</span>开始日期</label>
+                        <label for="departureDate"><span class="required">*</span>开始日期<span class="label-hint">YYYY/MM/DD</span></label>
                         <input id="departureDate" name="departureDate" class="input" type="date" required>
                     </div>
                     <div class="field">
-                        <label for="endDate"><span class="required">*</span>结束日期</label>
+                        <label for="endDate"><span class="required">*</span>结束日期<span class="label-hint">YYYY/MM/DD</span></label>
                         <input id="endDate" name="endDate" class="input" type="date" required>
                     </div>
                     <div class="field">
@@ -43,7 +51,7 @@
             </section>
 
             <section class="form-card">
-                <h2 class="section-title"><span class="section-no">02</span>偏好</h2>
+                <h2 class="section-title"><span class="section-no">NO.2</span>偏好</h2>
                 <div class="grid-three">
                     <div class="field">
                         <label for="origin">出发城市</label>
@@ -51,7 +59,7 @@
                     </div>
                     <div class="field">
                         <label for="budget">总预算</label>
-                        <input id="budget" name="budget" class="input" type="number" min="1" value="3000" required>
+                        <input id="budget" name="budget" class="input input-mono" type="number" min="1" value="3000" required>
                     </div>
                     <div class="field">
                         <label for="transportation">交通方式</label>
@@ -101,11 +109,12 @@
             </section>
 
             <section class="form-card">
-                <h2 class="section-title"><span class="section-no">03</span>备注</h2>
+                <h2 class="section-title"><span class="section-no">NO.3</span>备注</h2>
                 <div class="field">
                     <textarea id="extraRequirements" class="textarea" placeholder="请输入您的额外要求，例如：想去看升旗、希望路线更轻松、对海鲜过敏等..."></textarea>
                 </div>
                 <input id="preferences" name="preferences" type="hidden" value="自然风景,美食,轻松节奏">
+                <p class="form-ticket-note">** 填写完整后提交 · 规划引擎预计运行 30 秒 **</p>
                 <div class="action-wrap">
                     <button id="submit-btn" class="primary-button" type="submit">生成旅行计划</button>
                     <div id="status" class="status-text"></div>

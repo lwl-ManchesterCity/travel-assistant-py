@@ -22,10 +22,55 @@
 
 /* ---------- 单据抬头 ---------- */
 
+/* 标题区左右两栏：左标题、右机打单据号。底部不再用 1px 实线——分隔交给下面的打孔线，
+ * 两条线相距 20px 会像画重了。 */
 .doc-head {
-    padding-bottom: var(--sp-5);
-    margin-bottom: var(--sp-5);
-    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sp-5);
+}
+
+.doc-head-main {
+    min-width: 0;
+}
+
+.form-serial {
+    flex: none;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    line-height: 1.8;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+}
+
+/* 打孔分隔线：与结果页票根同一画法（2px dashed + 两端半圆缺口），两页物料才呼应。
+ * 缺口用 radial-gradient 画 —— 属渐变白名单，类名含 "perforation"，
+ * 已同步登记在 scripts/visual_acceptance.py 的 GRADIENT_WHITELIST，否则探针会误报。
+ * 负外边距把线顶到外壳边缘；缺口外半侧是纸色，落在同为纸色的页面背景上自然"缺失"，
+ * 看上去就是从单据上切出来的缺口，因此这里不需要 overflow: hidden。 */
+.perforation {
+    position: relative;
+    border-top: 2px dashed var(--line-strong);
+    margin: var(--sp-5) calc(var(--sp-6) * -1);
+}
+
+.perforation-notch {
+    position: absolute;
+    top: -10px;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-pill);
+    background-image: radial-gradient(circle, var(--paper) 0 10px, transparent 10px);
+}
+
+.perforation-notch-left {
+    left: -10px;
+}
+
+.perforation-notch-right {
+    right: -10px;
 }
 
 .doc-title {
@@ -65,12 +110,18 @@
     color: var(--ink);
 }
 
+/* 编号改红底白字小印章：白字压 --stamp-red = 4.57，过 AA（方案 2.7 定死的用法）。
+ * 角度 -2deg 与结果页「已出票」的 -4deg 错开，像随手盖的两枚章，而不是同一枚复用。 */
 .section-no {
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--stamp-red);
+    color: #fff;
     font-family: var(--font-mono);
     font-size: var(--fs-xs);
     font-weight: var(--fw-bold);
     letter-spacing: 0.08em;
-    color: var(--rail-blue);
+    transform: rotate(-2deg);
 }
 
 /* 原为 2px 半透明紫蓝粗条；改为 1px 纸色细线 */
@@ -107,6 +158,41 @@
     grid-column: 1 / -1;
 }
 
+/* ---------- 等宽：把「数据一眼可辨」落到着陆页（方案 2.3） ---------- */
+
+/* 「旅行天数」的数字加粗。基础样式在 controls.css，这里只补字重，
+ * 不改那边的共用规则（反馈单红线） */
+.readonly-value {
+    font-weight: var(--fw-bold);
+}
+
+/* 「总预算」用户输入数字时即等宽显示 */
+.input-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 日期格式提示：原生 date input 的字体由浏览器渲染，不强改，
+ * 于是把等宽的存在感放到 label 这一行的右端。
+ * 用 float 而不是 flex，避免动 controls.css 里 .field label 的共用规则。 */
+.label-hint {
+    float: right;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-regular);
+    letter-spacing: 0.04em;
+}
+
+/* 提交按钮上方的机打小字。星号是票据机打体的特征字符，不是装饰。 */
+.form-ticket-note {
+    margin-top: var(--sp-5);
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.06em;
+    color: var(--muted);
+}
+
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 1100px) {
@@ -134,5 +220,19 @@
     .grid-three,
     .grid-two {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* 外壳内边距在此断点缩到 --sp-4，打孔线的负外边距要跟着改 */
+    .perforation {
+        margin: var(--sp-4) calc(var(--sp-4) * -1);
+    }
+
+    .doc-head {
+        flex-direction: column;
+        gap: var(--sp-2);
+    }
+
+    .form-serial {
+        text-align: left;
     }
 }
