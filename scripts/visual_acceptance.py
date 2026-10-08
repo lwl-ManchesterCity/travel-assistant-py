@@ -64,7 +64,7 @@ ALIGNMENT_JS = """
     });
 
     const heights = {};
-    document.querySelectorAll('.input, .textarea, select.input, .pill-display').forEach((el) => {
+    document.querySelectorAll('.input, .textarea, select.input, .readonly-value, .pill-display').forEach((el) => {
         const h = px(el.getBoundingClientRect().height);
         heights[h] = (heights[h] || 0) + 1;
     });
@@ -89,6 +89,22 @@ GRADIENT_JS = """
 
 def is_whitelisted(selector: str) -> bool:
     return any(w.lstrip(".") in selector for w in GRADIENT_WHITELIST)
+
+
+def scan_static_emoji() -> dict:
+    """扫描全部静态资源（html/css/js）里的 emoji 残留。
+
+    覆盖整个 static/ 目录而不只是 index.html + app.js —— 样式表里同样可能藏
+    emoji（比如 content: "✈️"），只查两个文件会漏。字体是二进制，按扩展名跳过。
+    """
+    hits = {}
+    for path in sorted(STATIC_DIR.rglob("*")):
+        if not path.is_file() or path.suffix not in {".html", ".css", ".js"}:
+            continue
+        hits[str(path.relative_to(STATIC_DIR))] = len(
+            EMOJI_RE.findall(path.read_text(encoding="utf-8"))
+        )
+    return hits
 
 
 def main() -> int:
@@ -122,7 +138,12 @@ def main() -> int:
         align = page.evaluate(ALIGNMENT_JS)
         bad_grids = [g for g in align["grids"] if g["maxTopDeviation"] > 1]
         heights = align["controlHeights"]
-        height_ok = len([h for h in heights if h != 0]) <= 2  # 输入控件 44px + textarea 例外
+        # 输入控件一律 44px，textarea 例外 98px；height 0 是隐藏页里的控件，不计。
+        # 判据 2 只在乎「同屏控件同高」，不是「只有两种高度」——原写法 <=2 在结果页会因
+        # 隐藏页控件被算成 0 而恒过，等于没查。
+        # JS 对象的键经 Playwright 回来是字符串，必须转 float 再比，否则 '0' != 0 恒真
+        visible = {float(h) for h in heights if float(h) != 0}
+        height_ok = visible <= {44.0, 98.0}
         report["checks"]["alignment"] = {
             "pass": len(bad_grids) == 0,
             "grids": align["grids"],
@@ -150,12 +171,8 @@ def main() -> int:
             failures.append(f"375px 横向溢出 scrollWidth={scroll_w}")
         browser.close()
 
-    # 判据 4b：静态资源 emoji 扫描（HTML + JS）
-    static_hits = {}
-    for f in [STATIC_DIR / "index.html", STATIC_DIR / "js" / "app.js"]:
-        if f.exists():
-            found = EMOJI_RE.findall(f.read_text(encoding="utf-8"))
-            static_hits[f.name] = len(found)
+    # 判据 4b：静态资源 emoji 扫描
+    static_hits = scan_static_emoji()
     emoji_ok = len(page_emojis) == 0 and all(v == 0 for v in static_hits.values())
     report["checks"]["emoji"] = {
         "pass": emoji_ok, "page_innerText": len(page_emojis), "static_files": static_hits,
