@@ -76,9 +76,14 @@ def test_should_serve_index_html_from_root_and_keep_api_routes_ahead_of_static(c
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "智能旅行助手" in response.text
-    assert "/api/trips/plan" in response.text
-    assert "/api/trips/adjust" in response.text
-    assert "/api/map/config" in response.text
+    # P0 拆分后接口路径串只存在于外联 JS，改对 /js/app.js 的响应体断言（顺带验证静态挂载）
+    assert "/js/app.js" in response.text
+
+    js_response = client.get("/js/app.js")
+    assert js_response.status_code == 200
+    assert "/api/trips/plan" in js_response.text
+    assert "/api/trips/adjust" in js_response.text
+    assert "/api/map/config" in js_response.text
 
     # 挂载 "/" 之后 /api/ 仍归路由管：校验失败要拿回 Java 形状的错误体，而不是 index.html
     app.dependency_overrides[get_trip_planning_service] = _StubPlanningService

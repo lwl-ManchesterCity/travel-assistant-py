@@ -14,3 +14,6 @@ __pycache__/
 
 # 验收产物（截图与 DOM 证据），不属于迁移代码
 _verify/
+
+# 前端验收探针的产物（截图与报告），与 _verify/ 同口径；探针脚本本身要入库
+scripts/evidence/
