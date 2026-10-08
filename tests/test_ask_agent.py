@@ -1,8 +1,9 @@
-"""方案 A 追问 agent 的行为断言。
+"""方案 A + B 追问 agent 的行为断言。
 
 不接真实模型：用一个"按脚本调工具"的假 graph 顶掉 create_agent，
 这样跑的是真工具、真上下文、真留痕，只有模型那一层是假的。
-Java 侧没有对应物（/api/trips/ask 是移植基线之外的扩展），期望值取自 docs/ASK_AGENT_DESIGN.md。
+Java 侧没有对应物（/api/trips/ask 是移植基线之外的扩展），期望值取自
+docs/ASK_AGENT_DESIGN.md 与 docs/ADJUST_AGENT_DESIGN.md。
 """
 
 import pytest
@@ -157,10 +158,16 @@ class _ScriptedGraph:
         return {"messages": messages}
 
 
-def _agent(script, answer="第二天排了两个景点，通勤 60 分钟。", weather_error=None):
+def _answer_json(text: str) -> str:
+    """模型按约定的最后一轮输出格式回的一句只是回答。"""
+    return '{"intent":"answer","answer":"%s"}' % text
+
+
+def _agent(script, answer=None, weather_error=None):
     agent = AskAgent(_StubLlmClient(True), _StubAttractionAgent(),
                      _StubWeatherAgent(weather_error), _StubHotelAgent())
-    agent._get_agent = lambda: _ScriptedGraph(agent._tools, script, answer)
+    agent._get_agent = lambda: _ScriptedGraph(
+        agent._tools, script, answer or _answer_json("第二天排了两个景点，通勤 60 分钟。"))
     return agent
 
 
@@ -225,6 +232,84 @@ def test_shouldStillAnswerAndMarkFailedTraceWhenWeatherSourceBreaks():
     assert trace.status == "failed"
     assert "CUQPS_HAS_EXCEEDED_THE_LIMIT" in trace.output_summary
     assert response.answer.startswith("实时天气这次没查到")
+
+
+def test_shouldCarryAdjustmentPromptAndAnchorHintWhenModelProposesAChange():
+    raw = ('{"intent":"need_change","answer":"你是想把第二天换到西湖边住，对吗？'
+           '确认后我按这个条件重新排。","adjustmentPrompt":"第二天住得离西湖近一点",'
+           '"anchorHint":"西湖","anchorDay":1}')
+    response = _agent([("get_day_plan", {"day_index": 1})], answer=raw).ask(
+        _ask_request("第二天住得离西湖近一点"))
+
+    assert response.intent == "need_change"
+    assert response.adjustment_prompt == "第二天住得离西湖近一点"
+    assert response.anchor_hint == "西湖"
+    assert response.anchor_day == 1
+    assert _names(response.traces)[-1] == "AskAgent"
+    assert response.traces[-1].status == "pending"
+
+
+def test_shouldFallBackToPlainAnswerWhenLastTurnIsNotTheAgreedJson():
+    response = _agent([], answer="预算当然是 3000 元").ask(_ask_request("预算还剩多少"))
+
+    assert response.intent == "answer"
+    assert response.adjustment_prompt is None
+    assert response.answer == "预算当然是 3000 元"
+    fallback = [trace for trace in response.traces if trace.status == "fallback"]
+    assert len(fallback) == 1
+    assert "不是约定的 JSON" in fallback[0].output_summary
+
+
+def test_shouldFallBackWhenIntentValueIsUnknown():
+    response = _agent([], answer='{"intent":"modify","answer":"已帮你改好了"}').ask(
+        _ask_request("预算改成2000"))
+
+    assert response.intent == "answer"
+    assert response.answer == "已帮你改好了"
+    assert [trace for trace in response.traces if trace.status == "fallback"]
+
+
+def test_shouldFallBackWhenNeedChangeCarriesNoAdjustmentPrompt():
+    response = _agent([], answer='{"intent":"need_change","answer":"可以改"}').ask(
+        _ask_request("预算改成2000"))
+
+    assert response.intent == "answer"
+    assert response.adjustment_prompt is None
+    assert "说要改但没给出改哪句" in [t.output_summary for t in response.traces
+                                    if t.status == "fallback"][-1]
+
+
+def test_shouldNotTouchAnyPlanningCodeWhenProposingAChange():
+    """B 的护栏：判成要改也只是产一句文本，追问 agent 手上没有任何写动作。"""
+    agent = _agent([], answer='{"intent":"need_change","answer":"确认后再重排",'
+                              '"adjustmentPrompt":"预算改成2000"}')
+    response = agent.ask(_ask_request("预算改成2000"))
+
+    assert response.intent == "need_change"
+    assert set(response.model_dump(by_alias=True)) == {
+        "answer", "intent", "adjustmentPrompt", "anchorHint", "anchorDay", "traces"}
+    assert all(tool.name in {"get_plan_overview", "get_day_plan", "get_attraction_detail",
+                             "search_attractions", "query_weather", "recommend_hotels"}
+               for tool in agent._tools)
+
+
+def test_shouldProduceAPromptTheExistingAdjustRulePathCanApply():
+    """B 的归一化句必须落在下游真做得到的维度上：直接喂现成的规则解析，看它认不认。"""
+    from travel_assistant.agent.trip_adjustment_agent import TripAdjustmentAgent
+    from travel_assistant.service.request_optimization_strategy_service import (
+        RequestOptimizationStrategyService,
+    )
+
+    agent = _agent([], answer='{"intent":"need_change","answer":"确认后再重排",'
+                              '"adjustmentPrompt":"预算改成2000，住经济型酒店"}')
+    prompt = agent.ask(_ask_request("预算改成2000，住经济型")).adjustment_prompt
+
+    decision = TripAdjustmentAgent(_StubLlmClient(False),
+                                   RequestOptimizationStrategyService()).adjust(_request(), prompt)
+
+    assert decision.updated_request.budget == 2000
+    assert decision.updated_request.accommodation == "经济型酒店"
+    assert len(decision.applied_changes) >= 2
 
 
 def test_shouldReturnValidationErrorWhenQuestionIsBlank():

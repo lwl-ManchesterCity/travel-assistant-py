@@ -1,13 +1,17 @@
-"""方案 A：只读追问 agent。
+"""方案 A + B：只读追问 agent，B 多一步意图判定与人工确认。
 
 与取数链路的 PlanningDataAgent 同一套机制（`create_agent` 驱动模型自己选工具、
-工具执行完把结果回灌、模型再决定继续查还是作答），区别只在两件事：
+工具执行完把结果回灌、模型再决定继续查还是作答），区别只在三件事：
 
-- 工具读的是**已生成的方案**，不写回任何规划状态，所以 A 不会改动行程；
-- 每一步都往 AskContext 记一条 AgentTrace，随响应一起回前端，供事后核对答案的出处。
+- 工具读的是**已生成的方案**，不写回任何规划状态，所以这里不会改动行程；
+- 每一步都往 AskContext 记一条 AgentTrace，随响应一起回前端，供事后核对答案的出处；
+- 判成 `need_change` 时只产出一句给 /adjust 的描述，**必须用户点确认才会发出去**，
+  因为一次改方案等于一次完整重规划，误判的代价是 40~70 秒加一轮高德配额。
 
 模型不可用时直接 400，不做规则兜底：没有模型就没有对话，这是与 /plan 的有意差别。
 """
+
+import json
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage
@@ -26,18 +30,44 @@ from .weather_agent import WeatherAgent
 
 _SYSTEM_PROMPT = (
     "你是旅行方案的追问助手。用户已经拿到一份行程方案，你的任务是回答他关于这份方案的疑问，"
-    "只回答，不修改方案。\n"
+    "或者判断出他其实是想改方案。你不改任何东西，最多产出一句给改方案链路的描述。\n"
     "规则：\n"
     "1. 所有事实必须来自工具返回值，禁止用你自己的知识补充景点、票价、时长、地址、坐标或天气。\n"
     "2. 回答里出现的每个数字，都要能在本轮某次工具返回值里找到原文；找不到原文的就不要说。\n"
     "3. 按问题需要取数，两个方向都不许偏：细节不够就不许硬答，也不要多取——"
     "问一天就不要把每天各取一遍，方案里已有的天气不要再联网去查一次。\n"
-    "4. 用户提出要改行程、换酒店、调预算这类修改要求时，不要给新的行程安排，"
-    "只回一句提示：这需要重新生成方案，请使用页面上的「编辑行程」或改计划功能。\n"
-    "5. 工具没给到的信息，直接说没查到，不要推测。\n"
-    "6. 工具返回值里标了「估算」的价格，转述时必须保留「估算」二字，不许说成实时票价或实际收费。\n"
-    "7. 用中文回答，控制在三句以内，不要复述整份方案。\n"
+    "4. 工具没给到的信息，直接说没查到，不要推测。\n"
+    "5. 工具返回值里标了「估算」的价格，转述时必须保留「估算」二字，不许说成实时票价或实际收费。\n"
+    "6. 先判意图。只是问这份方案写了什么、为什么这么排、怎么办 → answer；"
+    "提出要改预算、改交通方式、改住宿档位、增加或删除偏好、调节奏松紧、"
+    "指定住宿位置（整趟或某一天）、要求整趟住同一家 → need_change。拿不准就按 answer 处理。\n"
+    "7. 判成 need_change 时，adjustmentPrompt 只许写下游做得到的那些：预算金额、交通方式、"
+    "住宿档位、偏好增删、节奏松紧、整趟住同一家；要指定住宿位置就把地名原样放进 anchorHint，"
+    "只指定某一天就同时把那天写进 anchorDay（第一天是 0）。"
+    "改天数、指定某一家酒店、改某个景点这类做不到的诉求，不要转过去，"
+    "在 answer 里当场说明当前版本改不了。\n"
+    "8. 最后一轮只输出一个 JSON 对象，二选一，不要任何多余文字：\n"
+    "   {\"intent\":\"answer\",\"answer\":\"…\"}\n"
+    "   {\"intent\":\"need_change\",\"answer\":\"…\",\"adjustmentPrompt\":\"…\"}\n"
+    "   需要指定住宿位置时再加 \"anchorHint\":\"西湖\" 与 \"anchorDay\":1。\n"
+    "9. answer 用中文，控制在三句以内，不要复述整份方案；"
+    "用户还没确认改不改之前，不许用完成时态说已经帮他改好了。\n"
 )
+
+_INTENTS = ("answer", "need_change")
+
+
+class _Decision:
+    """模型最后一轮输出的解析结果。"""
+
+    def __init__(self, intent: str = "answer", answer: str = "",
+                 adjustment_prompt: str | None = None,
+                 anchor_hint: str | None = None, anchor_day: int | None = None):
+        self.intent = intent
+        self.answer = answer
+        self.adjustment_prompt = adjustment_prompt
+        self.anchor_hint = anchor_hint
+        self.anchor_day = anchor_day
 
 
 class AskAgent:
@@ -65,9 +95,20 @@ class AskAgent:
         finally:
             reset_ask_context(token)
 
-        answer = self._last_answer(state)
-        context.record("AskAgent", "生成回答", f"问题={request.question}", answer or "未产出回答")
-        return AskResponse(answer=answer, intent="answer", traces=context.traces)
+        decision = self._parse_final(self._last_answer(state), context)
+        context.record("AskAgent", "判定意图并生成回答",
+                       f"问题={request.question}", decision.answer or "未产出回答")
+        if decision.intent == "need_change":
+            context.record("AskAgent", "归一化改方案诉求", "等用户确认后才发 /adjust",
+                           decision.adjustment_prompt or "", "pending")
+        return AskResponse(
+            answer=decision.answer,
+            intent=decision.intent,
+            adjustment_prompt=decision.adjustment_prompt,
+            anchor_hint=decision.anchor_hint,
+            anchor_day=decision.anchor_day,
+            traces=context.traces,
+        )
 
     def _get_agent(self) -> CompiledStateGraph:
         if self._agent is None:
@@ -85,3 +126,60 @@ class AskAgent:
             if isinstance(message, AIMessage) and not message.tool_calls and str(message.content).strip():
                 return str(message.content).strip()
         return ""
+
+    def _parse_final(self, raw: str, context: AskContext) -> _Decision:
+        """把最后一轮文本解析成意图；任何不合规的输出都回落成 answer。
+
+        回落而不是报错：误判成"要改"会白烧一次重规划，误判成"只是问"用户多点一次编辑就行，
+        两边代价不对称。
+        """
+        parsed = self._load_json(raw)
+        if parsed is None:
+            self._record_fallback(context, raw, "不是约定的 JSON，回落成只是回答")
+            return _Decision(answer=raw)
+        intent = str(parsed.get("intent") or "").strip()
+        answer = str(parsed.get("answer") or "").strip()
+        if intent not in _INTENTS:
+            self._record_fallback(context, raw, f"意图值不认识：{intent or '空'}，回落成只是回答")
+            return _Decision(answer=answer or raw)
+        if intent == "need_change":
+            prompt = str(parsed.get("adjustmentPrompt") or "").strip()
+            if not prompt:
+                self._record_fallback(context, raw, "说要改但没给出改哪句，回落成只是回答")
+                return _Decision(answer=answer or raw)
+            return _Decision(intent="need_change", answer=answer, adjustment_prompt=prompt,
+                             anchor_hint=self._anchor_hint(parsed), anchor_day=self._anchor_day(parsed))
+        return _Decision(intent="answer", answer=answer or raw)
+
+    def _record_fallback(self, context: AskContext, raw: str, why: str) -> None:
+        context.record("AskAgent", "解析模型最后一轮输出", raw[:120], why, "fallback")
+
+    @staticmethod
+    def _load_json(raw: str) -> dict | None:
+        text = (raw or "").strip()
+        if text.startswith("```"):
+            body = text.split("```")
+            text = body[1] if len(body) > 1 else text
+            if text.strip().startswith("json"):
+                text = text.strip()[4:]
+        try:
+            loaded = json.loads(text.strip())
+        except (ValueError, TypeError):
+            return None
+        return loaded if isinstance(loaded, dict) else None
+
+    @staticmethod
+    def _anchor_hint(parsed: dict) -> str | None:
+        hint = str(parsed.get("anchorHint") or "").strip()
+        return hint or None
+
+    @staticmethod
+    def _anchor_day(parsed: dict) -> int | None:
+        value = parsed.get("anchorDay")
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            return None
+        try:
+            day = int(value)
+        except (TypeError, ValueError):
+            return None
+        return day if day >= 0 else None
