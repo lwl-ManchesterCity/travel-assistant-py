@@ -1,0 +1,1391 @@
+/* 结果页：FRONTEND_REDESIGN_PLAN P3
+ *
+ * 文档对结果页只规定了四件事：头卡换票根、日期/金额/天数用等宽、侧导航去渐变、删玻璃拟态与装饰圆。
+ * 其余（预算/地图/天气/按天卡/景点/酒店/路线/餐饮/Agent 轨迹）的结构一律保留，
+ * 只把配色落到 tokens 上、把字重字号收敛到统一尺度 —— 不做文档没要求的改动。
+ *
+ * 原状在这一页有 53 处装饰性渐变、3 处玻璃拟态、两处 radial 装饰圆，全部清掉。
+ */
+
+/* ---------- 页面骨架 ---------- */
+
+.result-page {
+    min-height: 100vh;
+    padding: var(--sp-4) 0 var(--sp-8);
+}
+
+.result-shell {
+    width: min(var(--shell-max-result), calc(100% - var(--shell-gutter) * 2));
+    margin: 0 auto;
+}
+
+.top-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    margin-bottom: var(--sp-4);
+}
+
+.top-actions-right {
+    display: flex;
+    gap: var(--sp-3);
+}
+
+/* ---------- 布局与侧导航 ---------- */
+
+.result-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: var(--sp-4);
+    align-items: start;
+}
+
+.side-nav {
+    align-self: start;
+    position: sticky;
+    top: var(--sp-4);
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+}
+
+/* 原为 --gradient 渐变条 */
+.nav-head {
+    padding: 14px var(--sp-4);
+    background: var(--rail-blue);
+    color: #fff;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+}
+
+.nav-list {
+    padding: var(--sp-2) 0;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4);
+    color: var(--ink);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+}
+
+.nav-item:hover {
+    background: var(--paper);
+}
+
+/* 原为紫蓝线性渐变底 */
+.nav-item.active {
+    background: var(--rail-blue-tint);
+    color: var(--rail-blue);
+    font-weight: var(--fw-bold);
+}
+
+.dashboard-main,
+.content,
+.main-column,
+.right-rail {
+    display: grid;
+    gap: var(--sp-4);
+}
+
+.dashboard-hero {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-4);
+}
+
+/* ---------- 票根：整站唯一的记忆点（FRONTEND_REDESIGN_PLAN 2.4） ---------- */
+
+.ticket-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+}
+
+.ticket {
+    display: flex;
+    align-items: stretch;
+    gap: var(--sp-5);
+    padding: var(--sp-5);
+}
+
+.ticket-fields {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: var(--sp-2);
+}
+
+/* 印章一律红底白字：白字对 --stamp-red 为 4.57，过 AA（文档 2.7 定死） */
+.ticket-stamp {
+    justify-self: start;
+    margin-bottom: var(--sp-2);
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--stamp-red);
+    color: #fff;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.16em;
+    transform: rotate(-4deg);
+}
+
+.ticket-title {
+    font-family: var(--font-title);
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1.25;
+}
+
+.ticket-no {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+}
+
+.ticket-no-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+}
+
+.ticket-no-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.02em;
+    color: var(--ink);
+}
+
+.ticket-route {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-4);
+    margin-top: var(--sp-2);
+    padding-top: var(--sp-3);
+    border-top: 1px solid var(--line);
+}
+
+.ticket-route-value {
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+    color: var(--ink);
+}
+
+.ticket-fact {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+    color: var(--rail-blue);
+}
+
+/* 渐变白名单 #1：票根条码。纯 CSS 重复线性渐变即可，不需要图片。
+ * 除本条与下方 .ticket-notch 外，全站不应再有任何 gradient。 */
+.ticket-barcode {
+    flex: none;
+    width: 56px;
+    align-self: stretch;
+    min-height: 72px;
+    background-image: repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 5px);
+}
+
+/* 打孔线：dashed border，不占渐变白名单 */
+.ticket-perf {
+    position: relative;
+    border-top: 2px dashed var(--line-strong);
+}
+
+/* 渐变白名单 #2：打孔两端的半圆缺口。
+ * 用 radial-gradient 画纸色的圆盖在卡片两端，配合 .ticket-card 的 overflow:hidden
+ * 被裁掉外半侧，看起来就是「从卡片上切出的缺口」。 */
+.ticket-notch {
+    position: absolute;
+    top: -10px;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-pill);
+    background-image: radial-gradient(circle, var(--paper) 0 10px, transparent 10px);
+}
+
+.ticket-notch-left {
+    left: -10px;
+}
+
+.ticket-notch-right {
+    right: -10px;
+}
+
+/* ---------- 票根下方：原 hero-summary-body 的内容 ---------- */
+
+.hero-summary-body {
+    display: grid;
+    gap: var(--sp-4);
+    padding: var(--sp-5);
+}
+
+.summary-text {
+    line-height: 1.78;
+    color: var(--ink);
+    font-size: var(--fs-sm);
+}
+
+.hero-summary-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+}
+
+/* 原为半透明白底 + backdrop-filter（玻璃拟态），现为实色浅底徽章 */
+.hero-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: 6px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    background: var(--card);
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+/* 原 #d94457 压浅红底仅 3.80，不达 AA；--stamp-red-ink 为 6.41 */
+.hero-chip.warn {
+    border-color: var(--stamp-red);
+    background: var(--stamp-red-tint);
+    color: var(--stamp-red-ink);
+}
+
+.hero-chip.ok {
+    border-color: var(--ok-green);
+    background: var(--ok-green-tint);
+    color: var(--ok-green);
+}
+
+.hero-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+}
+
+/* 原为白色半透明块（为压深色卡片而设），现为纸色块 */
+.hero-meta-item {
+    padding: var(--sp-3) var(--sp-4);
+    min-height: 84px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+}
+
+.hero-meta-item span {
+    display: block;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    color: var(--muted);
+}
+
+.hero-meta-item strong {
+    display: block;
+    margin-top: var(--sp-2);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-bold);
+    line-height: 1.5;
+    color: var(--ink);
+}
+
+/* 非数值的 meta（如「系统判断：…」）不走等宽 */
+.hero-meta-item.text strong {
+    font-family: var(--font-body);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-regular);
+}
+
+.hero-meta-item.wide {
+    grid-column: 1 / -1;
+}
+
+.notes-box {
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--ink);
+}
+
+/* 原为带 bullet 的圆点列表，条目靠 emoji 当项目符号。
+ * 去掉字形图标后改成「标签 + 值」两栏，左边缘才能对齐。 */
+.notes-box ul {
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--sp-2);
+    list-style: none;
+    font-size: var(--fs-sm);
+}
+
+.notes-box li {
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    gap: var(--sp-3);
+    line-height: 1.7;
+}
+
+.note-label {
+    color: var(--muted);
+    font-weight: var(--fw-bold);
+}
+
+.note-value {
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+.extra-box {
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: var(--fs-sm);
+    line-height: 1.7;
+}
+
+/* ---------- 概览条 ---------- */
+
+.overview-strip {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--sp-3);
+}
+
+.overview-item {
+    padding: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    box-shadow: var(--shadow-card);
+}
+
+.overview-item strong {
+    display: block;
+    margin-bottom: var(--sp-2);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: -0.02em;
+    color: var(--rail-blue);
+}
+
+.overview-item span {
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+.content-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.02fr) minmax(360px, 0.98fr);
+    gap: var(--sp-4);
+    align-items: start;
+}
+
+.right-rail {
+    position: sticky;
+    top: var(--sp-4);
+}
+
+.console-section {
+    margin-top: 2px;
+}
+
+/* ---------- 卡片 ---------- */
+
+.card {
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+}
+
+/* 原为紫蓝线性渐变标题条 */
+.card-head {
+    padding: 14px var(--sp-5);
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+}
+
+.card-head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+}
+
+.card-body {
+    padding: var(--sp-5);
+}
+
+/* ---------- 预算 ---------- */
+
+.budget-progress-shell {
+    margin-bottom: var(--sp-3);
+    padding: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+}
+
+.budget-progress-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-3);
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+/* 进度数字用等宽，避免百分比变化时左右跳 */
+.budget-progress-top span:last-child {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+}
+
+.budget-progress-track {
+    width: 100%;
+    height: 10px;
+    overflow: hidden;
+    border-radius: var(--radius-pill);
+    background: var(--line);
+}
+
+/* 原为绿→蓝→紫三段渐变 */
+.budget-progress-fill {
+    height: 100%;
+    width: 0;
+    border-radius: var(--radius-pill);
+    background: var(--rail-blue);
+    transition: width 0.45s ease;
+}
+
+.budget-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+}
+
+.budget-item {
+    padding: var(--sp-4);
+    min-height: 108px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+    text-align: left;
+}
+
+.budget-item-label {
+    display: block;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.06em;
+}
+
+.budget-item strong {
+    display: block;
+    margin-top: var(--sp-2);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: -0.02em;
+    color: var(--ink);
+}
+
+.budget-item small {
+    display: block;
+    margin-top: var(--sp-2);
+    color: var(--muted);
+    font-size: var(--fs-xs);
+}
+
+/* 原为整条渐变横幅；改为浅蓝底 + 等宽金额，克制用色 */
+.budget-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-top: var(--sp-4);
+    padding: var(--sp-4);
+    border: 1px solid var(--rail-blue);
+    border-radius: var(--radius);
+    background: var(--rail-blue-tint);
+    color: var(--ink);
+    font-weight: var(--fw-bold);
+}
+
+.budget-total strong {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-xl);
+    color: var(--rail-blue);
+}
+
+.budget-status {
+    margin-top: var(--sp-4);
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: var(--radius-pill);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    background: var(--rail-blue-tint);
+    color: var(--rail-blue);
+}
+
+/* 原 #d94457 压浅红底仅 3.80，不达 AA；--stamp-red-ink 为 6.41 */
+.budget-status.warn {
+    background: var(--stamp-red-tint);
+    color: var(--stamp-red-ink);
+}
+
+.budget-status.ok {
+    background: var(--ok-green-tint);
+    color: var(--ok-green);
+}
+
+/* ---------- 地图 ---------- */
+
+/* 右栏只有约 480px 宽，tab 与元信息并排时会交错折行
+ * （第1天 第2天 [第1天] [高德地图路线规划] / 第3天 [2段路线]），读起来像六个混杂胶囊。
+ * 直接分两行：第一行日期 tab，第二行元信息。 */
+.map-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4) 0;
+    background: var(--card);
+}
+
+.map-toolbar .map-side-meta {
+    margin-left: 0;
+    justify-content: flex-start;
+}
+
+.map-day-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+}
+
+.map-side-meta {
+    margin-left: auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+}
+
+.map-meta-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    background: var(--paper);
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+.map-day-tab {
+    min-width: 82px;
+    padding: 8px 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    background: var(--card);
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    cursor: pointer;
+}
+
+.map-day-tab:hover {
+    border-color: var(--rail-blue);
+    color: var(--rail-blue);
+}
+
+/* 原为渐变底 */
+.map-day-tab.active {
+    border-color: var(--rail-blue);
+    background: var(--rail-blue);
+    color: #fff;
+}
+
+/* 原为浅蓝渐变底 */
+.map-box {
+    height: 460px;
+    position: relative;
+    overflow: hidden;
+    background: var(--paper);
+}
+
+.amap-canvas {
+    width: 100%;
+    height: 460px;
+}
+
+/* 原为双层渐变底 + 装饰光斑 */
+.map-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-3);
+    padding: var(--sp-6);
+    text-align: center;
+    color: var(--muted);
+    background: var(--paper);
+}
+
+.map-placeholder strong {
+    color: var(--ink);
+    font-size: var(--fs-lg);
+}
+
+.map-placeholder p {
+    margin: 0;
+    max-width: 420px;
+    font-size: var(--fs-sm);
+    line-height: 1.7;
+}
+
+.map-status-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 11;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    background: var(--card);
+    color: var(--ink);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    box-shadow: var(--shadow-card);
+}
+
+.map-status-badge.warn {
+    border-color: var(--stamp-red);
+    background: var(--stamp-red-tint);
+    color: var(--stamp-red-ink);
+}
+
+/* 地图标记：原为两处渐变，改实色。景点蓝、酒店红，靠色相区分 */
+.map-marker-pin {
+    width: 34px;
+    height: 34px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    box-shadow: 0 10px 22px rgba(68, 86, 152, 0.26);
+}
+
+.map-marker-pin span {
+    transform: rotate(45deg);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+.map-marker-pin.attraction {
+    background: var(--rail-blue);
+}
+
+.map-marker-pin.hotel {
+    background: var(--stamp-red);
+}
+
+.map-info {
+    min-width: 220px;
+    padding: 4px 2px;
+    color: var(--ink);
+    line-height: 1.7;
+    font-size: var(--fs-xs);
+}
+
+.map-info strong {
+    display: block;
+    margin-bottom: var(--sp-1);
+    color: var(--rail-blue);
+    font-size: var(--fs-sm);
+}
+
+/* ---------- 天气 ---------- */
+
+.weather-panel {
+    display: grid;
+    grid-template-columns: 0.88fr 1.12fr;
+    gap: var(--sp-4);
+}
+
+/* 原为浅蓝渐变底 */
+.weather-main {
+    padding: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+}
+
+.weather-main strong {
+    display: block;
+    margin-bottom: var(--sp-3);
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: -0.02em;
+    color: var(--ink);
+}
+
+.weather-tips {
+    padding: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+}
+
+.weather-tips ul {
+    padding-left: var(--sp-5);
+    color: var(--ink);
+    font-size: var(--fs-sm);
+    line-height: 1.85;
+}
+
+.weather-source-chip {
+    display: inline-flex;
+    align-items: center;
+    margin-top: var(--sp-3);
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
+    background: var(--rail-blue-tint);
+    color: var(--rail-blue);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+/* 原 #d94457 压浅红底仅 3.80，不达 AA */
+.weather-source-chip.warn {
+    background: var(--stamp-red-tint);
+    color: var(--stamp-red-ink);
+}
+
+/* ---------- 每日行程 ---------- */
+
+.itinerary-card .card-body {
+    padding-top: var(--sp-3);
+}
+
+.day-section + .day-section {
+    margin-top: var(--sp-3);
+}
+
+/* 原为浅蓝渐变底 */
+.day-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+    cursor: pointer;
+}
+
+.day-header:hover {
+    border-color: var(--rail-blue);
+}
+
+.day-header strong {
+    display: inline-flex;
+    align-items: center;
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+    color: var(--ink);
+}
+
+/* 展开箭头：原为 ⌄ / › 字形，各平台渲染不一致，改用边框画的直角旋转而成 */
+.caret {
+    display: inline-block;
+    flex: none;
+    width: 7px;
+    height: 7px;
+    margin-right: var(--sp-2);
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg) translate(-1px, -1px);
+    transition: transform 0.15s ease;
+}
+
+.caret.open {
+    transform: rotate(45deg) translate(-1px, -1px);
+}
+
+/* 日期用等宽，逐天纵排时数字成列 */
+.day-date {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+/* 原为白色渐变底 */
+.day-body {
+    margin-top: var(--sp-3);
+    padding: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+}
+
+.meta-box {
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+}
+
+.meta-row {
+    font-size: var(--fs-sm);
+    line-height: 1.7;
+    color: var(--ink);
+}
+
+.meta-row + .meta-row {
+    margin-top: var(--sp-2);
+}
+
+.meta-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    margin-top: var(--sp-3);
+}
+
+/* 当日预估/通勤/里程：都是数字，用等宽 */
+.meta-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    background: var(--card);
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+/* ---------- 景点 ---------- */
+
+.spot-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-4);
+    margin-top: var(--sp-3);
+}
+
+.spot-grid.single {
+    grid-template-columns: minmax(300px, 420px);
+    justify-content: center;
+}
+
+.spot-card {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+}
+
+/* 原为紫蓝渐变底 */
+.spot-head {
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--rail-blue);
+    color: #fff;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+}
+
+.spot-image {
+    position: relative;
+    height: 192px;
+    overflow: hidden;
+    background: var(--paper);
+    background-position: center;
+    background-size: cover;
+}
+
+/* 原 ::after 是压暗渐变；景区图上的两个角标各自有实色底，不依赖它保证可读性，故整体删除 */
+
+.spot-index,
+.spot-price {
+    position: absolute;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-pill);
+    color: #fff;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+.spot-index {
+    top: var(--sp-4);
+    left: var(--sp-4);
+    width: 34px;
+    height: 34px;
+    background: var(--ink);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 原 rgba(255,86,96,.9)；改实色 --stamp-red，白字 4.57 过 AA */
+.spot-price {
+    top: var(--sp-4);
+    right: var(--sp-4);
+    min-width: 46px;
+    height: 28px;
+    padding: 0 10px;
+    background: var(--stamp-red);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.spot-info {
+    padding: var(--sp-3) var(--sp-4) var(--sp-4);
+    font-size: var(--fs-sm);
+    line-height: 1.7;
+    color: var(--ink);
+}
+
+/* ---------- 酒店 ---------- */
+
+/* 原为蓝→浅蓝整块渐变 + 白字，改白底卡 + 浅蓝标题带 */
+.hotel-box {
+    margin-top: var(--sp-4);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+}
+
+.hotel-name {
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--rail-blue-tint);
+    color: var(--ink);
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+}
+
+/* auto-fit 而不是写死两列：按天卡窄的时候两列各只有约 290px，
+ * 长地址「浙江省杭州市西湖区天目山路383号」和「560-860 元」会被从中间折断。 */
+.hotel-meta {
+    padding: var(--sp-4);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--sp-2) var(--sp-4);
+    color: var(--ink);
+    font-size: var(--fs-sm);
+}
+
+/* ---------- 路线 ---------- */
+
+/* 原为白色渐变底 */
+.route-box {
+    margin-top: var(--sp-4);
+    padding: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+}
+
+/* flex-wrap + 标题 nowrap：按天卡在 1280px 下只有约 460px 宽，长摘要会把标题
+ * 挤成「当日路 / 线」两行竖排。标题不许折，摘要负责收缩换行。 */
+.route-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-1) var(--sp-3);
+    margin-bottom: var(--sp-3);
+}
+
+.route-head strong {
+    flex: none;
+    white-space: nowrap;
+    color: var(--ink);
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+}
+
+/* 总时长/总里程：等宽 */
+.route-summary {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+.route-steps {
+    display: grid;
+    gap: var(--sp-2);
+}
+
+.route-step {
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+}
+
+.route-step-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+    color: var(--ink);
+}
+
+.route-step-main span:last-child {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--rail-blue);
+    white-space: nowrap;
+}
+
+.route-step-sub {
+    margin-top: var(--sp-1);
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    line-height: 1.6;
+}
+
+/* ---------- 餐饮 ---------- */
+
+.meal-table {
+    width: 100%;
+    margin-top: var(--sp-4);
+    border-collapse: collapse;
+    overflow: hidden;
+    border-radius: var(--radius);
+}
+
+.meal-table td {
+    border: 1px solid var(--line);
+    padding: var(--sp-3) var(--sp-4);
+    font-size: var(--fs-sm);
+    color: var(--ink);
+    background: var(--card);
+}
+
+.meal-table td:first-child {
+    width: 88px;
+    font-weight: var(--fw-bold);
+    background: var(--paper);
+}
+
+/* ---------- Agent 轨迹 ---------- */
+
+/* 原为白色渐变底 */
+.agent-loop-summary {
+    margin-bottom: var(--sp-3);
+    padding: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
+}
+
+.agent-loop-summary strong {
+    display: block;
+    margin-bottom: var(--sp-2);
+    color: var(--ink);
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+}
+
+.agent-loop-summary span {
+    display: block;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    line-height: 1.7;
+}
+
+.loop-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-3);
+}
+
+/* 原为白色渐变底 */
+.loop-item {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+}
+
+.loop-item.best {
+    border-color: var(--rail-blue);
+}
+
+.agent-collapse-summary,
+.loop-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+    cursor: pointer;
+    list-style: none;
+}
+
+.agent-collapse-summary::-webkit-details-marker {
+    display: none;
+}
+
+.agent-collapse-summary::after {
+    content: "展开";
+    margin-left: auto;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+details[open] > .agent-collapse-summary::after {
+    content: "收起";
+}
+
+.loop-item-title {
+    color: var(--ink);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+}
+
+.loop-badge-row,
+.loop-score {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+}
+
+.loop-score {
+    margin-bottom: var(--sp-3);
+}
+
+.loop-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    background: var(--paper);
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+}
+
+.loop-badge.best {
+    border-color: var(--rail-blue);
+    background: var(--rail-blue-tint);
+    color: var(--rail-blue);
+}
+
+.agent-detail-body,
+.loop-detail-body {
+    padding: 0 var(--sp-4) var(--sp-4);
+}
+
+.agent-trace-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--sp-3);
+}
+
+/* 原为白色渐变底 */
+.agent-trace-item {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+}
+
+.agent-trace-agent {
+    color: var(--rail-blue);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+}
+
+.agent-trace-action {
+    margin-bottom: var(--sp-2);
+    color: var(--ink);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+}
+
+.agent-trace-meta {
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.agent-trace-status {
+    display: inline-flex;
+    margin-top: var(--sp-2);
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--rail-blue-tint);
+    color: var(--rail-blue);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 1180px) {
+    .overview-strip,
+    .content-grid,
+    .loop-grid,
+    .agent-trace-list {
+        grid-template-columns: 1fr;
+    }
+
+    .right-rail {
+        position: static;
+    }
+}
+
+@media (max-width: 1100px) {
+    .spot-grid,
+    .budget-grid,
+    .hotel-meta,
+    .overview-strip,
+    .weather-panel,
+    .agent-trace-item,
+    .hero-meta-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .result-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .side-nav {
+        position: static;
+    }
+}
+
+@media (max-width: 720px) {
+    .result-shell {
+        width: calc(100% - var(--sp-3) * 2);
+    }
+
+    .card-body,
+    .hero-summary-body,
+    .ticket {
+        padding: var(--sp-4);
+    }
+
+    .top-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .top-actions-right {
+        flex-direction: column;
+    }
+
+    .top-actions-right .ghost-button,
+    .ghost-button {
+        width: 100%;
+    }
+
+    /* 票根在窄屏改为竖排：条码移到标题带下方，别挤掉城市名 */
+    .ticket {
+        flex-direction: column;
+        gap: var(--sp-4);
+    }
+
+    .ticket-barcode {
+        width: 100%;
+        height: 40px;
+        min-height: 0;
+        background-image: repeating-linear-gradient(0deg, var(--ink) 0 2px, transparent 2px 5px);
+    }
+
+    .map-toolbar,
+    .route-head,
+    .loop-item-top,
+    .agent-collapse-summary,
+    .card-head-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .map-side-meta,
+    .hero-summary-tags {
+        justify-content: flex-start;
+        margin-left: 0;
+    }
+
+    .spot-grid.single {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

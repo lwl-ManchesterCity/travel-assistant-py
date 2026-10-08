@@ -228,7 +228,7 @@
 
     function setTripAdjustLoading(isLoading) {
         editTripBtn.disabled = isLoading;
-        editTripBtn.textContent = isLoading ? '⏳ 调整中...' : '📝 编辑行程';
+        editTripBtn.textContent = isLoading ? '调整中...' : '编辑行程';
         tripAdjustOverlay.classList.toggle('hidden', !isLoading);
     }
 
@@ -300,6 +300,7 @@
         currentPayload = payload;
         document.getElementById('summary-title').textContent = `${payload.city}旅行计划`;
         document.getElementById('summary-text').textContent = buildSummaryText(data, payload);
+        renderTicket(data, payload);
         renderOverview(data, payload);
         renderPlanningNotes(data, payload);
         renderBudget(data, payload);
@@ -327,7 +328,7 @@
         }
 
         button.disabled = true;
-        button.textContent = '⏳ 追问中...';
+        button.textContent = '追问中...';
         hideAskConfirmation();
         status.textContent = '正在读方案并查数据，约需几秒';
         answerBox.innerHTML = '<div class="ask-loading"><span class="ask-loading-spinner"></span>正在思考...</div>';
@@ -485,6 +486,33 @@
             || `${payload.city} ${getTripDays()} 天旅行方案已生成。建议结合天气、预算和住宿偏好灵活调整节奏。`;
     }
 
+    // 票根上的三个字段（FRONTEND_REDESIGN_PLAN 2.4）。票号规则 TRIP-{出发日期}-{目的地城市名}，
+    // 不引入城市→三字码映射（后端无此字段）；票据感由打孔线 + 等宽字承担，不依赖 IATA 码。
+    function renderTicket(data, payload) {
+        const city = payload.city || data.city || '';
+        const startDate = (payload.startDate || '').replace(/-/g, '');
+        const tripNumber = document.getElementById('ticket-number');
+        const route = document.getElementById('ticket-route');
+        const days = document.getElementById('ticket-days');
+        const total = document.getElementById('ticket-budget');
+
+        if (tripNumber) {
+            tripNumber.textContent = startDate ? `TRIP-${startDate}-${city}` : '--';
+        }
+        if (route) {
+            // 出发城市后端不接收（TripPlanRequest 无 origin 字段），这里只如实回显委托单上填的值
+            const origin = document.getElementById('origin')?.value.trim();
+            route.textContent = origin && city ? `${origin} → ${city}` : (city || '--');
+        }
+        if (days) {
+            const dayCount = (data.days || []).length;
+            days.textContent = dayCount ? `${dayCount} DAYS` : '--';
+        }
+        if (total) {
+            total.textContent = `¥${data.budget?.total ?? 0}`;
+        }
+    }
+
     function renderPlanningNotes(data, payload) {
         const notes = document.getElementById('planning-notes');
         const summaryMetaGrid = document.getElementById('summary-meta-grid');
@@ -495,11 +523,11 @@
         const routeMinutes = (data.days || []).reduce((sum, day) => sum + (day.routePlan?.totalDurationMinutes || 0), 0);
         const routeKm = (data.days || []).reduce((sum, day) => sum + (day.routePlan?.totalDistanceKm || 0), 0);
         const primaryTransportation = (data.days || []).find(day => day.transportation)?.transportation || payload.transportation || '智能推荐';
-        const items = [
-            `📅 日期: ${payload.startDate} 至 ${payload.endDate}`,
-            `🚗 交通方式: ${primaryTransportation}`,
-            `🏨 住宿偏好: ${payload.accommodation}`,
-            `🎯 偏好: ${payload.preferences.join('、')}`
+        const notePairs = [
+            { label: '日期', value: `${payload.startDate} 至 ${payload.endDate}`, mono: true },
+            { label: '交通方式', value: primaryTransportation },
+            { label: '住宿偏好', value: payload.accommodation },
+            { label: '偏好', value: payload.preferences.join('、') }
         ];
         const sourceNotes = (data.planningNotes || []).filter(note =>
             note.startsWith('景点来源：') || note.startsWith('天气来源：') || note.startsWith('酒店来源：')
@@ -508,12 +536,19 @@
             sourceNotes.push(`路线来源：${routeProvider}`);
         }
         if (payload.extraRequirements) {
-            items.push(`💬 额外要求: ${payload.extraRequirements}`);
+            notePairs.push({ label: '额外要求', value: payload.extraRequirements });
         }
-        notes.innerHTML = `
-            ${items.map(item => `<li>${item}</li>`).join('')}
-            ${sourceNotes.map(item => `<li>🧩 ${item}</li>`).join('')}
-        `;
+        // 来源文案自带「景点来源：xxx」形式，拆成标签与值两栏，列表左边缘才对得齐
+        sourceNotes.forEach(note => {
+            const [label, ...rest] = note.split('：');
+            notePairs.push({ label: label || '来源', value: rest.join('：') });
+        });
+        notes.innerHTML = notePairs.map(pair => `
+            <li>
+                <span class="note-label">${pair.label}</span>
+                <span class="note-value${pair.mono ? ' mono' : ''}">${pair.value}</span>
+            </li>
+        `).join('');
 
         summaryBadges.innerHTML = `
             <div class="hero-chip ${remainingBudget < 0 ? 'warn' : 'ok'}">${remainingBudget < 0 ? '预算偏紧' : '预算健康'}</div>
@@ -538,7 +573,7 @@
                 <span>通勤规模</span>
                 <strong>${routeMinutes} 分钟 / ${round(routeKm)} 公里</strong>
             </div>
-            <div class="hero-meta-item wide">
+            <div class="hero-meta-item wide text">
                 <span>系统判断</span>
                 <strong>${data.loopSummary?.stopReason || '当前方案已完成生成，可继续编辑再优化。'}</strong>
             </div>
@@ -718,7 +753,7 @@
                                 ${item.selectedAsBest ? '<span class="loop-badge best">最终采用</span>' : ''}
                                 <span class="loop-badge">${item.critiqueAction || 'KEEP_CURRENT_PLAN'}</span>
                             </div>
-                        </div>
+                        </summary>
                         <div class="loop-detail-body">
                             <div class="loop-score">
                                 <span class="loop-badge">总分 ${item.reflectionScore ?? '--'}</span>
@@ -771,20 +806,20 @@
             return `
                 <div class="day-section">
                     <div class="day-header" data-day-toggle="${index}">
-                        <strong>${index === 0 ? '⌄' : '›'} 第${(day.dayIndex ?? index) + 1}天</strong>
+                        <strong><span class="caret${index === 0 ? ' open' : ''}"></span>第${(day.dayIndex ?? index) + 1}天</strong>
                         <span class="day-date">${dateText}</span>
                     </div>
                     <div class="day-body ${index === 0 ? '' : 'hidden'}" data-day-body="${index}">
                         <div class="meta-box">
-                            <div class="meta-row">📝 行程描述: ${day.description || '暂无描述'}</div>
-                            <div class="meta-row">🚗 交通方式: ${day.transportation || payload.transportation}</div>
-                            <div class="meta-row">🏨 住宿: ${hotelName}</div>
-                            <div class="meta-row">🧭 路线来源: ${day.routePlan?.provider?.providerName || '路线规划引擎'}</div>
+                            <div class="meta-row">行程描述: ${day.description || '暂无描述'}</div>
+                            <div class="meta-row">交通方式: ${day.transportation || payload.transportation}</div>
+                            <div class="meta-row">住宿: ${hotelName}</div>
+                            <div class="meta-row">路线来源: ${day.routePlan?.provider?.providerName || '路线规划引擎'}</div>
                             ${renderOptimizationNotes(day.optimizationNotes)}
                             <div class="meta-chip-row">
-                                <div class="meta-chip">💵 当日预估 ¥${dailyCost}</div>
-                                <div class="meta-chip">🛣️ 通勤 ${routePlan?.totalDurationMinutes || 0} 分钟</div>
-                                <div class="meta-chip">📏 路线 ${routePlan?.totalDistanceKm || 0} 公里</div>
+                                <div class="meta-chip">当日预估 ¥${dailyCost}</div>
+                                <div class="meta-chip">通勤 ${routePlan?.totalDurationMinutes || 0} 分钟</div>
+                                <div class="meta-chip">路线 ${routePlan?.totalDistanceKm || 0} 公里</div>
                             </div>
                         </div>
 
@@ -811,13 +846,13 @@
                                 <div>地址: ${hotelArea}</div>
                                 <div>类型: ${day.hotel?.type || inferHotelType(hotelName)}</div>
                                 <div>价格范围（估算）: ${day.hotel?.priceRange || inferHotelPrice(hotelName)}</div>
-                                <div>评分: ${day.hotel?.rating || `4.${index + 1}`}⭐</div>
+                                <div>评分: ${day.hotel?.rating || `4.${index + 1}`}</div>
                             </div>
                         </div>
 
                         <div class="route-box">
                             <div class="route-head">
-                                <strong>🗺️ 当日路线</strong>
+                                <strong>当日路线</strong>
                                 <span class="route-summary">${routePlan?.summary || '暂未生成路线摘要'}</span>
                             </div>
                             <div class="route-steps">
@@ -864,7 +899,7 @@
         }
         return `
             <div class="meta-row">
-                🧠 调整说明: ${notes.join('；')}
+                调整说明: ${notes.join('；')}
             </div>
         `;
     }
@@ -946,8 +981,12 @@
                 const index = toggle.dataset.dayToggle;
                 const body = document.querySelector(`[data-day-body="${index}"]`);
                 body.classList.toggle('hidden');
-                const icon = body.classList.contains('hidden') ? '›' : '⌄';
-                toggle.querySelector('strong').textContent = `${icon} 第${Number(index) + 1}天`;
+                // 只切箭头朝向，不改写标题文字——原来这里用 Number(index)+1 重写，
+                // 与模板的 (day.dayIndex ?? index)+1 不是同一套算法，日后一旦两者不一致就会显示错天数
+                const caret = toggle.querySelector('.caret');
+                if (caret) {
+                    caret.classList.toggle('open', !body.classList.contains('hidden'));
+                }
                 if (!body.classList.contains('hidden') && currentTripData && currentPayload) {
                     renderMap(currentTripData, currentPayload, Number(index));
                     updateMapDayTabs(Number(index));
@@ -988,9 +1027,9 @@
             const index = Number(body.dataset.dayBody);
             const shouldOpen = index === targetIndex;
             body.classList.toggle('hidden', !shouldOpen);
-            const toggle = document.querySelector(`[data-day-toggle="${index}"] strong`);
-            if (toggle) {
-                toggle.textContent = `${shouldOpen ? '⌄' : '›'} 第${index + 1}天`;
+            const caret = document.querySelector(`[data-day-toggle="${index}"] .caret`);
+            if (caret) {
+                caret.classList.toggle('open', shouldOpen);
             }
         });
     }
@@ -1195,9 +1234,9 @@
         return `
             <div class="map-info">
                 <strong>${point.name}</strong>
-                <div>📍 ${point.address}</div>
-                <div>🧭 ${point.detail}</div>
-                <div>🏙️ ${payload.city}</div>
+                <div>${point.address}</div>
+                <div>${point.detail}</div>
+                <div>${payload.city}</div>
             </div>
         `;
     }

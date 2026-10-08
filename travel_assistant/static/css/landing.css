@@ -1,0 +1,138 @@
+/* 着陆页：FRONTEND_REDESIGN_PLAN 2.5「旅行委托单」
+ *
+ * 整页就是一张委托单：删掉渐变 hero 与两个浮动装饰圆，标题左对齐。
+ * section 标题改为「编号 + 名称」—— 编号真实表达"这是一个有顺序的流程"，不是装饰。
+ * 栅格全部等宽，消除原 grid-four 的 1.25fr/1fr/1fr/0.6fr 造成的长短不一。
+ */
+
+.landing-page {
+    min-height: 100vh;
+    padding: var(--sp-8) 0 var(--sp-8);
+}
+
+.planner-shell {
+    width: min(var(--shell-max), calc(100% - var(--shell-gutter) * 2));
+    margin: 0 auto;
+    padding: var(--sp-6);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+}
+
+/* ---------- 单据抬头 ---------- */
+
+.doc-head {
+    padding-bottom: var(--sp-5);
+    margin-bottom: var(--sp-5);
+    border-bottom: 1px solid var(--line);
+}
+
+.doc-title {
+    font-family: var(--font-title);
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: -0.02em;
+    color: var(--ink);
+}
+
+.doc-subtitle {
+    margin-top: var(--sp-2);
+    color: var(--muted);
+    font-size: var(--fs-sm);
+}
+
+/* ---------- 分区：编号 + 名称 + 细线 ---------- */
+
+.form-card {
+    padding: var(--sp-5);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+}
+
+.form-card + .form-card {
+    margin-top: var(--sp-4);
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+    color: var(--ink);
+}
+
+.section-no {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.08em;
+    color: var(--rail-blue);
+}
+
+/* 原为 2px 半透明紫蓝粗条；改为 1px 纸色细线 */
+.section-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+}
+
+/* ---------- 栅格：全部等宽 ---------- */
+
+.grid-four,
+.grid-three,
+.grid-two {
+    display: grid;
+    gap: var(--sp-4);
+}
+
+.grid-four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.grid-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* 兴趣 chip 独占整行：原布局里它挤在 grid-three 的一格里，chip 会被压得很难看 */
+.field-wide {
+    grid-column: 1 / -1;
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 1100px) {
+    .grid-four,
+    .grid-three {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .landing-page {
+        padding: var(--sp-4) 0 var(--sp-4);
+    }
+
+    .planner-shell {
+        width: calc(100% - var(--sp-3) * 2);
+        padding: var(--sp-4);
+    }
+
+    .form-card {
+        padding: var(--sp-4);
+    }
+
+    .grid-four,
+    .grid-three,
+    .grid-two {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

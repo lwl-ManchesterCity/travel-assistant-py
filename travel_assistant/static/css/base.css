@@ -1,0 +1,52 @@
+/* 基础层：重置、排版基线、通用工具类 */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: var(--fs-sm);
+    line-height: 1.6;
+    background: var(--paper);
+    -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+    color: inherit;
+}
+
+h1,
+h2,
+h3 {
+    margin: 0;
+}
+
+p {
+    margin: 0;
+}
+
+ul {
+    margin: 0;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* 数据用等宽：日期、天数、金额、编号。
+ * tabular-nums 让数字等宽对齐，金额成列时不会左右跳。 */
+.mono,
+.num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 只读展示框（.readonly-value）与其它控件同层，定义在 controls.css —— 它要在
+ * .input 的共享规则之后覆盖底色，放这里会被后加载的 controls.css 盖掉。 */

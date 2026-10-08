@@ -4,21 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>智能旅行助手</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='8' y='46' font-size='42'%3E%E2%9C%88%EF%B8%8F%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="/css/app.css">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='8' width='28' height='16' rx='3' fill='%231B4ED8'/%3E%3Cline x1='21' y1='8' x2='21' y2='24' stroke='%23FFFFFF' stroke-width='1.6' stroke-dasharray='2 2'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/controls.css">
+    <link rel="stylesheet" href="/css/landing.css">
+    <link rel="stylesheet" href="/css/result.css">
 </head>
 <body>
 <section id="landing-page" class="landing-page">
-    <div class="hero">
-        <div class="hero-icon">✈️</div>
-        <h1>智能旅行助手</h1>
-        <p>基于 AI 的个性化旅行规划,让每一次出行都更完整更省心</p>
-    </div>
-
     <div class="planner-shell">
+        <header class="doc-head">
+            <h1 class="doc-title">智能旅行助手</h1>
+            <p class="doc-subtitle">填好这张委托单，剩下的交给规划引擎。</p>
+        </header>
+
         <form id="trip-form">
-            <div class="form-card">
-                <div class="section-title">📍 目的地与日期</div>
+            <section class="form-card">
+                <h2 class="section-title"><span class="section-no">01</span>行程</h2>
                 <div class="grid-four">
                     <div class="field">
                         <label for="destination"><span class="required">*</span>目的地城市</label>
@@ -34,13 +37,13 @@
                     </div>
                     <div class="field">
                         <label for="daysDisplay">旅行天数</label>
-                        <div id="daysDisplay" class="pill-display">3 天</div>
+                        <div id="daysDisplay" class="readonly-value">3 天</div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="form-card">
-                <div class="section-title">⚙️ 偏好设置</div>
+            <section class="form-card">
+                <h2 class="section-title"><span class="section-no">02</span>偏好</h2>
                 <div class="grid-three">
                     <div class="field">
                         <label for="origin">出发城市</label>
@@ -53,22 +56,22 @@
                     <div class="field">
                         <label for="transportation">交通方式</label>
                         <select id="transportation" name="transportation" class="input">
-                            <option value="" selected>✨ 智能推荐</option>
-                            <option value="公共交通">🚌 公共交通</option>
-                            <option value="自驾">🚗 自驾</option>
-                            <option value="打车为主">🚕 打车为主</option>
+                            <option value="" selected>智能推荐</option>
+                            <option value="公共交通">公共交通</option>
+                            <option value="自驾">自驾</option>
+                            <option value="打车为主">打车为主</option>
                         </select>
                     </div>
                     <div class="field">
                         <label for="accommodation">住宿偏好</label>
                         <select id="accommodation" name="accommodation" class="input">
-                            <option value="经济型酒店">💰 经济型酒店</option>
-                            <option value="便捷酒店">🧳 便捷酒店</option>
-                            <option value="舒适型酒店" selected>🏨 舒适型酒店</option>
-                            <option value="精选酒店">🌟 精选酒店</option>
-                            <option value="高端酒店">✨ 品质酒店</option>
-                            <option value="民宿">🏡 民宿</option>
-                            <option value="客栈">🪟 客栈</option>
+                            <option value="经济型酒店">经济型酒店</option>
+                            <option value="便捷酒店">便捷酒店</option>
+                            <option value="舒适型酒店" selected>舒适型酒店</option>
+                            <option value="精选酒店">精选酒店</option>
+                            <option value="高端酒店">品质酒店</option>
+                            <option value="民宿">民宿</option>
+                            <option value="客栈">客栈</option>
                         </select>
                     </div>
                     <div class="field">
@@ -84,23 +87,23 @@
                             <option value="strict">整趟住同一家</option>
                         </select>
                     </div>
-                    <div class="field">
+                    <div class="field field-wide">
                         <label for="preferencesDisplay">旅行偏好</label>
                         <div class="choice-group" id="preference-group">
-                            <label class="choice-item"><input type="checkbox" value="人文历史"> 🏛️ 历史文化</label>
-                            <label class="choice-item"><input type="checkbox" value="自然风景" checked> 🌿 自然风光</label>
-                            <label class="choice-item"><input type="checkbox" value="美食" checked> ☕ 美食</label>
-                            <label class="choice-item"><input type="checkbox" value="轻松节奏" checked> ☁️ 休闲</label>
-                            <label class="choice-item"><input type="checkbox" value="城市漫游"> 🎨 艺术</label>
+                            <label class="choice-item"><input type="checkbox" value="人文历史">历史文化</label>
+                            <label class="choice-item"><input type="checkbox" value="自然风景" checked>自然风光</label>
+                            <label class="choice-item"><input type="checkbox" value="美食" checked>美食</label>
+                            <label class="choice-item"><input type="checkbox" value="轻松节奏" checked>休闲</label>
+                            <label class="choice-item"><input type="checkbox" value="城市漫游">艺术</label>
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="form-card">
-                <div class="section-title">💬 额外要求</div>
+            <section class="form-card">
+                <h2 class="section-title"><span class="section-no">03</span>备注</h2>
                 <div class="field">
-                    <textarea id="extraRequirements" class="textarea" placeholder="请输入您的额外要求,例如:想去看升旗、希望路线更轻松、对海鲜过敏等..."></textarea>
+                    <textarea id="extraRequirements" class="textarea" placeholder="请输入您的额外要求，例如：想去看升旗、希望路线更轻松、对海鲜过敏等..."></textarea>
                 </div>
                 <input id="preferences" name="preferences" type="hidden" value="自然风景,美食,轻松节奏">
                 <div class="action-wrap">
@@ -112,12 +115,12 @@
                         </div>
                         <div class="progress-meta">
                             <span id="progress-label">正在生成行程计划...</span>
-                            <span id="progress-percent">0%</span>
+                            <span id="progress-percent" class="mono">0%</span>
                         </div>
                     </div>
                     <div id="error-box" class="error-box hidden"></div>
                 </div>
-            </div>
+            </section>
         </form>
     </div>
 </section>
@@ -127,36 +130,50 @@
         <div class="top-actions">
             <button id="back-home-btn" class="ghost-button">← 返回首页</button>
             <div class="top-actions-right">
-                <button id="edit-trip-btn" class="ghost-button">📝 编辑行程</button>
-                <button class="ghost-button">📤 导出行程 ▾</button>
+                <button id="edit-trip-btn" class="ghost-button">编辑行程</button>
+                <button class="ghost-button">导出行程</button>
             </div>
         </div>
 
         <div class="result-layout">
             <aside class="side-nav">
-                <div class="nav-head">📋 行程概览</div>
+                <div class="nav-head">行程概览</div>
                 <div class="nav-list">
-                    <div class="nav-item active" data-target="overview-section">📌 行程总览</div>
-                    <div class="nav-item" data-target="budget-section">💰 预算明细</div>
-                    <div class="nav-item" data-target="map-section">📍 景点地图</div>
-                    <div class="nav-item" data-target="days-section">🗓️ 每日行程 <span>⌄</span></div>
-                    <div class="nav-item" data-target="weather-section">🌤️ 天气信息</div>
-                    <div class="nav-item" data-target="agent-trace-section">🧠 Agent轨迹</div>
-                    <div class="nav-item" data-target="ask-section">💬 方案追问</div>
+                    <div class="nav-item active" data-target="overview-section">行程总览</div>
+                    <div class="nav-item" data-target="budget-section">预算明细</div>
+                    <div class="nav-item" data-target="map-section">景点地图</div>
+                    <div class="nav-item" data-target="days-section">每日行程</div>
+                    <div class="nav-item" data-target="weather-section">天气信息</div>
+                    <div class="nav-item" data-target="agent-trace-section">Agent 轨迹</div>
+                    <div class="nav-item" data-target="ask-section">方案追问</div>
                 </div>
             </aside>
 
             <main class="dashboard-main">
                 <section class="dashboard-hero">
-                    <div id="summary-section" class="hero-summary-card">
-                        <div class="hero-summary-head">
-                            <div>
-                                <div class="hero-summary-kicker">Agent Travel Console</div>
-                                <div id="summary-title" class="hero-summary-title">旅行计划</div>
+                    <div id="summary-section" class="ticket-card">
+                        <div class="ticket">
+                            <div class="ticket-fields">
+                                <span class="ticket-stamp">已出票</span>
+                                <div id="summary-title" class="ticket-title">旅行计划</div>
+                                <div class="ticket-no">
+                                    <span class="ticket-no-label">TRIP NO.</span>
+                                    <strong id="ticket-number" class="ticket-no-value">--</strong>
+                                </div>
+                                <div class="ticket-route">
+                                    <span id="ticket-route" class="ticket-route-value">--</span>
+                                    <span id="ticket-days" class="ticket-fact">--</span>
+                                    <span id="ticket-budget" class="ticket-fact">--</span>
+                                </div>
                             </div>
-                            <div id="summary-badges" class="hero-summary-tags"></div>
+                            <div class="ticket-barcode" aria-hidden="true"></div>
+                        </div>
+                        <div class="ticket-perf">
+                            <span class="ticket-notch ticket-notch-left"></span>
+                            <span class="ticket-notch ticket-notch-right"></span>
                         </div>
                         <div class="hero-summary-body">
+                            <div id="summary-badges" class="hero-summary-tags"></div>
                             <p id="summary-text" class="summary-text"></p>
                             <div id="summary-meta-grid" class="hero-meta-grid"></div>
                             <div class="notes-box">
@@ -193,7 +210,7 @@
                 <div class="content-grid">
                     <div class="main-column">
                         <div id="budget-section" class="card">
-                            <div class="card-head">💰 预算明细</div>
+                            <div class="card-head">预算明细</div>
                             <div class="card-body">
                                 <div class="budget-progress-shell">
                                     <div class="budget-progress-top">
@@ -214,7 +231,7 @@
                         </div>
 
                         <div id="weather-section" class="card">
-                            <div class="card-head">🌤️ 天气信息</div>
+                            <div class="card-head">天气信息</div>
                             <div class="card-body">
                                 <div class="weather-panel">
                                     <div class="weather-main">
@@ -230,14 +247,14 @@
                         </div>
 
                         <div id="days-section" class="card itinerary-card">
-                            <div class="card-head">🗓️ 每日行程</div>
+                            <div class="card-head">每日行程</div>
                             <div id="day-list" class="card-body"></div>
                         </div>
                     </div>
 
                     <div class="right-rail">
                         <div id="map-section" class="card">
-                            <div class="card-head">📍 景点地图</div>
+                            <div class="card-head">景点地图</div>
                             <div class="map-toolbar">
                                 <div id="map-day-tabs" class="map-day-tabs"></div>
                                 <div id="map-side-meta" class="map-side-meta"></div>
@@ -250,7 +267,7 @@
                 <div id="agent-trace-section" class="card console-section">
                     <div class="card-head">
                         <div class="card-head-row">
-                            <span>🧠 智能体执行轨迹</span>
+                            <span>智能体执行轨迹</span>
                             <button id="agent-trace-toggle" class="collapse-button" type="button">展开详情</button>
                         </div>
                     </div>
@@ -260,7 +277,7 @@
                 <div id="ask-section" class="card console-section">
                     <div class="card-head">
                         <div class="card-head-row">
-                            <span>💬 方案追问</span>
+                            <span>方案追问</span>
                             <span class="map-side-meta">只读；判成要改会先请你确认</span>
                         </div>
                     </div>

@@ -1,0 +1,121 @@
+/* 设计令牌：FRONTEND_REDESIGN_PLAN 2.2 / 2.3 / 2.7
+ *
+ * 色彩全部经过 WCAG 实测（见下方每条注释里的对比度），不是估的。
+ * 文档 2.7 只定了五个 token，另外三处既有缺陷是本次实测发现的，一并在这里修正：
+ *   1. 必填星号原 #f16053 对白仅 3.21，低于 AA 小字 4.5 → 改用 --stamp-red（4.57）
+ *   2. .budget-status.warn 原 #d94457 压浅红底仅 3.80 → 改用 --stamp-red-ink（6.41）
+ *   3. .weather-source-chip.warn 同上 → 同一处理
+ */
+
+/* ---------- 字体：本地打包，不走 CDN（答辩离线可用） ---------- */
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    src: url("/fonts/ibm-plex-mono-600.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    src: url("/fonts/ibm-plex-mono-700.woff2") format("woff2");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* 得意黑：官方只发布斜体版，斜体是它的设计特征 */
+@font-face {
+    font-family: "Smiley Sans";
+    src: url("/fonts/SmileySans-Oblique.woff2") format("woff2");
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    /* ---------- 纸与墨 ---------- */
+    --paper: #F6F7F9;          /* 页面底色：冷白纸感 */
+    --card: #FFFFFF;           /* 卡片面 */
+    --ink: #16181D;            /* 正文/标题 —— 对白 17.76 AAA */
+    --muted: #6B7280;          /* 辅助文字 —— 对白 4.83 AA，对纸 4.51 AA */
+    --line: #E3E6EB;           /* 描边/分隔线（非文本，无对比度要求） */
+    --line-strong: #CBD2DA;    /* 需要强调的描边 */
+
+    /* ---------- 主行动色：票据蓝 ---------- */
+    --rail-blue: #1B4ED8;      /* 对白 6.71 AA，对纸 6.26 AA；白字压其上也 6.71 */
+    --rail-blue-dark: #173FB0; /* 悬停 —— 对白 8.84 AAA */
+    --rail-blue-tint: #EEF2FE; /* 浅底 —— 其上压 --rail-blue 为 6.00 AA */
+
+    /* ---------- 印章红：只做点缀与关键状态，不铺大面积 ---------- */
+    --stamp-red: #D93A2B;      /* 对白 4.57 AA（故印章一律红底白字） */
+    --stamp-red-ink: #A3271B;  /* 红字压在浅红底上时用 —— 对 #FDECEA 为 6.41 AA */
+    --stamp-red-tint: #FDECEA;
+
+    /* ---------- 通过态 ---------- */
+    --ok-green: #16794A;       /* 对白 5.43 AA，对浅绿底 4.85 AA */
+    --ok-green-tint: #E9F5EF;
+
+    /* ---------- 字体 ---------- */
+    --font-title: "Smiley Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --font-body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+    /* 数据用等宽：日期、天数、金额、编号一眼可辨 */
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    /* ---------- 字阶：5 级（原 12 档收敛；旧 13px 并入 12px 一档） ---------- */
+    --fs-xs: 12px;   /* 标签、徽章、辅助说明 */
+    --fs-sm: 14px;   /* 正文 */
+    --fs-md: 16px;   /* 小标题 */
+    --fs-lg: 18px;   /* 卡片标题、强调 */
+    --fs-xl: 24px;   /* 页面大标题、统计数字 */
+
+    /* ---------- 字重：只用三档（原 800/900 全部并入 700） ---------- */
+    --fw-regular: 400;
+    --fw-medium: 500;
+    --fw-bold: 700;
+
+    /* ---------- 间距 ---------- */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 20px;
+    --sp-6: 24px;
+    --sp-8: 32px;
+
+    /* ---------- 圆角：8px 系统，不用胶囊做输入控件 ---------- */
+    --radius-sm: 6px;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --radius-pill: 999px;
+
+    /* ---------- 阴影：票据是纸，不是玻璃 ---------- */
+    --shadow-card: 0 1px 2px rgba(22, 24, 29, 0.04), 0 8px 24px rgba(22, 24, 29, 0.06);
+    --shadow-pop: 0 12px 32px rgba(22, 24, 29, 0.12);
+
+    /* ---------- 控件 ---------- */
+    --control-h: 44px;
+    --focus-ring: 0 0 0 3px rgba(27, 78, 216, 0.18);
+
+    /* ---------- 布局 ---------- */
+    --shell-max: 1180px;
+    --shell-max-result: 1280px;
+    --shell-gutter: 20px;
+}
