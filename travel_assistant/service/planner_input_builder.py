@@ -38,10 +38,9 @@ class PlannerInputBuilder:
         planning_notes = self._build_planning_notes(request, attraction_result, weather_result, hotel_result, constraints)
         agent_traces = self._build_agent_traces(request, attraction_result, weather_result, hotel_result, constraints)
         anchors = self._hotel_anchor_service.resolve(request)
-        nearby = self._hotel_anchor_service.search_nearby(request, anchors)
-        if nearby:
-            hotel_result = self._merge_hotel_candidates(hotel_result, nearby)
-        anchor_trace = self._build_anchor_trace(request, anchors)
+        day_candidates = self._hotel_anchor_service.build_day_candidates(
+            request, anchors, list(hotel_result.hotels or []))
+        anchor_trace = self._build_anchor_trace(request, anchors, day_candidates)
         if anchor_trace is not None:
             agent_traces.append(anchor_trace)
 
@@ -56,21 +55,13 @@ class PlannerInputBuilder:
             agent_traces=agent_traces,
             hotel_anchor_location=anchors.whole_trip,
             day_hotel_anchor_locations=anchors.by_day,
+            day_hotel_candidates=day_candidates,
         )
 
-    def _merge_hotel_candidates(self, hotel_result: HotelSearchResult, nearby: list) -> HotelSearchResult:
-        merged = list(hotel_result.hotels or [])
-        for hotel in nearby:
-            if not any(existing.name == hotel.name for existing in merged):
-                merged.append(hotel)
-        return HotelSearchResult(
-            city=hotel_result.city,
-            hotels=merged,
-            summary=hotel_result.summary,
-            provider=hotel_result.provider,
-        )
-
-    def _build_anchor_trace(self, request: TripPlanRequest, anchors) -> AgentTrace | None:
+    def _build_anchor_trace(self,
+                            request: TripPlanRequest,
+                            anchors,
+                            day_candidates: dict[int, list]) -> AgentTrace | None:
         # 用户没指定住宿位置时不留痕：这条链路的默认行为要与 Java 逐字一致，多一条痕迹都算差异。
         if not (request.hotel_anchor or request.day_hotel_anchors):
             return None
@@ -91,13 +82,14 @@ class PlannerInputBuilder:
                 output_summary="没定位到坐标，已按未填写处理",
                 status="fallback",
             )
+        days = "、".join(f"第{day + 1}天" for day in sorted(day_candidates))
         return AgentTrace(
             agent_name="HotelAnchorService",
             action="解析住宿位置锚点",
             input_summary=request.hotel_anchor or "、".join(
                 f"第{day + 1}天 {name}" for day, name in (request.day_hotel_anchors or {}).items()),
             output_summary=(f"已定位 {len(anchors.every_location())} 处，按锚点补检索 {anchors.searched} 次，"
-                             f"新增 {anchors.found_nearby} 家附近候选"),
+                            f"新增 {anchors.found_nearby} 家附近候选（只用于{days or '没有可用的一天'}）"),
             status="success",
         )
 

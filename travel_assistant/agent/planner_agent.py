@@ -98,8 +98,9 @@ class PlannerAgent:
                 anchor_notes.append(self._locked_hotel_note(
                     locked_hotel, hotels, preliminary_attractions, day_anchor_label, day_index))
             else:
+                day_pool = planner_input.hotel_candidates_for_day(day_index, hotels)
                 candidate_hotels = self._narrow_hotel_candidates(
-                    hotels, planner_input.hotel_anchor_for_day(day_index), anchor_label, anchor_notes)
+                    day_pool, planner_input.hotel_anchor_for_day(day_index), anchor_label, anchor_notes)
                 selected_hotel = self._select_hotel(candidate_hotels, preliminary_attractions, daily_budget_limit)
                 if strict_continuity:
                     locked_hotel = selected_hotel
@@ -827,6 +828,8 @@ class PlannerAgent:
             anchor_notes.append(
                 f"「{anchor_label or '指定位置'}」{self._anchor_settings.radius_km:.0f} 公里内没有候选酒店，"
                 "已按全城候选继续"
+                if any(hotel.location is not None for hotel in hotels)
+                else "候选酒店都没有坐标，无法按位置筛住宿，已按全城候选继续"
             )
             return hotels
 

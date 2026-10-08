@@ -32,6 +32,9 @@ class HotelAnchors:
     def is_empty(self) -> bool:
         return self.whole_trip is None and not self.by_day
 
+    def for_day(self, day_index: int) -> Optional[Location]:
+        return self.by_day.get(day_index) or self.whole_trip
+
     def every_location(self) -> list[Location]:
         locations = [location for location in [self.whole_trip, *self.by_day.values()] if location is not None]
         unique: list[Location] = []
@@ -68,22 +71,39 @@ class HotelAnchorService:
                 anchors.by_day[int(day)] = location
         return anchors
 
-    def search_nearby(self, request: TripPlanRequest, anchors: HotelAnchors) -> list[Hotel]:
-        """按每个锚点补一趟周边酒店检索，返回去重后的候选清单（可能为空）。"""
+    def build_day_candidates(self,
+                             request: TripPlanRequest,
+                             anchors: HotelAnchors,
+                             base_hotels: list[Hotel]) -> dict[int, list[Hotel]]:
+        """给每一天准备它自己的候选池，只返回"这天主张了某个位置"的那些天。
+
+        不并回全程那份候选：实测把西湖周边的 10 家并进全局池子之后，只声明"第三天住西湖边"
+        也会把第一天和第二天的选择一起改掉——周边检索发一次，等于替全程重开了标底。
+        """
         if anchors.is_empty():
-            return []
+            return {}
+
         query = HotelQuery(
             city=request.city,
             budget=request.budget,
             days=request.calculate_days(),
             accommodation=request.accommodation,
         )
-        merged: list[Hotel] = []
+        nearby: dict[tuple[float, float], list[Hotel]] = {}
         for location in anchors.every_location():
             anchors.searched += 1
-            for hotel in self._hotel_client.search_near_location(
-                    query, location, self._anchor_settings.radius_km):
-                if not any(existing.name == hotel.name for existing in merged):
-                    merged.append(hotel)
-        anchors.found_nearby = len(merged)
-        return merged
+            key = (location.longitude, location.latitude)
+            found = self._hotel_client.search_near_location(query, location, self._anchor_settings.radius_km)
+            anchors.found_nearby += len(found)
+            nearby[key] = found
+
+        candidates: dict[int, list[Hotel]] = {}
+        for day_index in range(request.calculate_days()):
+            location = anchors.for_day(day_index)
+            if location is None:
+                continue
+            extra = [hotel for hotel in nearby.get((location.longitude, location.latitude), [])
+                     if not any(base.name == hotel.name for base in base_hotels)]
+            if extra:
+                candidates[day_index] = [*base_hotels, *extra]
+        return candidates

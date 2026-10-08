@@ -575,7 +575,7 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
    `agent/ask_tools.py`、`agent/ask_agent.py`、`api/ask_controller.py`、`tests/test_ask_agent.py`、
    `docs/ASK_AGENT_DESIGN.md`；改动 `main.py`、`config/container.py`、两个 `__init__.py` 与 `static/index.html`。
 3. 对既有链路的影响：`/api/trips/plan`、`/api/trips/adjust`、`/api/map/config` 的语义、响应体与错误分支
-   一字未改，原有 55 条用例未作修改且仍全绿（合并后共 62 条）。
+   一字未改，原有 55 条用例未作修改且仍全绿（A 合并后 62 条；B 与第七节的补格子之后共 85 条）。
 4. 前端页面在本分支上有两类改动，因此"与 Java 字节级一致"只在 `main` 分支成立：
    - 加了"方案追问"区块（新端点 + 加载态）；
    - 价格文案改成标明估算来源，共四处：每日行程景点价格牌 `¥30（估算）`（带 title 说明）、

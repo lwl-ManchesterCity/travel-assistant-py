@@ -263,11 +263,11 @@ MIGRATION_NOTES.md        Java->Python 映射表 + 全部不一致清单（第�
 `test_trip_plan_controller.py` 里追加的 3 条 `/adjust` 用例同样取自 Java 源码：Java 没有对应测试方法。
 `tests/test_map_config_controller.py` 的 4 条取自 `MapConfigController.java` 的两个分支
 （`enabled` 真/假/纯空白，以及静态挂载不遮 `/api/` 路由）：Java 侧没有对应的测试类。
-`tests/test_ask_agent.py` 的 13 条属于扩展能力（Java 无对应物），用一个"按脚本调工具"的假 graph 顶掉模型，
+`tests/test_ask_agent.py` 的 14 条属于扩展能力（Java 无对应物），用一个"按脚本调工具"的假 graph 顶掉模型，
 跑真工具、真上下文、真留痕：钉住"无模型直接 400"、只读工具各调一次的留痕、按天游标、
 景点名对不上时 `not_found` 且不外发请求、联网失败仍出回答并记 `failed`、空白问题挡成 400，
 以及 B 的意图判定三种回落、`need_change` 手上没有任何写动作、归一化那句能被 `/adjust` 的规则路径识别。
-`tests/test_hotel_anchor.py` 的 15 条同理，钉的是"资格"而不是"分数"：不填新字段时候选集合原样不动、
+`tests/test_hotel_anchor.py` 的 17 条同理，钉的是"资格"而不是"分数"：不填新字段时候选集合原样不动、
 填了之后圈外被划掉且优先取最近那一档、一档空退一档、圈内空则回落全城并留一句说明、
 没有坐标的酒店不参与远近判断、`strict` 三天同名（含预算被压到必然触发换店那一支时仍同名）、
 按天锚点只改那一天、`strict` 与按天锚点冲突时明写"未生效"、以及改一次行程不会把上次填的位置弄丢。

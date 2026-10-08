@@ -23,7 +23,7 @@ from travel_assistant.models.provider_metadata import ProviderMetadata
 from travel_assistant.models.trip_plan_request import TripPlanRequest
 from travel_assistant.models.weather_info import WeatherInfo
 from travel_assistant.models.weather_query_result import WeatherQueryResult
-from travel_assistant.service.hotel_anchor_service import HotelAnchorService
+from travel_assistant.service.hotel_anchor_service import HotelAnchorService, HotelAnchors
 from travel_assistant.service.llm_narration_service import LlmNarrationService
 from travel_assistant.service.request_optimization_strategy_service import RequestOptimizationStrategyService
 
@@ -207,7 +207,7 @@ def test_shouldBehaveAsBeforeWhenNoCandidateHasCoordinates():
     narrowed, notes = _narrow(planner, plain, ANCHOR)
 
     assert narrowed is plain
-    assert "没有候选酒店" in notes[0]
+    assert "都没有坐标" in notes[0]
     assert _day_hotels(planner.build_plan(filled_input)) == _day_hotels(planner.build_plan(unfilled_input))
 
 
@@ -304,17 +304,41 @@ def test_shouldCarryAnchorsAcrossLoopRoundCopy():
     assert copied.hotel_continuity == "strict"
 
 
+def test_shouldGiveTheNearbyHotelsOnlyToTheDayThatAsked():
+    """周边检索补来的酒店只进"那天"的池子：并回全局会把另外两天一起改掉（端到端实测踩到）。"""
+    from travel_assistant.models.hotel import Hotel as _Hotel
+
+    class _NearbyClient:
+        def search_near_location(self, query, location, radius_km):
+            return [_Hotel(name="湖边客栈", type="客栈", price_range="300-400", estimated_cost=320,
+                           location=location)]
+
+    service = HotelAnchorService(AmapSettings(api_key=""), _NearbyClient(), AnchorSettings())
+    base = [Hotel(name="城里酒店", type="经济型", price_range="200-300", estimated_cost=260, location=ANCHOR)]
+    request = _request(day_hotel_anchors={2: "西湖"})
+    anchors = HotelAnchors(by_day={2: ANCHOR})
+
+    pools = service.build_day_candidates(request, anchors, base)
+
+    assert sorted(pools) == [2]
+    assert [hotel.name for hotel in pools[2]] == ["城里酒店", "湖边客栈"]
+
+    whole_trip = service.build_day_candidates(
+        _request(hotel_anchor="西湖"), HotelAnchors(whole_trip=ANCHOR), base)
+    assert sorted(whole_trip) == [0, 1, 2]
+
+
 def test_shouldReportUnresolvedPlaceNamesWithoutTouchingTheNetwork():
     """判据 5：地名搜不到（这里用未配 key 模拟）→ 按未填写处理，不抛错、不发第二趟检索。"""
     service = HotelAnchorService(AmapSettings(api_key=""), _amap_hotel_client(), AnchorSettings())
     request = _request(hotel_anchor="不存在的地点xyz", day_hotel_anchors={1: "另一个地名"})
 
     anchors = service.resolve(request)
-    nearby = service.search_nearby(request, anchors)
+    pools = service.build_day_candidates(request, anchors, [])
 
     assert anchors.is_empty()
     assert sorted(anchors.unresolved) == sorted(["不存在的地点xyz", "另一个地名"])
-    assert nearby == []
+    assert pools == {}
 
 
 def _amap_hotel_client():

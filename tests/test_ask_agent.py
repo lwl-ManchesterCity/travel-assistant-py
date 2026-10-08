@@ -312,6 +312,29 @@ def test_shouldProduceAPromptTheExistingAdjustRulePathCanApply():
     assert len(decision.applied_changes) >= 2
 
 
+def test_shouldExposeTheNewAskFieldsInCamelCaseOverHttp():
+    """前端按驼峰读这三个新格子，响应体的键名必须一字不差。"""
+    from travel_assistant.models.ask_response import AskResponse
+
+    class _Proposer:
+        def ask(self, request):
+            return AskResponse(answer="确认后再重排", intent="need_change",
+                               adjustment_prompt="第二天住得离西湖近一点",
+                               anchor_hint="西湖", anchor_day=1, traces=[])
+
+    app.dependency_overrides[get_ask_agent] = lambda: _Proposer()
+    try:
+        body = TestClient(app).post("/api/trips/ask", json=_ask_request().model_dump(by_alias=True)).json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert body["intent"] == "need_change"
+    assert body["adjustmentPrompt"] == "第二天住得离西湖近一点"
+    assert body["anchorHint"] == "西湖"
+    assert body["anchorDay"] == 1
+    assert "adjustment_prompt" not in body
+
+
 def test_shouldReturnValidationErrorWhenQuestionIsBlank():
     payload = _ask_request().model_dump(by_alias=True)
     payload["question"] = "   "
