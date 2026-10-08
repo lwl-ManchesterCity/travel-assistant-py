@@ -32,6 +32,11 @@
     let amapInfoWindow = null;
     let currentMapDayIndex = 0;
 
+    // 天数翻牌用（反馈单辅助创意 B）。这两个声明必须落在下方 initializeDefaultDates /
+    // syncDateRange 的调用之前 —— const 在声明前处于暂时性死区，放函数定义旁边会直接报错。
+    const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let daysFlipTimer = null;
+
     preferenceGroup.addEventListener('change', syncPreferenceValues);
     departureDateInput.addEventListener('change', syncDateRange);
     endDateInput.addEventListener('change', syncDateRange);
@@ -194,7 +199,27 @@
             endDateInput.value = start;
         }
         endDateInput.min = start || formatDateInput(new Date());
-        daysDisplay.textContent = `${getTripDays()} 天`;
+        updateDaysDisplay(`${getTripDays()} 天`);
+    }
+
+    // 天数翻牌（反馈单辅助创意 B）：纯展示层 —— 天数怎么算仍由 getTripDays() 决定，
+    // 这里只负责怎么把它显示出来。牌面先翻下遮住旧值，翻到侧对视线（150ms）时换文本，
+    // 下半程翻回时露出的已经是新值，所以中途换值看不见。
+    function updateDaysDisplay(value) {
+        if (daysDisplay.textContent === value) {
+            return;
+        }
+        if (reducedMotionQuery.matches) {
+            daysDisplay.textContent = value; // reduced-motion：不翻牌，直接换文本
+            return;
+        }
+        window.clearTimeout(daysFlipTimer);
+        daysDisplay.classList.remove('is-flipping');
+        void daysDisplay.offsetWidth; // 强制重排，让动画能重放
+        daysDisplay.classList.add('is-flipping');
+        daysFlipTimer = window.setTimeout(() => {
+            daysDisplay.textContent = value;
+        }, 150);
     }
 
     function formatDateInput(date) {
@@ -224,6 +249,9 @@
         submitBtn.disabled = isLoading;
         progressPanel.classList.toggle('hidden', !isLoading);
         statusText.textContent = isLoading ? '正在生成中...' : '';
+        // 第 1 幕「受理章」的 class 钩子（反馈单红线：JS 只加 class 钩子与展示字符串，
+        // 请求 / 分支 / 渲染流程一行不动）
+        landingPage.classList.toggle('is-loading', isLoading);
     }
 
     function setTripAdjustLoading(isLoading) {

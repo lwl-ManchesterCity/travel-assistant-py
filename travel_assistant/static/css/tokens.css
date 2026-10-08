@@ -118,4 +118,10 @@
     --shell-max: 1180px;
     --shell-max-result: 1280px;
     --shell-gutter: 20px;
+
+    /* ---------- 动效 ----------
+     * 反馈单只允许新增这两个 token（FRONTEND_FEEDBACK_CREATIVE_MOTION 红线）。
+     * 其余时长/缓动直接写在对应规则里，不再扩token 面。 */
+    --dur-stamp: 0.25s;                             /* 盖章：受理 / 已出票共用 */
+    --ease-stamp: cubic-bezier(0.2, 1.4, 0.4, 1);   /* 过冲回弹，模拟盖章手感 */
 }

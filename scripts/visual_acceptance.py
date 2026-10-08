@@ -32,8 +32,11 @@ STATIC_DIR = ROOT / "travel_assistant" / "static"
 # 渐变白名单（见 FRONTEND_REDESIGN_PLAN 验收标准 1）
 # .perforation 是着陆页委托单的打孔分隔线（FRONTEND_FEEDBACK_LANDING_TICKET 修复 1），
 # 与结果页票根同一画法：缺口用 radial-gradient 画，属白名单 #2 的同类用法。
+# .punch-holes 是委托单左缘的打孔列（FRONTEND_FEEDBACK_CREATIVE_MOTION 辅助创意 A），
+# 同样是纸色圆压白卡，同一类用法。
 # 匹配按元素 className 做子串判断，故缺口的类名（.perforation-notch）也含 "perforation"。
-GRADIENT_WHITELIST = [".ticket-barcode", ".ticket-notch", ".perforation"]
+# 反馈单红线：白名单封顶这四个选择器，不得再增。
+GRADIENT_WHITELIST = [".ticket-barcode", ".ticket-notch", ".perforation", ".punch-holes"]
 
 EMOJI_RE = re.compile(
     "[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u2700-\u27BF]"

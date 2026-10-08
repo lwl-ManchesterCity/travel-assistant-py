@@ -53,7 +53,9 @@
 .perforation {
     position: relative;
     border-top: 2px dashed var(--line-strong);
-    margin: var(--sp-5) calc(var(--sp-6) * -1);
+    /* 外壳改为非对称内边距（左侧留出打孔存根区）后，负外边距也得跟着不对称，
+     * 否则打孔线会从左侧 24px 处起步，够不到单据边缘。 */
+    margin: var(--sp-5) calc(var(--sp-6) * -1) var(--sp-5) -40px;
 }
 
 .perforation-notch {
@@ -158,6 +160,88 @@
     grid-column: 1 / -1;
 }
 
+/* ---------- 辅助创意 A：委托单左缘打孔列（反馈单第二节） ---------- */
+
+/* 外壳左侧留出存根区：打孔列 + 撕缝线。右侧内边距不变，故是「非对称」内边距，
+ * 上方 .perforation 的负外边距已同步改为不对称。 */
+.planner-shell {
+    position: relative;
+    padding-left: 40px;
+}
+
+/* 打孔列的孔：纸色圆压在白卡上，看上去像打穿的孔洞。
+ * radial-gradient 属渐变白名单，类名 .punch-holes 已登记在探针 GRADIENT_WHITELIST。
+ * 上下各让开 12px —— 外壳圆角半径就是 12px，孔列不参与圆角区域。 */
+.punch-holes {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 0;
+    width: 10px;
+    background-image: radial-gradient(circle at 0 50%, var(--paper) 0 5px, transparent 5px);
+    background-size: 10px 28px;
+    background-repeat: repeat-y;
+    pointer-events: none;
+}
+
+/* 孔列右侧 12px 的撕缝线：与顶部打孔线一起，把它左边那条读成「存根联」 */
+.punch-tear {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 22px;
+    border-left: 1px dashed var(--line);
+    pointer-events: none;
+}
+
+/* ---------- 第 1 幕 · 受理章（提交瞬间盖下） ---------- */
+
+/* 章压在提交按钮右端，不挡点击。角度 -6deg 与结果页「已出票」的 -4deg、
+ * 以及 section 编号印章的 -2deg 三者错开，像三枚不同的章。 */
+.stamp-accept {
+    position: absolute;
+    top: 10px;
+    right: 24px;
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--stamp-red);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.16em;
+    transform: rotate(-6deg);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.action-wrap {
+    position: relative;
+}
+
+/* 默认（含 reduced-motion）：直接是终态，不播动画 */
+.landing-page.is-loading .stamp-accept {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    /* 从又大又斜、半透明处砸下来并回弹，模拟落章手感 */
+    .landing-page.is-loading .stamp-accept {
+        animation: stamp-land-accept var(--dur-stamp) var(--ease-stamp) both;
+    }
+
+    @keyframes stamp-land-accept {
+        from {
+            transform: scale(1.6) rotate(-12deg);
+            opacity: 0;
+        }
+        to {
+            transform: scale(1) rotate(-6deg);
+            opacity: 1;
+        }
+    }
+}
+
 /* ---------- 等宽：把「数据一眼可辨」落到着陆页（方案 2.3） ---------- */
 
 /* 「旅行天数」的数字加粗。基础样式在 controls.css，这里只补字重，
@@ -222,9 +306,14 @@
         grid-template-columns: minmax(0, 1fr);
     }
 
-    /* 外壳内边距在此断点缩到 --sp-4，打孔线的负外边距要跟着改 */
+    /* 外壳内边距在此断点缩到 --sp-4；左侧存根区宽度保持 40px，
+     * 打孔列的负外边距也跟着改，孔列在窄屏照常可见（反馈单验收 4） */
+    .planner-shell {
+        padding-left: 40px;
+    }
+
     .perforation {
-        margin: var(--sp-4) calc(var(--sp-4) * -1);
+        margin: var(--sp-4) calc(var(--sp-4) * -1) var(--sp-4) -40px;
     }
 
     .doc-head {

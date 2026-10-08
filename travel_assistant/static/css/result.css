@@ -1297,6 +1297,69 @@ details[open] > .agent-collapse-summary::after {
     font-weight: var(--fw-bold);
 }
 
+/* ---------- 第 3 / 4 幕：票根打印滑出 + 落章（反馈单第一节） ---------- */
+
+/* 上缘裁切用 clip-path 而不是 overflow: hidden —— 后者会把票根和概览条的柔和阴影
+ * 一并裁掉，卡片会「扁」下去。inset 的负值放行左右下三边，只在上缘切。 */
+.dashboard-hero {
+    position: relative;
+    clip-path: inset(0 -60px -60px -60px);
+}
+
+/* 出票口：票根顶部外沿的深色细槽，票根从槽里出来的错觉。
+ * 上边两个圆角与票根一致，免得在卡片圆角处露出方角。 */
+.dashboard-hero::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 8px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
+    z-index: 2;
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    /* 第 3 幕：票根从出票口滑出，先快后缓，像纸落定 */
+    .ticket-card {
+        animation: ticket-slide 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes ticket-slide {
+        from { transform: translateY(-110%); }
+        to { transform: translateY(0); }
+    }
+
+    /* 第 4 幕：票根滑停后再等 0.15s 落章（0.7 + 0.15 = 0.85s）。
+     * 与第 1 幕的受理章是同一种手感，但角度落在票根自己的 -4deg 上。 */
+    .ticket-stamp {
+        animation: stamp-land-issue var(--dur-stamp) var(--ease-stamp) 0.85s both;
+    }
+
+    @keyframes stamp-land-issue {
+        from {
+            transform: scale(1.6) rotate(-12deg);
+            opacity: 0;
+        }
+        to {
+            transform: scale(1) rotate(-4deg);
+            opacity: 1;
+        }
+    }
+
+    /* 其余结果页内容正常淡入，不做花样 */
+    .result-page {
+        animation: result-fade 0.35s ease-out both;
+    }
+
+    @keyframes result-fade {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+}
+
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 1180px) {

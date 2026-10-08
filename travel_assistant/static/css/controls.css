@@ -80,12 +80,44 @@
 /* 只读展示框（着陆页的「旅行天数」）：原为渐变胶囊，与白底输入框并排时视觉跳动。
  * 现在与输入框同高同描边，只把底色压成纸色表示不可编辑，数字用等宽。 */
 .readonly-value {
+    position: relative;
     display: flex;
     align-items: center;
     background: var(--paper);
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     cursor: default;
+    transform-origin: center center;
+}
+
+/* 牌面中线：模拟翻牌轴（反馈单辅助创意 B） */
+.readonly-value::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--line);
+    pointer-events: none;
+}
+
+/* 翻牌透视交给外层：perspective 只作用于子元素，设在牌面自己身上没用 */
+.field-days {
+    perspective: 240px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    /* 先翻下遮住旧值（到 -90deg 时牌面侧对视线，看不见），
+     * JS 在 150ms 那一刻换文本，下半程翻回时露出的已是新值。 */
+    .readonly-value.is-flipping {
+        animation: flap 0.3s ease-in-out;
+    }
+
+    @keyframes flap {
+        0% { transform: rotateX(0deg); }
+        50% { transform: rotateX(-90deg); }
+        100% { transform: rotateX(0deg); }
+    }
 }
 
 /* select：抹掉浏览器原生外观，配 SVG 下拉箭头，与 input 视觉一致 */
@@ -228,38 +260,95 @@ input[type="date"] {
 
 /* ---------- 进度与状态 ---------- */
 
+/* ---------- 出票机 · 第 2 幕「打印中」（FRONTEND_FEEDBACK_CREATIVE_MOTION 第一节）
+ *
+ * 原细进度条的可视层被替换成「打印口 + 走纸线 + 等宽读数」。
+ * #progress-fill 仍留在 DOM 里作为进度数据的出口 —— 反馈单红线要求原有进度数据流不动，
+ * JS 照旧会写它的 width；这里把它从视觉上摘掉，免得它在新布局里多画一条。 */
+
 .progress-panel {
     margin-top: var(--sp-4);
-    padding: var(--sp-4);
+    overflow: hidden;
     border: 1px solid var(--line);
     border-radius: var(--radius-lg);
     background: var(--card);
 }
 
-.progress-bar {
-    width: 100%;
+/* 打印口：与结果页票根顶部的「出票口」同一画法 */
+.print-slot {
     height: 8px;
-    overflow: hidden;
-    border-radius: var(--radius-pill);
-    background: var(--rail-blue-tint);
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+.print-body {
+    display: flex;
+    align-items: stretch;
+    gap: var(--sp-4);
+    padding: var(--sp-4);
+}
+
+/* 走纸线：2px 竖向虚线。
+ * 虚线图案用 mask 切出来而不是写进 SVG —— 那样颜色只能硬编码在 data-URI 里，
+ * 会绕过 token；mask 只管形状，颜色仍由 --line-strong 决定。 */
+.print-line {
+    flex: none;
+    width: 2px;
+    align-self: stretch;
+    min-height: 56px;
+    background: var(--line-strong);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='8'%3E%3Crect width='2' height='4' fill='%23fff'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='8'%3E%3Crect width='2' height='4' fill='%23fff'/%3E%3C/svg%3E");
+    -webkit-mask-repeat: repeat-y;
+    mask-repeat: repeat-y;
+    -webkit-mask-size: 2px 8px;
+    mask-size: 2px 8px;
+}
+
+.print-readout {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    align-content: center;
+    gap: var(--sp-2);
+}
+
+.print-status {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.08em;
+    color: var(--muted);
+}
+
+.print-note {
+    font-size: var(--fs-xs);
+    color: var(--muted);
 }
 
 .progress-fill {
-    width: 0;
-    height: 100%;
-    border-radius: var(--radius-pill);
-    background: var(--rail-blue);
-    transition: width 0.4s ease;
+    display: none;
 }
 
-.progress-meta {
-    margin-top: var(--sp-3);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--sp-4);
-    font-size: var(--fs-xs);
-    color: var(--muted);
+@media (prefers-reduced-motion: no-preference) {
+    /* 走纸感：虚线整周期位移，0.8s 一轮正好接回原点，看不出接缝。
+     * 反馈单允许这里用 background-position 一类位移（性能无害），此处用 mask-position 同理。 */
+    .print-line {
+        animation: paper-feed 0.8s linear infinite;
+    }
+
+    @keyframes paper-feed {
+        from {
+            -webkit-mask-position: 0 0;
+            mask-position: 0 0;
+        }
+        to {
+            -webkit-mask-position: 0 8px;
+            mask-position: 0 8px;
+        }
+    }
 }
 
 /* 原为白字（压在紫色底上）；纸底下必须转深色 */
