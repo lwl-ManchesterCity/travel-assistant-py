@@ -11,14 +11,19 @@ from ..models.planner_input import PlannerInput
 from ..models.planning_constraints import PlanningConstraints
 from ..models.trip_plan_request import TripPlanRequest
 from ..models.weather_query_result import WeatherQueryResult
+from .hotel_anchor_service import HotelAnchorService
 from .requirement_analysis_service import RequirementAnalysisService
 
 
 class PlannerInputBuilder:
 
-    def __init__(self, planning_data_agent: PlanningDataAgent, requirement_analysis_service: RequirementAnalysisService):
+    def __init__(self,
+                 planning_data_agent: PlanningDataAgent,
+                 requirement_analysis_service: RequirementAnalysisService,
+                 hotel_anchor_service: HotelAnchorService):
         self._planning_data_agent = planning_data_agent
         self._requirement_analysis_service = requirement_analysis_service
+        self._hotel_anchor_service = hotel_anchor_service
 
     def build(self, request: TripPlanRequest) -> PlannerInput:
         context = PlanningContext(request=request)
@@ -32,6 +37,13 @@ class PlannerInputBuilder:
         self._validate_planning_inputs(attraction_result, weather_result, hotel_result)
         planning_notes = self._build_planning_notes(request, attraction_result, weather_result, hotel_result, constraints)
         agent_traces = self._build_agent_traces(request, attraction_result, weather_result, hotel_result, constraints)
+        anchors = self._hotel_anchor_service.resolve(request)
+        nearby = self._hotel_anchor_service.search_nearby(request, anchors)
+        if nearby:
+            hotel_result = self._merge_hotel_candidates(hotel_result, nearby)
+        anchor_trace = self._build_anchor_trace(request, anchors)
+        if anchor_trace is not None:
+            agent_traces.append(anchor_trace)
 
         return PlannerInput(
             request=request,
@@ -42,6 +54,51 @@ class PlannerInputBuilder:
             planning_notes=planning_notes,
             planner_query=self._build_planner_query(request, attraction_result, weather_result, hotel_result, constraints),
             agent_traces=agent_traces,
+            hotel_anchor_location=anchors.whole_trip,
+            day_hotel_anchor_locations=anchors.by_day,
+        )
+
+    def _merge_hotel_candidates(self, hotel_result: HotelSearchResult, nearby: list) -> HotelSearchResult:
+        merged = list(hotel_result.hotels or [])
+        for hotel in nearby:
+            if not any(existing.name == hotel.name for existing in merged):
+                merged.append(hotel)
+        return HotelSearchResult(
+            city=hotel_result.city,
+            hotels=merged,
+            summary=hotel_result.summary,
+            provider=hotel_result.provider,
+        )
+
+    def _build_anchor_trace(self, request: TripPlanRequest, anchors) -> AgentTrace | None:
+        # 用户没指定住宿位置时不留痕：这条链路的默认行为要与 Java 逐字一致，多一条痕迹都算差异。
+        if not (request.hotel_anchor or request.day_hotel_anchors):
+            return None
+        if anchors.unresolved:
+            return AgentTrace(
+                agent_name="HotelAnchorService",
+                action="解析住宿位置锚点",
+                input_summary="、".join(anchors.unresolved),
+                output_summary="这些地名没搜到坐标，已按未填写处理",
+                status="fallback",
+            )
+        if not anchors.every_location():
+            return AgentTrace(
+                agent_name="HotelAnchorService",
+                action="解析住宿位置锚点",
+                input_summary=request.hotel_anchor or "、".join(
+                    f"第{day + 1}天 {name}" for day, name in (request.day_hotel_anchors or {}).items()),
+                output_summary="没定位到坐标，已按未填写处理",
+                status="fallback",
+            )
+        return AgentTrace(
+            agent_name="HotelAnchorService",
+            action="解析住宿位置锚点",
+            input_summary=request.hotel_anchor or "、".join(
+                f"第{day + 1}天 {name}" for day, name in (request.day_hotel_anchors or {}).items()),
+            output_summary=(f"已定位 {len(anchors.every_location())} 处，按锚点补检索 {anchors.searched} 次，"
+                             f"新增 {anchors.found_nearby} 家附近候选"),
+            status="success",
         )
 
     def _validate_planning_inputs(self,

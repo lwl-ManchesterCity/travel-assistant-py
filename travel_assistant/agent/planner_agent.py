@@ -1,11 +1,16 @@
 """对应 Java agent/PlannerAgent.java：单轮行程生成的规则主体。
 
 判定与选点全部在这里按 Java 规则复现；模型只负责需求理解与文案润色，不产出 POI、坐标、价格或天气。
+
+偏离源项目的一处（详见 MIGRATION_NOTES.md 与 docs/ADJUST_AGENT_DESIGN.md 第 9 节）：用户填了
+住宿位置或要求整趟住同一家时，这里会先按锚点筛掉圈外候选、再按远近分档，同档内仍跑 Java 原样的
+三项打分；打分公式与既有常数一个字没改。Java 没有这三格，因为它的请求里没有对应字段。
 """
 
 from datetime import date, timedelta
 import math
 
+from ..config.settings import AnchorSettings
 from ..evaluator.daily_plan_evaluator import DailyPlanEvaluator
 from ..models.agent_trace import AgentTrace
 from ..models.attraction import Attraction
@@ -47,10 +52,12 @@ class _DailyPlanDecision:
 
 class PlannerAgent:
 
-    def __init__(self, route_agent: RouteAgent, daily_plan_evaluator: DailyPlanEvaluator, llm_narration_service):
+    def __init__(self, route_agent: RouteAgent, daily_plan_evaluator: DailyPlanEvaluator, llm_narration_service,
+                 anchor_settings: AnchorSettings | None = None):
         self._route_agent = route_agent
         self._daily_plan_evaluator = daily_plan_evaluator
         self._llm_narration_service = llm_narration_service
+        self._anchor_settings = anchor_settings or AnchorSettings()
 
     def build_plan(self, planner_input: PlannerInput) -> TripPlan:
         request = planner_input.request
@@ -64,6 +71,8 @@ class PlannerAgent:
         start_date = date.fromisoformat(request.start_date)
         daily_budget_limit = max(200, request.budget // request.calculate_days())
         days = request.calculate_days()
+        strict_continuity = request.is_strict_hotel_continuity()
+        locked_hotel: Hotel | None = None
 
         for day_index in range(days):
             current_date = (start_date + timedelta(days=day_index)).isoformat()
@@ -78,7 +87,22 @@ class PlannerAgent:
                 constraints,
                 current_weather,
             )
-            selected_hotel = self._select_hotel(hotels, preliminary_attractions, daily_budget_limit)
+            anchor_label = request.hotel_anchor_label_for_day(day_index)
+            anchor_notes: list[str] = []
+            if strict_continuity and day_index > 0 and locked_hotel is not None:
+                # 只留锁定的这一家：另一处换店入口（reduce_budget 分支）也拿不到别的选择
+                candidate_hotels = [locked_hotel]
+                selected_hotel = locked_hotel
+                # 只有"某一天单独指定的位置"才算被 strict 顶掉；整趟那个锚点在第 1 天已经生效过
+                day_anchor_label = (request.day_hotel_anchors or {}).get(day_index)
+                anchor_notes.append(self._locked_hotel_note(
+                    locked_hotel, hotels, preliminary_attractions, day_anchor_label, day_index))
+            else:
+                candidate_hotels = self._narrow_hotel_candidates(
+                    hotels, planner_input.hotel_anchor_for_day(day_index), anchor_label, anchor_notes)
+                selected_hotel = self._select_hotel(candidate_hotels, preliminary_attractions, daily_budget_limit)
+                if strict_continuity:
+                    locked_hotel = selected_hotel
             daily_attractions = self._pick_daily_attractions(
                 attractions,
                 day_index,
@@ -92,7 +116,7 @@ class PlannerAgent:
             decision = self._refine_daily_plan(
                 request,
                 constraints,
-                hotels,
+                candidate_hotels,
                 attractions,
                 used_attraction_names,
                 agent_traces,
@@ -102,6 +126,9 @@ class PlannerAgent:
                 selected_hotel,
                 daily_attractions,
             )
+            for note in anchor_notes:
+                if note not in decision.notes:
+                    decision.notes.append(note)
             self._mark_attractions_as_used(used_attraction_names, decision.attractions)
             lead_attraction = decision.attractions[0]
             day_plan = DayPlan(
@@ -775,6 +802,81 @@ class PlannerAgent:
 
     def _safe_hotel_name(self, hotel: Hotel | None) -> str:
         return "未选择酒店" if hotel is None else hotel.name
+
+    def _narrow_hotel_candidates(self,
+                                 hotels: list[Hotel],
+                                 anchor: Location | None,
+                                 anchor_label: str | None,
+                                 anchor_notes: list[str]) -> list[Hotel]:
+        """用户指定了住宿位置时，先圈掉远处、再按远近分档，同档内才交给三项打分。
+
+        只改"谁有资格进打分"，不改分数本身：加一个"离锚点多少公里"的分数项会和
+        "离当天景点多少公里"抢权重（两者同单位，且前者跨天不变、后者每天重算），
+        倍数小了等于没写、大了就把预算那一维碾掉。详见 docs/ADJUST_AGENT_DESIGN.md 9.3。
+        """
+        if anchor is None or not hotels:
+            return hotels
+
+        inside = [
+            hotel for hotel in hotels
+            if hotel.location is None
+            or self._calculate_distance_km(hotel.location, anchor) <= self._anchor_settings.radius_km
+        ]
+        named = [hotel for hotel in inside if hotel.location is not None]
+        if not named:
+            anchor_notes.append(
+                f"「{anchor_label or '指定位置'}」{self._anchor_settings.radius_km:.0f} 公里内没有候选酒店，"
+                "已按全城候选继续"
+            )
+            return hotels
+
+        for tier in (
+            [hotel for hotel in inside if self._anchor_tier(hotel, anchor) == 0],
+            [hotel for hotel in inside if self._anchor_tier(hotel, anchor) == 1],
+        ):
+            if tier:
+                return tier
+        return inside
+
+    def _anchor_tier(self, hotel: Hotel, anchor: Location) -> int:
+        """0＝贴得很近（含没有坐标、无法判断的），1＝中等，2＝圈内边缘。"""
+        if hotel.location is None:
+            return 0
+        distance = self._calculate_distance_km(hotel.location, anchor)
+        if distance <= self._anchor_settings.near_km:
+            return 0
+        if distance <= self._anchor_settings.mid_km:
+            return 1
+        return 2
+
+    def _locked_hotel_note(self,
+                           locked_hotel: Hotel,
+                           hotels: list[Hotel],
+                           day_attractions: list[Attraction],
+                           day_anchor_label: str | None,
+                           day_index: int) -> str:
+        """锁同一家时把代价明写出来：它离当天景点可能比别家远不少。
+
+        用公里差而不是通勤分钟，因为分钟差要再发一轮路线请求（占高德每秒配额、可能撞 CUQPS），
+        为一句备注付这个成本不值。
+        """
+        label = self._safe_hotel_name(locked_hotel)
+        if day_anchor_label:
+            return (f"已锁定第 1 天的酒店「{label}」，"
+                    f"第 {day_index + 1} 天指定的住宿位置「{day_anchor_label}」未生效")
+        center = self._calculate_center(day_attractions)
+        if center is None or locked_hotel.location is None:
+            return f"第 {day_index + 1} 天沿用第 1 天的酒店「{label}」（整趟住同一家）"
+        locked_km = self._calculate_distance_km(locked_hotel.location, center)
+        reachable = [self._calculate_distance_km(hotel.location, center)
+                     for hotel in hotels if hotel.location is not None]
+        if not reachable:
+            return f"第 {day_index + 1} 天沿用第 1 天的酒店「{label}」（整趟住同一家）"
+        nearest_km = min(reachable)
+        if locked_km - nearest_km < 1.0:
+            return f"第 {day_index + 1} 天沿用第 1 天的酒店「{label}」（整趟住同一家）"
+        return (f"已锁定整趟住同一家「{label}」，第 {day_index + 1} 天它离当天景点中心 "
+                f"{locked_km:.1f} 公里，比最近的一家远 {locked_km - nearest_km:.1f} 公里")
 
     def _select_hotel(self, hotels: list[Hotel] | None, attractions: list[Attraction], daily_budget_limit: int) -> Hotel | None:
         if not hotels:

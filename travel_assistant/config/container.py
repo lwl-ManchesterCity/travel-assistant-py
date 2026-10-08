@@ -40,6 +40,7 @@ from ..evaluator.daily_plan_evaluator import DailyPlanEvaluator
 from ..evaluator.route_evaluator import RouteEvaluator
 from ..evaluator.weather_evaluator import WeatherEvaluator
 from ..service.llm_narration_service import LlmNarrationService
+from ..service.hotel_anchor_service import HotelAnchorService
 from ..service.planner_input_builder import PlannerInputBuilder
 from ..service.request_optimization_strategy_service import RequestOptimizationStrategyService
 from ..service.requirement_analysis_service import RequirementAnalysisService
@@ -94,12 +95,14 @@ def build_container(settings: Settings | None = None) -> Container:
 
     requirement_analysis_service = RequirementAnalysisService(llm_client)
     llm_narration_service = LlmNarrationService(llm_client)
-    planner_agent = PlannerAgent(route_agent, daily_plan_evaluator, llm_narration_service)
+    planner_agent = PlannerAgent(route_agent, daily_plan_evaluator, llm_narration_service, settings.anchor)
 
     planning_data_agent = PlanningDataAgent(
         llm_client, build_planning_tools(attraction_agent, weather_agent, hotel_agent)
     )
-    planner_input_builder = PlannerInputBuilder(planning_data_agent, requirement_analysis_service)
+    planner_input_builder = PlannerInputBuilder(
+        planning_data_agent, requirement_analysis_service,
+        HotelAnchorService(amap, amap_hotel_client, settings.anchor))
 
     # Loop 闭环（Java agent/LoopPlanningAgent.java 及其三个协作者）
     request_optimization_strategy_service = RequestOptimizationStrategyService()

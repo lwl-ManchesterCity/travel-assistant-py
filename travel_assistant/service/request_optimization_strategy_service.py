@@ -49,6 +49,11 @@ class RequestOptimizationStrategyService:
             transportation=request.transportation,
             accommodation=request.accommodation,
             extra_requirements=self._sanitize_persisted_extra_requirements(request.extra_requirements),
+            # 这三格是 Java 没有的扩展，必须显式带上：漏一格的后果是用户改一次行程，
+            # 上次填的住宿位置与"整趟住同一家"就静默消失了。
+            hotel_anchor=request.hotel_anchor,
+            day_hotel_anchors=dict(request.day_hotel_anchors) if request.day_hotel_anchors else None,
+            hotel_continuity=request.hotel_continuity,
         )
 
     def apply_action(self,

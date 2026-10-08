@@ -85,6 +85,19 @@ class ProviderSettings(TravelDefaults, BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
 
+class AnchorSettings(TravelDefaults, BaseSettings):
+    """用户指定住宿位置时怎么圈定候选酒店，对应 docs/ADJUST_AGENT_DESIGN.md 第 9 节。
+
+    这三个数只决定"谁有资格进打分"，不参与任何分数计算，所以改它们不会重排已有候选。
+    """
+
+    radius_km: float = Field(default=5.0, validation_alias="TRAVEL_HOTEL_ANCHOR_RADIUS_KM")
+    near_km: float = Field(default=1.5, validation_alias="TRAVEL_HOTEL_ANCHOR_NEAR_KM")
+    mid_km: float = Field(default=3.0, validation_alias="TRAVEL_HOTEL_ANCHOR_MID_KM")
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+
+
 class Settings(BaseSettings):
     """对应 application.yml 顶层：server.port + travel.loop + travel.llm + travel.providers。"""
 
@@ -92,6 +105,7 @@ class Settings(BaseSettings):
     loop: LoopSettings = Field(default_factory=LoopSettings)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     providers: ProviderSettings = Field(default_factory=ProviderSettings)
+    anchor: AnchorSettings = Field(default_factory=AnchorSettings)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 

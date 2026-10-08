@@ -16,6 +16,7 @@ from .rule_hotel import RuleBasedHotelClient
 log = logging.getLogger(__name__)
 
 _PATH = "/v3/place/text"
+_AROUND_PATH = "/v3/place/around"
 
 
 class AmapHotelClient(HotelClient):
@@ -44,6 +45,53 @@ class AmapHotelClient(HotelClient):
             provider_code="amap-hotel-search",
             provider_name="高德地图酒店检索",
             mock=self._amap.mock_response,
+        )
+
+    def search_near_location(self, query: HotelQuery, location: Location, radius_km: float) -> list[Hotel]:
+        """以锚点为圆心做一次周边酒店检索（`/v3/place/around`，按距离排序）。
+
+        必须单独发这一趟：默认的 `/v3/place/text` 是按关键词相关性返回 10 家，实测
+        "舒适型酒店 精品酒店"在杭州最近的离西湖 6.1 公里——全城 10 家里挑，再怎么画圈也
+        圈不到湖边的店。周边检索才是"附近的酒店"这件事的对应能力。
+        失败或没结果时返回空列表，绝不回退到规则酒店：规则酒店没有坐标，顶上来会伪装成"附近找到了"。
+        """
+        if self._amap.mock_response:
+            return []
+        try:
+            response = self._fetch_around_response(query, location, radius_km)
+        except Exception as exception:  # noqa: BLE001 - 锚点是增强，不能因为它打断规划
+            log.warning("锚点周边酒店检索失败: reason=%s", type(exception).__name__)
+            return []
+        pois = response.get("pois")
+        if pois is None:
+            return []
+        hotels = [
+            self._to_hotel(poi, query)
+            for poi in pois
+            if self._is_hotel_in_requested_city(poi, query.city)
+        ]
+        return [hotel for hotel in hotels if hotel.location is not None]
+
+    def _fetch_around_response(self, query: HotelQuery, location: Location, radius_km: float) -> dict:
+        self._validate_amap_configuration()
+        candidate_urls = build_candidate_urls(self._amap, _AROUND_PATH, {
+            "key": self._amap.api_key,
+            "keywords": "酒店",
+            "location": f"{location.longitude},{location.latitude}",
+            "radius": int(round(radius_km * 1000)),
+            "offset": self._amap.poi_page_size,
+            "page": 1,
+            "extensions": "all",
+            "sortrule": "distance",
+        })
+        return fetch_json(
+            self._amap,
+            candidate_urls,
+            log_scope="高德周边酒店检索",
+            error_prefix="高德周边酒店检索",
+            request_exception_prefix="高德周边酒店检索请求异常：",
+            curl_exception_prefix="高德周边酒店检索 curl fallback 未获取到有效响应：",
+            catch_curl_errors=True,
         )
 
     def _validate_amap_configuration(self) -> None:
