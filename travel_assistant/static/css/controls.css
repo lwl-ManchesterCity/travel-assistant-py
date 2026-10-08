@@ -90,16 +90,9 @@
     transform-origin: center center;
 }
 
-/* 牌面中线：模拟翻牌轴（反馈单辅助创意 B） */
-.readonly-value::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    border-top: 1px solid var(--line);
-    pointer-events: none;
-}
+/* 注：反馈单辅助创意 B 原要求"牌面加一条 1px 水平中线模拟翻牌轴"，
+ * 实测观感像给「3 天」划了条删除线，已去掉。翻牌动效不依赖这条线 ——
+ * 轴是概念上的，翻下/翻回照常。 */
 
 /* 翻牌透视交给外层：perspective 只作用于子元素，设在牌面自己身上没用 */
 .field-days {
@@ -143,9 +136,221 @@ input[type="number"]::-webkit-inner-spin-button {
     margin: 0;
 }
 
-/* date：让日历按钮不吃掉右侧内边距 */
+/* ---------- 日期输入：把原生控件尽量拉进设计系统 ----------
+ *
+ * 硬边界先说清：点开后的日历弹层由浏览器自绘、不在页面 DOM 里，CSS 够不到，
+ * 所以它的字号与尺寸无法调整。能改的是输入框本体这三样 —— 选中片段的强调色、
+ * 日期文字的字体、右侧那个日历按钮。 */
+
 input[type="date"] {
     cursor: pointer;
+    /* Chrome 默认强调蓝换成票据蓝。这个值同时作用于输入框内被选中的日期片段
+     * 和日历弹层里选中的那一天 —— 弹层尺寸改不了，但至少颜色不再和设计系统打架。 */
+    accent-color: var(--rail-blue);
+    /* 日期是数据，用等宽：与 label 右侧的 YYYY/MM/DD 提示同一套字 */
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+input[type="date"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+}
+
+/* 各片段继承输入框自己的字体与字号，别让浏览器另起一套 */
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+    padding: 0 1px;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* ---------- 自绘日期选择器 ----------
+ *
+ * 原生 <input type="date"> 作为取值与 min 约束的载体留在 DOM 里（现有 JS 仍读它的
+ * .value、仍靠它派发 change），只是藏起来不参与视觉与点击。
+ * 弹层尺寸与日期显示格式这两样原生控件够不着的东西，全部由下面这层自绘控制。 */
+
+.date-field {
+    position: relative;
+}
+
+/* 取值载体：1px 且不可点，但仍在表单里、仍能被 label 关联 */
+.date-native {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.date-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+}
+
+.date-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+}
+
+.date-value.is-empty {
+    color: var(--muted);
+}
+
+/* 日历图标：与原生那个同尺寸的自绘件 */
+.date-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Crect x='2.25' y='3.75' width='13.5' height='12' rx='2.25' fill='none' stroke='%236B7280' stroke-width='1.5'/%3E%3Cline x1='2.25' y1='7.5' x2='15.75' y2='7.5' stroke='%236B7280' stroke-width='1.5'/%3E%3Cline x1='6' y1='1.7' x2='6' y2='4.6' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='12' y1='1.7' x2='12' y2='4.6' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 18px 18px;
+}
+
+.date-trigger[aria-expanded="true"] {
+    border-color: var(--rail-blue);
+    box-shadow: var(--focus-ring);
+}
+
+/* ---------- 日历弹层 ---------- */
+
+.date-popup {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 60;
+    width: 320px;
+    max-width: calc(100vw - var(--sp-4) * 2);
+    padding: var(--sp-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    box-shadow: var(--shadow-pop);
+}
+
+.date-popup-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-3);
+}
+
+.date-popup-title {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+    color: var(--ink);
+}
+
+.date-nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    cursor: pointer;
+}
+
+.date-nav:hover:not(:disabled) {
+    border-color: var(--rail-blue);
+}
+
+.date-nav:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* 箭头用边框画，不用字形 —— 与按天卡的 .caret 同一做法 */
+.date-nav-caret {
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid var(--muted);
+    border-bottom: 2px solid var(--muted);
+}
+
+.date-nav-prev .date-nav-caret {
+    transform: rotate(135deg) translate(-1px, -1px);
+}
+
+.date-nav-next .date-nav-caret {
+    transform: rotate(-45deg) translate(-1px, -1px);
+}
+
+.date-popup-week,
+.date-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
+}
+
+.date-popup-week {
+    margin-bottom: var(--sp-1);
+}
+
+.date-popup-week span {
+    text-align: center;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    color: var(--muted);
+}
+
+/* 单元格比原生那个大一圈 —— 这正是"太小"要解决的地方 */
+.date-cell {
+    height: 38px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+}
+
+.date-cell:hover:not(:disabled) {
+    border-color: var(--rail-blue);
+    color: var(--rail-blue);
+}
+
+.date-cell.is-outside {
+    color: var(--muted);
+    opacity: 0.5;
+}
+
+.date-cell.is-today {
+    border-color: var(--line-strong);
+    font-weight: var(--fw-bold);
+}
+
+.date-cell.is-selected {
+    border-color: var(--rail-blue);
+    background: var(--rail-blue);
+    color: #fff;
+    font-weight: var(--fw-bold);
+}
+
+.date-cell:disabled {
+    color: var(--muted);
+    opacity: 0.32;
+    cursor: not-allowed;
 }
 
 /* ---------- 兴趣 chip：原为「原生小方框 + emoji 混排」 ---------- */

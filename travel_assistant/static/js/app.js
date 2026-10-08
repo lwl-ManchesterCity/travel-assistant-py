@@ -245,6 +245,198 @@
         return Math.max(1, diff + 1 || 1);
     }
 
+    // ---------- 自绘日期选择器 ----------
+    // 起因：原生日期弹层的尺寸与显示格式（跟着浏览器语言走）都无法用 CSS 改。
+    // 契约保持不变：原生 input 仍是唯一取值源与 min 约束载体，选中后照样 dispatch change，
+    // 所以 syncDateRange / getTripDays / buildTripPayload 一行都不用改。
+    // 本段代码在本文件末尾执行，晚于上方第 117 行的 initializeDefaultDates()，读得到初始值。
+
+    const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+
+    function formatDateDisplay(iso) {
+        return iso ? iso.replace(/-/g, '/') : '';
+    }
+
+    const dateFields = Array.from(document.querySelectorAll('[data-date-field]')).map((root) => {
+        const input = root.querySelector('input[type="date"]');
+        const trigger = root.querySelector('.date-trigger');
+        const valueEl = root.querySelector('.date-value');
+
+        const popup = document.createElement('div');
+        popup.className = 'date-popup hidden';
+        popup.setAttribute('role', 'dialog');
+        popup.setAttribute('aria-label', '选择日期');
+        popup.innerHTML = `
+            <div class="date-popup-head">
+                <button type="button" class="date-nav date-nav-prev" aria-label="上个月">
+                    <span class="date-nav-caret"></span>
+                </button>
+                <span class="date-popup-title"></span>
+                <button type="button" class="date-nav date-nav-next" aria-label="下个月">
+                    <span class="date-nav-caret"></span>
+                </button>
+            </div>
+            <div class="date-popup-week">${WEEKDAY_LABELS.map((w) => `<span>${w}</span>`).join('')}</div>
+            <div class="date-grid"></div>
+        `;
+        root.appendChild(popup);
+
+        const anchor = input.value ? new Date(`${input.value}T00:00:00`) : new Date();
+        const field = {
+            input,
+            trigger,
+            valueEl,
+            popup,
+            titleEl: popup.querySelector('.date-popup-title'),
+            gridEl: popup.querySelector('.date-grid'),
+            prevBtn: popup.querySelector('.date-nav-prev'),
+            nextBtn: popup.querySelector('.date-nav-next'),
+            view: { year: anchor.getFullYear(), month: anchor.getMonth() }
+        };
+
+        trigger.addEventListener('click', () => {
+            if (popup.classList.contains('hidden')) {
+                openDateField(field);
+            } else {
+                closeDateField(field);
+            }
+        });
+        field.prevBtn.addEventListener('click', () => shiftDateMonth(field, -1));
+        field.nextBtn.addEventListener('click', () => shiftDateMonth(field, 1));
+        popup.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeDateField(field);
+                trigger.focus();
+                return;
+            }
+            const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[event.key];
+            if (!step) {
+                return;
+            }
+            const cells = Array.from(field.gridEl.querySelectorAll('[data-date]:not(:disabled)'));
+            const index = cells.indexOf(document.activeElement);
+            const next = cells[Math.min(Math.max(index + step, 0), cells.length - 1)];
+            if (next) {
+                event.preventDefault();
+                next.focus();
+            }
+        });
+        return field;
+    });
+
+    function syncDateFieldDisplay(field) {
+        const text = formatDateDisplay(field.input.value);
+        field.valueEl.textContent = text || '选择日期';
+        field.valueEl.classList.toggle('is-empty', !text);
+    }
+
+    function openDateField(field) {
+        dateFields.forEach((other) => {
+            if (other !== field) {
+                closeDateField(other);
+            }
+        });
+        // 每次打开都把视图拉回当前值所在月份
+        const anchor = field.input.value ? new Date(`${field.input.value}T00:00:00`) : new Date();
+        field.view = { year: anchor.getFullYear(), month: anchor.getMonth() };
+        renderDateMonth(field);
+        field.popup.classList.remove('hidden');
+        field.trigger.setAttribute('aria-expanded', 'true');
+        // 弹层比字段宽，窄屏下要按"字段左缘到视口右缘"的剩余空间收窄，
+        // 否则会越出视口右缘（375px 下实测会到 390）。
+        // 只按 100vw 算 max-width 不够 —— 字段本身还带着外壳存根区与卡片内边距的偏移。
+        const popupLeft = field.popup.getBoundingClientRect().left;
+        const available = window.innerWidth - popupLeft - 16;
+        field.popup.style.width = `${Math.max(240, Math.min(320, available))}px`;
+        const focusTarget = field.gridEl.querySelector('.is-selected:not(:disabled)')
+            || field.gridEl.querySelector('.is-today:not(:disabled)')
+            || field.gridEl.querySelector('[data-date]:not(:disabled)');
+        if (focusTarget) {
+            focusTarget.focus();
+        }
+    }
+
+    function closeDateField(field) {
+        field.popup.classList.add('hidden');
+        field.trigger.setAttribute('aria-expanded', 'false');
+    }
+
+    function shiftDateMonth(field, delta) {
+        const shifted = new Date(field.view.year, field.view.month + delta, 1);
+        field.view = { year: shifted.getFullYear(), month: shifted.getMonth() };
+        renderDateMonth(field);
+    }
+
+    function renderDateMonth(field) {
+        const { year, month } = field.view;
+        field.titleEl.textContent = `${year}年${month + 1}月`;
+
+        const min = field.input.min; // 由 syncDateRange 维护：结束日期不得早于开始日期
+        const firstWeekday = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const prevMonthDays = new Date(year, month, 0).getDate();
+        const todayIso = formatDateInput(new Date());
+
+        const cells = [];
+        for (let i = firstWeekday - 1; i >= 0; i -= 1) {
+            cells.push({ day: prevMonthDays - i, offset: -1 });
+        }
+        for (let d = 1; d <= daysInMonth; d += 1) {
+            cells.push({ day: d, offset: 0 });
+        }
+        let trailing = 1;
+        while (cells.length % 7 !== 0) {
+            cells.push({ day: trailing, offset: 1 });
+            trailing += 1;
+        }
+
+        field.gridEl.innerHTML = cells.map((cell) => {
+            const iso = formatDateInput(new Date(year, month + cell.offset, cell.day));
+            const classes = ['date-cell'];
+            if (cell.offset !== 0) {
+                classes.push('is-outside');
+            }
+            if (iso === todayIso) {
+                classes.push('is-today');
+            }
+            if (iso === field.input.value) {
+                classes.push('is-selected');
+            }
+            const disabled = min && iso < min ? ' disabled' : '';
+            return `<button type="button" class="${classes.join(' ')}" data-date="${iso}"${disabled}>${cell.day}</button>`;
+        }).join('');
+
+        field.gridEl.querySelectorAll('[data-date]').forEach((cell) => {
+            cell.addEventListener('click', () => selectDate(field, cell.dataset.date));
+        });
+    }
+
+    function selectDate(field, iso) {
+        if (field.input.value !== iso) {
+            field.input.value = iso;
+            // 走既有链路：syncDateRange 据此更新天数（触发翻牌）与结束日期的 min
+            field.input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        // 结束日期可能被 syncDateRange 夹到开始日期上，所以两个显示都要重算
+        dateFields.forEach(syncDateFieldDisplay);
+        closeDateField(field);
+        field.trigger.focus();
+    }
+
+    // 点击弹层与触发器之外的地方就收起
+    document.addEventListener('click', (event) => {
+        dateFields.forEach((field) => {
+            if (!field.popup.classList.contains('hidden')
+                && !field.popup.contains(event.target)
+                && !field.trigger.contains(event.target)) {
+                closeDateField(field);
+            }
+        });
+    });
+
+    dateFields.forEach(syncDateFieldDisplay);
+
     function setLoading(isLoading) {
         submitBtn.disabled = isLoading;
         progressPanel.classList.toggle('hidden', !isLoading);

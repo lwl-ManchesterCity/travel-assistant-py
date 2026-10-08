@@ -38,12 +38,31 @@
                         <input id="destination" name="destination" class="input" value="北京" required>
                     </div>
                     <div class="field">
-                        <label for="departureDate"><span class="required">*</span>开始日期<span class="label-hint">YYYY/MM/DD</span></label>
-                        <input id="departureDate" name="departureDate" class="input" type="date" required>
+                        <label for="departureDateTrigger"><span class="required">*</span>开始日期<span class="label-hint">YYYY/MM/DD</span></label>
+                        <div class="date-field" data-date-field>
+                            <!-- 原生 date input 留作取值 / min 约束的载体（现有 JS 仍读它的 .value、
+                                 仍靠它派发 change），只是视觉上藏起来；required 交给 validateTripPayload，
+                                 免得原生校验气泡指向一个看不见的控件。 -->
+                            <input id="departureDate" name="departureDate" class="date-native" type="date"
+                                   tabindex="-1" aria-hidden="true">
+                            <button id="departureDateTrigger" type="button" class="input date-trigger"
+                                    aria-haspopup="dialog" aria-expanded="false">
+                                <span class="date-value"></span>
+                                <span class="date-icon" aria-hidden="true"></span>
+                            </button>
+                        </div>
                     </div>
                     <div class="field">
-                        <label for="endDate"><span class="required">*</span>结束日期<span class="label-hint">YYYY/MM/DD</span></label>
-                        <input id="endDate" name="endDate" class="input" type="date" required>
+                        <label for="endDateTrigger"><span class="required">*</span>结束日期<span class="label-hint">YYYY/MM/DD</span></label>
+                        <div class="date-field" data-date-field>
+                            <input id="endDate" name="endDate" class="date-native" type="date"
+                                   tabindex="-1" aria-hidden="true">
+                            <button id="endDateTrigger" type="button" class="input date-trigger"
+                                    aria-haspopup="dialog" aria-expanded="false">
+                                <span class="date-value"></span>
+                                <span class="date-icon" aria-hidden="true"></span>
+                            </button>
+                        </div>
                     </div>
                     <div class="field field-days">
                         <label for="daysDisplay">旅行天数</label>
