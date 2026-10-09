@@ -5,6 +5,10 @@
 偏离源项目的一处（详见 MIGRATION_NOTES.md 与 docs/ADJUST_AGENT_DESIGN.md 第 9 节）：用户填了
 住宿位置或要求整趟住同一家时，这里会先按锚点筛掉圈外候选、再按远近分档，同档内仍跑 Java 原样的
 三项打分；打分公式与既有常数一个字没改。Java 没有这三格，因为它的请求里没有对应字段。
+
+第二处偏离（2026-10-09）：选景点时同样让它贴酒店——候选先按离酒店 5/10km 分档、近档整档先选，
+同档内仍跑 Java 原样的 `_score_attraction`；离酒店超过 15km 的景点被剔掉（不足 2 个则回落全城，
+防某天选空）。Java 里景点对距离既不分档也不设这 15km 顶，只按分数排。
 """
 
 from datetime import date, timedelta
@@ -29,6 +33,13 @@ from ..models.trip_plan_request import TripPlanRequest
 from ..models.weather_info import WeatherInfo
 from ..utils import jround
 from .route_agent import RouteAgent
+
+# 景点贴酒店（2026-10-09 第二次主动偏离 Java，见 MIGRATION_NOTES）：
+# 硬顶把离酒店太远的候选剔掉，分档让"近"排在"分数"前面——同档内仍跑 Java 原样打分。
+# 初步景点趟没有酒店（hotel=None），分档恒为 0，退化成纯分数，酒店选取因此不受影响。
+_ATTRACTION_HOTEL_RADIUS_KM = 15.0
+_ATTRACTION_NEAR_KM = 5.0
+_ATTRACTION_MID_KM = 10.0
 
 
 class _DailyPlanDecision:
@@ -68,6 +79,10 @@ class PlannerAgent:
         day_plans: list[DayPlan] = []
         agent_traces: list[AgentTrace] = list(planner_input.agent_traces or [])
         used_attraction_names: set[str] = set()
+        # 预留：被点名的必去景点先占住，任何一天的常规挑选都不许拿走（必去那天在 _refine 后强制塞回）。
+        for pinned in (planner_input.pinned_attractions_by_day or {}).values():
+            for attraction in pinned:
+                used_attraction_names.add(attraction.name)
         start_date = date.fromisoformat(request.start_date)
         daily_budget_limit = max(200, request.budget // request.calculate_days())
         days = request.calculate_days()
@@ -127,6 +142,12 @@ class PlannerAgent:
                 selected_hotel,
                 daily_attractions,
             )
+            day_pins = planner_input.pinned_for_day(day_index)
+            if day_pins:
+                decision = self._apply_day_pins(
+                    decision, day_pins, request.city, day_index, daily_budget_limit,
+                    hotels, current_weather,
+                    planner_input.hotel_anchor_for_day(day_index) is not None)
             for note in anchor_notes:
                 if note not in decision.notes:
                     decision.notes.append(note)
@@ -193,6 +214,7 @@ class PlannerAgent:
         target_count = self._determine_target_count(day_index, daily_budget_limit, constraints, current_weather)
         candidate_attractions = self._prioritize_candidate_attractions(
             nearby_attractions or attractions,
+            hotel,
             preferences,
             constraints,
             current_weather,
@@ -235,18 +257,31 @@ class PlannerAgent:
 
     def _prioritize_candidate_attractions(self,
                                           attractions: list[Attraction],
+                                          hotel: Hotel | None,
                                           preferences: list[str] | None,
                                           constraints: PlanningConstraints | None,
                                           current_weather: WeatherInfo | None,
                                           daily_budget_limit: int) -> list[Attraction]:
         # Java: Comparator.comparingDouble(score).reversed().thenComparingInt(ticketPrice)
+        # 偏离：先按离酒店距离分档（近的整档先选），同档内仍是 Java 的"分数降序、票价升序"。
         return sorted(
             attractions,
             key=lambda attraction: (
+                self._distance_band_to_hotel(hotel, attraction),
                 -self._score_attraction(attraction, preferences, constraints, current_weather, daily_budget_limit),
                 attraction.ticket_price,
             ),
         )
+
+    def _distance_band_to_hotel(self, hotel: Hotel | None, attraction: Attraction) -> int:
+        if hotel is None or hotel.location is None or attraction.location is None:
+            return 0
+        distance_km = self._calculate_distance_km(hotel.location, attraction.location)
+        if distance_km <= _ATTRACTION_NEAR_KM:
+            return 0
+        if distance_km <= _ATTRACTION_MID_KM:
+            return 1
+        return 2
 
     def _score_attraction(self,
                           attraction: Attraction,
@@ -345,6 +380,60 @@ class PlannerAgent:
         if decision_notes:
             builder += " 已自动优化：" + "；".join(decision_notes) + "。"
         return builder
+
+    def _apply_day_pins(self,
+                        decision: "_DailyPlanDecision",
+                        pins: list[Attraction],
+                        city: str,
+                        day_index: int,
+                        daily_budget_limit: int,
+                        all_hotels: list[Hotel],
+                        weather: WeatherInfo | None,
+                        anchor_hotel_to_last: bool) -> "_DailyPlanDecision":
+        """有必去景点那天的收尾。普通天不走这里。
+
+        - 只 1 个：以它为中心补附近高分（靠"酒店锚到它 + 就近档"已经实现），把它留作当天最后一站。
+        - 2 个及以上：这天就=你点名的这些，不再自动补别的；游玩顺序交给 LLM 按天气/环境排（失败回落原序）。
+        酒店（用户同意挪时）从全量酒店里取离"当天最后一站"最近的一家，所以两个点离得远也能贴到收工那站。
+        超预算/多绕路以重算后的具体数字写进备注，不静默。
+        """
+        if not pins:
+            return decision
+        if len(pins) >= 2:
+            merged = self._llm_narration_service.order_attractions(pins, weather)
+            replaced = True
+        else:
+            merged = [a for a in decision.attractions if not any(p.name == a.name for p in pins)]
+            merged.extend(pins)
+            replaced = False
+        hotel = decision.hotel
+        last = merged[-1] if merged else None
+        if anchor_hotel_to_last and last is not None and last.location is not None and all_hotels:
+            hotel = self._select_hotel(all_hotels, [last], daily_budget_limit) or decision.hotel
+        old_route = decision.route_plan
+        route_plan = self._route_agent.plan_route(RouteQuery(
+            city=city,
+            day_index=day_index,
+            transportation=decision.transportation,
+            hotel=hotel,
+            attractions=merged,
+        ))
+        estimated_cost = self._estimate_daily_cost(merged, hotel, decision.meals, route_plan)
+        label = "、".join(p.name for p in pins)
+        note = (f"第 {day_index + 1} 天按你点名的必去景点安排：{label}"
+                if replaced else f"已把必去景点排在第 {day_index + 1} 天最后一站：{label}")
+        over = estimated_cost - daily_budget_limit
+        if over > 0:
+            note += f"；当日预计 ¥{estimated_cost}，超日预算 ¥{over}"
+        if old_route is not None and route_plan is not None:
+            extra_km = route_plan.total_distance_km - old_route.total_distance_km
+            extra_minutes = route_plan.total_duration_minutes - old_route.total_duration_minutes
+            if extra_km >= 0.1 or extra_minutes >= 1:
+                note += f"；通勤多 {jround(extra_km)} 公里 / {extra_minutes} 分钟"
+        notes = list(decision.notes)
+        notes.append(note)
+        return _DailyPlanDecision(hotel, merged, decision.transportation, decision.meals,
+                                  route_plan, estimated_cost, notes)
 
     def _refine_daily_plan(self,
                            request: TripPlanRequest,
@@ -573,6 +662,7 @@ class PlannerAgent:
         nearby_attractions = self._filter_nearby_attractions(all_attractions, hotel)
         candidate_attractions = self._prioritize_candidate_attractions(
             nearby_attractions or all_attractions,
+            hotel,
             preferences,
             constraints,
             current_weather,
@@ -986,7 +1076,7 @@ class PlannerAgent:
             attraction
             for attraction in attractions
             if attraction.location is not None
-            and self._calculate_distance_km(hotel.location, attraction.location) <= 25
+            and self._calculate_distance_km(hotel.location, attraction.location) <= _ATTRACTION_HOTEL_RADIUS_KM
         ]
         return nearby_attractions if len(nearby_attractions) >= 2 else attractions
 

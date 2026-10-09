@@ -224,6 +224,28 @@
     opacity: 1;
 }
 
+/* ---------- 委托单被吸入打印机（提交 → 等待期过渡） ----------
+ *
+ * 整张委托单缩小 + 上移 + 淡出，模拟被顶部打印口吸进去的感觉。
+ * 动画结束后保持终态（forwards），等后端返回后 JS 切到结果页，
+ * 着陆页 hidden 掉时这个状态自然消失。 */
+@media (prefers-reduced-motion: no-preference) {
+    .landing-page.is-loading .planner-shell {
+        animation: feed-into-printer 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    @keyframes feed-into-printer {
+        0% {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+        100% {
+            transform: scale(0.92) translateY(-24px);
+            opacity: 0.4;
+        }
+    }
+}
+
 @media (prefers-reduced-motion: no-preference) {
     /* 从又大又斜、半透明处砸下来并回弹，模拟落章手感 */
     .landing-page.is-loading .stamp-accept {
@@ -323,5 +345,249 @@
 
     .form-serial {
         text-align: left;
+    }
+}
+
+/* ---------- FRONTEND_FEEDBACK_LANDING_BOLD ----------
+ *
+ * 输入阶段与结果阶段此前质感断裂：结果页已是票据宇宙，着陆页还是白表单。
+ * 这一节把着陆页拉到同一水准，同时把色彩配额 v2.1 放开的那一项用掉
+ * （线路色可用于「旅行偏好」chips，仍禁用于按钮/正文/边框）。 */
+
+/* ---------- 修复 1：票头实时预览 ---------- */
+
+.preview-band {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    min-height: 72px;
+    margin-bottom: var(--sp-5);
+    padding: var(--sp-3) var(--sp-5);
+    border-radius: var(--radius);
+    background: var(--rail-blue);
+    color: #fff;
+}
+
+.preview-band-route {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+    font-family: var(--font-title);
+    font-size: 32px;
+    font-weight: var(--fw-bold);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.preview-band-city {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* 未填时是下划线占位，白色 50%（占位符不承载信息，不按正文对比度要求） */
+.preview-band-city.is-placeholder {
+    opacity: 0.5;
+    letter-spacing: 0.06em;
+}
+
+.preview-band-arrow {
+    flex: none;
+    font-family: var(--font-mono);
+    font-weight: var(--fw-regular);
+    font-size: 24px;
+    opacity: 0.85;
+}
+
+.preview-band-facts {
+    flex: none;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+    white-space: nowrap;
+}
+
+/* 「待出票」骑跨色带下缘，和结果页的「已出票」构成"委托 → 出票"的状态叙事。
+ * 两枚章不混用：这枚只在着陆页出现，且只在预览色带上。 */
+.preview-stamp {
+    position: absolute;
+    left: 50%;
+    bottom: -13px;
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 12px;
+    border-radius: var(--radius-sm);
+    background: var(--stamp-red);
+    color: #fff;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.16em;
+    white-space: nowrap;
+    transform: translateX(-50%) rotate(-3deg);
+}
+
+/* ---------- 修复 2.2：外壳顶部锯齿撕裂边 ----------
+ * 齿色取页面底色 --paper，齿纹探出外壳、咬进页面，像从整卷票纸上撕下来的一张。
+ * 白名单 #6 .form-zigzag。 */
+.form-zigzag {
+    position: absolute;
+    top: -8px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    background-repeat: repeat-x;
+    background-size: 16px 8px;
+    background-position: 0 0, 8px 0;
+    background-image:
+        linear-gradient(135deg, var(--card) 50%, transparent 50%),
+        linear-gradient(225deg, var(--card) 50%, transparent 50%);
+    pointer-events: none;
+}
+
+/* ---------- 修复 3：兴趣 chips 站点化 ----------
+ * 五个 chip 按线路色循环，未选中=色边色字、选中=色底白字。
+ * 选择器比 controls.css 的 .choice-item:has(input:checked) 高一级（多一个 .choice-group），
+ * 否则那三条规则会把这里的线路色盖回蓝色。 */
+.choice-group .choice-item:nth-child(4n+1) { --line-color: var(--rail-blue); }
+.choice-group .choice-item:nth-child(4n+2) { --line-color: var(--line-emerald); }
+.choice-group .choice-item:nth-child(4n+3) { --line-color: var(--line-amber); }
+.choice-group .choice-item:nth-child(4n+4) { --line-color: var(--line-cyan); }
+
+.choice-group .choice-item {
+    border-color: var(--line-color);
+    color: var(--line-color);
+}
+
+.choice-group .choice-item:hover {
+    border-color: var(--line-color);
+    color: var(--line-color);
+}
+
+.choice-group .choice-item:has(input:checked) {
+    border-color: var(--line-color);
+    background: var(--line-color);
+    color: #fff;
+}
+
+/* ---------- 修复 4：提交按钮出票化 ---------- */
+
+/* 迷你条码复用 .ticket-barcode 这个类名：白名单按类名子串认，改名就得多占一个名额，
+   而红线把白名单封顶在六个。这里只压扁尺寸、改成白色 60%。 */
+.primary-button .ticket-barcode {
+    width: 20px;
+    min-height: 0;
+    align-self: center;
+    height: 16px;
+    margin-right: var(--sp-2);
+    background-image: repeating-linear-gradient(
+        90deg, rgba(255, 255, 255, 0.6) 0 2px, transparent 2px 5px
+    );
+}
+
+/* 按钮内要横排「条码 + 文案」，故用 flex（原来只有文字，块级也够） */
+.primary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 375 档：色带压到 64px，城市对降到 24px，右侧数据折到第二行（FRONTEND_FEEDBACK_LANDING_BOLD 修复 1） */
+@media (max-width: 720px) {
+    .preview-band {
+        min-height: 64px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--sp-1);
+    }
+
+    .preview-band-route {
+        font-size: 24px;
+    }
+
+    .preview-band-arrow {
+        font-size: 18px;
+    }
+}
+
+/* ---------- 结构层：让委托单「看得出是另一版」，不只是换色 ---------- */
+
+/* 1. 分区幽灵编号：右上角 96px 等宽淡数字，表达流程顺序的第二重线索。
+ * 计数器挂在 shell 上，form-card 自增；纯 CSS，不动 HTML。 */
+.planner-shell {
+    counter-reset: form-sec;
+}
+
+.form-card {
+    position: relative;
+    counter-increment: form-sec;
+}
+
+.form-card::after {
+    content: "0" counter(form-sec);
+    position: absolute;
+    top: var(--sp-2);
+    right: var(--sp-4);
+    font-family: var(--font-mono);
+    font-size: 96px;
+    font-weight: var(--fw-bold);
+    line-height: 1;
+    color: var(--ink);
+    opacity: 0.05;
+    pointer-events: none;
+}
+
+/* 2. 票头放大成出发屏：城市对 48px、色带加高，右端压一条竖条码（SVG，非渐变） */
+.preview-band {
+    min-height: 108px;
+    padding-right: 72px;
+}
+
+.preview-band-route {
+    font-size: 48px;
+}
+
+.preview-band::after {
+    content: "";
+    position: absolute;
+    top: 14px;
+    bottom: 14px;
+    right: 20px;
+    width: 30px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='80'%3E%3Cg fill='%23FFFFFF' fill-opacity='0.55'%3E%3Crect x='0' width='2' height='80'/%3E%3Crect x='4' width='1' height='80'/%3E%3Crect x='7' width='3' height='80'/%3E%3Crect x='12' width='1' height='80'/%3E%3Crect x='15' width='2' height='80'/%3E%3Crect x='19' width='1' height='80'/%3E%3Crect x='22' width='3' height='80'/%3E%3Crect x='27' width='1' height='80'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: repeat-y;
+    pointer-events: none;
+}
+
+/* 3. 提交区撕缝：按钮上方横一条打孔线，把「填写区」和「出票动作」撕开 */
+.action-wrap::before {
+    content: "";
+    position: absolute;
+    top: -18px;
+    left: calc(var(--sp-5) * -1);
+    right: calc(var(--sp-5) * -1);
+    border-top: 2px dashed var(--line-strong);
+    pointer-events: none;
+}
+
+@media (max-width: 720px) {
+    .preview-band {
+        min-height: 64px;
+        padding-right: var(--sp-5);
+    }
+
+    .preview-band::after {
+        display: none;
+    }
+
+    .preview-band-route {
+        font-size: 24px;
+    }
+
+    .form-card::after {
+        font-size: 64px;
     }
 }

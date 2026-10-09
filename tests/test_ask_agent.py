@@ -287,7 +287,8 @@ def test_shouldNotTouchAnyPlanningCodeWhenProposingAChange():
 
     assert response.intent == "need_change"
     assert set(response.model_dump(by_alias=True)) == {
-        "answer", "intent", "adjustmentPrompt", "anchorHint", "anchorDay", "traces"}
+        "answer", "intent", "adjustmentPrompt", "anchorHint", "anchorDay",
+        "pinHints", "pinDay", "traces"}
     assert all(tool.name in {"get_plan_overview", "get_day_plan", "get_attraction_detail",
                              "search_attractions", "query_weather", "recommend_hotels"}
                for tool in agent._tools)

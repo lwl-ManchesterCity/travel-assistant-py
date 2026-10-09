@@ -17,3 +17,6 @@ _verify/
 
 # 前端验收探针的产物（截图与报告），与 _verify/ 同口径；探针脚本本身要入库
 scripts/evidence/
+
+# 本地开发服务器日志（重启时重定向出来的那份），不入库
+uvicorn-dev.log

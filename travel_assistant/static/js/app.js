@@ -59,6 +59,8 @@
     document.getElementById('ask-submit').addEventListener('click', askAboutCurrentTrip);
     document.getElementById('ask-confirm-yes').addEventListener('click', confirmAskChange);
     document.getElementById('ask-confirm-no').addEventListener('click', hideAskConfirmation);
+    document.getElementById('ask-hotel-move-yes').addEventListener('click', () => chooseHotelMove(true));
+    document.getElementById('ask-hotel-move-no').addEventListener('click', () => chooseHotelMove(false));
 
     form.noValidate = true;
 
@@ -122,6 +124,45 @@
     initializeDefaultDates();
     syncPreferenceValues();
     syncDateRange();
+
+    // 必须排在上面三行之后：initializeDefaultDates / syncDateRange 才把日期填进输入框，
+    // 早于它们调用的话 getTripDays() 读到的是空日期，预览会显示成「1 DAYS」。
+    bindLandingPreview();
+
+    // 票头实时预览：只读输入框的值、只写预览区的文本。
+    // 不参与提交、不参与校验、不产生任何新状态（FRONTEND_FEEDBACK_LANDING_BOLD 红线）。
+    function updateLandingPreview() {
+        const originEl = document.getElementById('preview-origin');
+        const cityEl = document.getElementById('preview-city');
+        const factsEl = document.getElementById('preview-facts');
+        if (!originEl || !cityEl || !factsEl) {
+            return;
+        }
+        const origin = document.getElementById('origin')?.value.trim() || '';
+        const city = document.getElementById('destination')?.value.trim() || '';
+        const budget = document.getElementById('budget')?.value.trim() || '';
+        const days = getTripDays();
+
+        originEl.textContent = origin || '____';
+        originEl.classList.toggle('is-placeholder', !origin);
+        cityEl.textContent = city || '____';
+        cityEl.classList.toggle('is-placeholder', !city);
+        factsEl.textContent = `${days > 0 ? days : '--'} DAYS · \u00a5${budget || '--'}`;
+    }
+
+    function bindLandingPreview() {
+        // 日期是自绘控件，选中后走的是原生 input 的 change；文本框走 input。
+        // 两个事件都听，免得漏掉自绘日历那条路径。
+        ['origin', 'destination', 'budget', 'departureDate', 'endDate'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) {
+                return;
+            }
+            el.addEventListener('input', updateLandingPreview);
+            el.addEventListener('change', updateLandingPreview);
+        });
+        updateLandingPreview();
+    }
 
     function syncPreferenceValues() {
         const checkedValues = Array.from(preferenceGroup.querySelectorAll('input:checked'))
@@ -587,9 +628,15 @@
 
     let pendingAskChange = null;
 
+    function normalizePinHints(value) {
+        if (Array.isArray(value)) {
+            return value.map(name => (name || '').trim()).filter(Boolean);
+        }
+        const single = (value || '').trim();
+        return single ? [single] : [];
+    }
+
     function showAskConfirmation(data) {
-        const box = document.getElementById('ask-confirm');
-        const text = document.getElementById('ask-confirm-text');
         if (data.intent !== 'need_change' || !data.adjustmentPrompt) {
             hideAskConfirmation();
             return;
@@ -597,31 +644,59 @@
         pendingAskChange = {
             adjustmentPrompt: data.adjustmentPrompt,
             anchorHint: data.anchorHint || null,
-            anchorDay: Number.isInteger(data.anchorDay) ? data.anchorDay : null
+            anchorDay: Number.isInteger(data.anchorDay) ? data.anchorDay : null,
+            pinHints: normalizePinHints(data.pinHints || data.pinHint),
+            pinDay: Number.isInteger(data.pinDay) ? data.pinDay : null,
+            moveHotel: null
         };
-        const where = pendingAskChange.anchorHint
-            ? `（位置：${pendingAskChange.anchorHint}${pendingAskChange.anchorDay === null ? '，整趟' : `，第 ${pendingAskChange.anchorDay + 1} 天`}）`
-            : '';
-        text.textContent = `要按这句话重新生成方案吗${where}：${pendingAskChange.adjustmentPrompt}`;
-        box.classList.remove('hidden');
+        // 指定了必去景点、又没提酒店 → 先问一句要不要把酒店也挪过去（多一张卡，仍在同一次提交内）
+        if (pendingAskChange.pinHints.length && !pendingAskChange.anchorHint) {
+            showHotelMoveCard();
+            return;
+        }
+        showFinalAskConfirm();
+    }
+
+    function showHotelMoveCard() {
+        const dayLabel = pendingAskChange.pinDay === null ? '这趟' : `第 ${pendingAskChange.pinDay + 1} 天`;
+        document.getElementById('ask-hotel-move-text').textContent =
+            `${dayLabel}要必去「${pendingAskChange.pinHints.join('、')}」——要不要把酒店也挪到它们附近？`
+            + '（不挪就保住现在的酒店，只把景点加进去）';
+        document.getElementById('ask-hotel-move').classList.remove('hidden');
+        document.getElementById('ask-confirm').classList.add('hidden');
+    }
+
+    function chooseHotelMove(move) {
+        if (!pendingAskChange) {
+            return;
+        }
+        pendingAskChange.moveHotel = move;
+        document.getElementById('ask-hotel-move').classList.add('hidden');
+        showFinalAskConfirm();
+    }
+
+    function showFinalAskConfirm() {
+        const change = pendingAskChange;
+        const where = [];
+        if (change.anchorHint) {
+            where.push(`住宿位置：${change.anchorHint}${change.anchorDay === null ? '（整趟）' : `（第 ${change.anchorDay + 1} 天）`}`);
+        }
+        if (change.pinHints.length) {
+            const dayLabel = change.pinDay === null ? '某天' : `第 ${change.pinDay + 1} 天`;
+            const moveNote = change.moveHotel === true ? '，酒店也挪过去'
+                : change.moveHotel === false ? '，酒店不变' : '';
+            where.push(`必去：${dayLabel}的${change.pinHints.join('、')}${moveNote}`);
+        }
+        const whereText = where.length ? `（${where.join('；')}）` : '';
+        document.getElementById('ask-confirm-text').textContent =
+            `要按这句话重新生成方案吗${whereText}：${change.adjustmentPrompt}`;
+        document.getElementById('ask-confirm').classList.remove('hidden');
     }
 
     function hideAskConfirmation() {
         pendingAskChange = null;
         document.getElementById('ask-confirm').classList.add('hidden');
-    }
-
-    function applyAskAnchorToPayload(change) {
-        if (!change.anchorHint) {
-            return;
-        }
-        if (change.anchorDay === null) {
-            currentPayload.hotelAnchor = change.anchorHint;
-            document.getElementById('hotelAnchor').value = change.anchorHint;
-            return;
-        }
-        currentPayload.dayHotelAnchors = Object.assign({}, currentPayload.dayHotelAnchors || {});
-        currentPayload.dayHotelAnchors[change.anchorDay] = change.anchorHint;
+        document.getElementById('ask-hotel-move').classList.add('hidden');
     }
 
     async function confirmAskChange() {
@@ -630,8 +705,9 @@
             return;
         }
         hideAskConfirmation();
-        applyAskAnchorToPayload(change);
-        await runTripAdjustment(change.adjustmentPrompt);
+        // 把 agent 摘出的 anchor/pin + 挪酒店选择转达给 /adjust，写哪一格由后端定
+        await runTripAdjustment(change.adjustmentPrompt, change.anchorHint, change.anchorDay,
+            change.pinHints, change.pinDay, change.moveHotel === true);
     }
 
     async function adjustCurrentTrip() {
@@ -653,7 +729,7 @@
         await runTripAdjustment(adjustmentPrompt.trim());
     }
 
-    async function runTripAdjustment(adjustmentPrompt) {
+    async function runTripAdjustment(adjustmentPrompt, anchorHint, anchorDay, pinHints, pinDay, moveHotel) {
         if (!currentTripData || !currentPayload) {
             showError('请先生成一次旅行计划，再进行修改');
             return;
@@ -663,15 +739,29 @@
         setTripAdjustLoading(true);
 
         try {
+            const body = {
+                originalRequest: currentPayload,
+                adjustmentPrompt: adjustmentPrompt
+            };
+            if (anchorHint) {
+                body.anchorHint = anchorHint;
+                if (Number.isInteger(anchorDay)) {
+                    body.anchorDay = anchorDay;
+                }
+            }
+            if (pinHints && pinHints.length) {
+                body.pinHints = pinHints;
+                if (Number.isInteger(pinDay)) {
+                    body.pinDay = pinDay;
+                }
+                body.pinMoveHotel = moveHotel === true;
+            }
             const response = await fetch('/api/trips/adjust', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    originalRequest: currentPayload,
-                    adjustmentPrompt: adjustmentPrompt
-                })
+                body: JSON.stringify(body)
             });
 
             if (!response.ok) {
@@ -682,6 +772,11 @@
 
             const data = await response.json();
             renderResult(data.tripPlan, data.updatedRequest);
+            // 后端写回的整趟锚点回填表单，保证下次「编辑行程」重新收集请求时不丢
+            const hotelAnchorInput = document.getElementById('hotelAnchor');
+            if (hotelAnchorInput && data.updatedRequest) {
+                hotelAnchorInput.value = data.updatedRequest.hotelAnchor || '';
+            }
             statusText.textContent = `已按要求完成调整：${adjustmentPrompt}`;
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (error) {
@@ -712,18 +807,40 @@
         const city = payload.city || data.city || '';
         const startDate = (payload.startDate || '').replace(/-/g, '');
         const tripNumber = document.getElementById('ticket-number');
-        const route = document.getElementById('ticket-route');
+        const originEl = document.getElementById('ticket-origin');
+        const cityEl = document.getElementById('ticket-city');
+        const coordsEl = document.getElementById('ticket-coords');
+        const geoCorner = document.getElementById('geo-corner');
         const days = document.getElementById('ticket-days');
         const total = document.getElementById('ticket-budget');
 
         if (tripNumber) {
             tripNumber.textContent = startDate ? `TRIP-${startDate}-${city}` : '--';
         }
-        if (route) {
+        if (originEl) {
             // 出发城市后端不接收（TripPlanRequest 无 origin 字段），这里只如实回显委托单上填的值
             const origin = document.getElementById('origin')?.value.trim();
-            route.textContent = origin && city ? `${origin} → ${city}` : (city || '--');
+            originEl.textContent = origin || '--';
         }
+        if (cityEl) {
+            cityEl.textContent = city || '--';
+        }
+
+        // 坐标读数取这趟行程首尾两个真实景点的坐标。
+        // 反馈单允许写死「31.23°N 121.47°E → 39.90°N 116.40°E」这样的示例值，但那是京沪的坐标，
+        // 落在任何别的城市上都成了可见的错误信息；所以改成有坐标才显示、没有就整行隐藏。
+        const readings = collectItineraryCoordinates(data);
+        if (coordsEl) {
+            const text = readings.length > 1 ? `${readings[0]} → ${readings[readings.length - 1]}` : '';
+            coordsEl.textContent = text;
+            coordsEl.classList.toggle('hidden', !text);
+        }
+        if (geoCorner) {
+            const text = readings.length ? readings[readings.length - 1] : '';
+            geoCorner.textContent = text;
+            geoCorner.classList.toggle('hidden', !text);
+        }
+
         if (days) {
             const dayCount = (data.days || []).length;
             days.textContent = dayCount ? `${dayCount} DAYS` : '--';
@@ -731,6 +848,35 @@
         if (total) {
             total.textContent = `¥${data.budget?.total ?? 0}`;
         }
+    }
+
+    // 高德给的坐标是十进制度数，正负号换成 N/S、E/W 更贴测绘图纸的读法
+    function formatCoordinate(location) {
+        if (!location) {
+            return '';
+        }
+        const lat = Number(location.latitude);
+        const lng = Number(location.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            return '';
+        }
+        const latText = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'}`;
+        const lngText = `${Math.abs(lng).toFixed(2)}°${lng >= 0 ? 'E' : 'W'}`;
+        return `${latText} ${lngText}`;
+    }
+
+    // 按行程顺序收集所有带坐标的景点；首尾两点就是这趟行程的地理跨度
+    function collectItineraryCoordinates(data) {
+        const readings = [];
+        (data?.days || []).forEach(day => {
+            (day.attractions || []).forEach(spot => {
+                const text = formatCoordinate(spot.location);
+                if (text) {
+                    readings.push(text);
+                }
+            });
+        });
+        return readings;
     }
 
     function renderPlanningNotes(data, payload) {
@@ -845,10 +991,12 @@
             </div>
         `;
         document.getElementById('budget-progress-text').textContent = `¥${estimatedTotal} / ¥${requestedBudget}`;
-        document.getElementById('budget-progress-fill').style.width = `${usageRatio <= 0 ? 0 : Math.max(8, Math.round(usageRatio * 100))}%`;
+        const overBudget = budget.withinBudget === false || remainingBudget < 0;
+        const progressFillEl = document.getElementById('budget-progress-fill');
+        progressFillEl.style.width = `${usageRatio <= 0 ? 0 : Math.max(8, Math.round(usageRatio * 100))}%`;
+        progressFillEl.classList.toggle('warn', overBudget);
         document.getElementById('budget-total').textContent = `¥${estimatedTotal}`;
         const status = document.getElementById('budget-status');
-        const overBudget = budget.withinBudget === false || remainingBudget < 0;
         status.className = `budget-status ${overBudget ? 'warn' : 'ok'}`;
         status.textContent = overBudget
             ? `预算偏紧, 当前状态 ${budget.status || 'over_budget'}, 超出 ${Math.abs(remainingBudget)} 元`
@@ -1012,9 +1160,77 @@
         toggleAgentTraceSection(false);
     }
 
+    // 线路色：与 tokens.css「线路色」小节一一对应。JS 读不到 CSS 自定义属性在
+    // 高德 Polyline 这种非 DOM 参数上的值，只能在这里重复一次；改 token 时两处要一起改。
+    const LINE_COLORS = ['#1B4ED8', '#0F7B5F', '#B45309', '#0E7490'];
+
+    // 券上只留 MM-DD：年份在票根的 TRIP NO. 和正下方那天的详情头上都有，
+    // 而券宽在主列里只有 60~90px，带年份的 10 位日期从第 5 天起就会被截断
+    function stubDate(date) {
+        const text = String(date || '');
+        return text.length >= 10 ? text.slice(5) : (text || '--');
+    }
+
+    // 地铁线路图式当日路线：站点=酒店/景点，站间=路线段的通勤分钟。
+    // 数据全部来自 routePlan.steps，没有路线时整条不渲染。
+    function buildRouteLine(routeSteps, hotelName) {
+        const steps = routeSteps || [];
+        if (!steps.length) return '';
+        const stations = [];
+        const segs = [];
+        steps.forEach(step => {
+            if (!stations.length || stations[stations.length - 1] !== step.fromName) {
+                stations.push(step.fromName);
+            }
+            stations.push(step.toName);
+            segs.push(step.durationMinutes || 0);
+        });
+        return `
+            <div class="rline" aria-label="当日路线示意图">
+                ${stations.map((name, i) => `
+                    <div class="rline-node${name === hotelName ? ' hotel' : ''}">
+                        <span class="rline-dot"></span>
+                        <span class="rline-name">${name}</span>
+                    </div>
+                    ${i < stations.length - 1 ? `<div class="rline-seg"><span class="rline-time">${segs[i]}′</span></div>` : ''}
+                `).join('')}
+            </div>
+        `;
+    }
+
     function renderDays(data, payload) {
         const dayList = document.getElementById('day-list');
-        dayList.innerHTML = data.days.map((day, index) => {
+        const days = data.days || [];
+
+        // 联票条：N 张券首尾相接成一整条，只当索引用 —— 点哪张就在下面展开哪天的完整详情。
+        // 券数量仍由 days 驱动，循环本身没改，只是把模板拆成「索引条 + 详情」两段。
+        const dayStrip = `
+            <div class="day-strip" role="tablist" aria-label="按天切换行程详情">
+                ${days.map((day, index) => {
+                    const names = (day.attractions || []).map(spot => spot.name).filter(Boolean);
+                    const preview = names.slice(0, 2).join('·') || '暂无景点安排';
+                    const isActive = index === 0;
+                    return `
+                        <button type="button" class="day-stub${isActive ? ' active' : ''}"
+                                data-day-stub="${index}" role="tab" aria-selected="${isActive}">
+                            ${index === 0 ? '' : `
+                                <span class="ticket-notch ticket-notch-strip-top" aria-hidden="true"></span>
+                                <span class="ticket-notch ticket-notch-strip-bottom" aria-hidden="true"></span>
+                            `}
+                            <span class="day-stub-head">
+                                <span class="day-stub-day">DAY ${(day.dayIndex ?? index) + 1}</span>
+                                <span class="day-stub-date">${stubDate(day.date)}</span>
+                            </span>
+                            <span class="day-stub-body">${preview}</span>
+                            <span class="day-stub-stamp">检票</span>
+                            <span class="ticket-barcode" aria-hidden="true"></span>
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+        `;
+
+        dayList.innerHTML = dayStrip + days.map((day, index) => {
             const dateText = day.date;
             const dayAttractions = day.attractions || [];
             const hotelName = day.hotel?.name || day.accommodation || payload.accommodation;
@@ -1030,6 +1246,7 @@
                         <span class="day-date">${dateText}</span>
                     </div>
                     <div class="day-body ${index === 0 ? '' : 'hidden'}" data-day-body="${index}">
+                        ${buildRouteLine(routeSteps, hotelName)}
                         <div class="meta-box">
                             <div class="meta-row">行程描述: ${day.description || '暂无描述'}</div>
                             <div class="meta-row">交通方式: ${day.transportation || payload.transportation}</div>
@@ -1046,15 +1263,22 @@
                         <div class="spot-grid ${dayAttractions.length === 1 ? 'single' : ''}">
                             ${dayAttractions.map((spot, spotIndex) => `
                                 <div class="spot-card">
-                                    <div class="spot-head">${spot.name}</div>
-                                    <div class="spot-image" style="background-image: url('${resolveSpotImage(spot, payload.city)}')">
-                                        <div class="spot-index">${spotIndex + 1}</div>
-                                        <div class="spot-price" title="门票价按景点类别估算，不是高德实时票价">¥${spot.ticketPrice || 0}（估算）</div>
+                                    <div class="spot-stub">
+                                        <span class="spot-stub-no">${spotIndex + 1}</span>
+                                        <span class="spot-stub-cat">${(spot.category || '').split(';')[0] || 'SPOT'}</span>
+                                        <span class="ticket-barcode" aria-hidden="true"></span>
                                     </div>
-                                    <div class="spot-info">
-                                        <div><strong>地址:</strong> ${spot.address || '暂无地址'}</div>
-                                        <div><strong>游览时长:</strong> ${spot.visitDuration || 0}分钟</div>
-                                        <div><strong>描述:</strong> ${spot.description || '暂无描述'}</div>
+                                    <div class="spot-main">
+                                        <div class="spot-head">
+                                            ${spot.name}
+                                            <span class="spot-price" title="门票价按景点类别估算，不是高德实时票价">¥${spot.ticketPrice || 0}（估算）</span>
+                                        </div>
+                                        <div class="spot-image" style="background-image: url('${resolveSpotImage(spot, payload.city)}')"></div>
+                                        <div class="spot-info">
+                                            <div><strong>地址:</strong> ${spot.address || '暂无地址'}</div>
+                                            <div><strong>游览时长:</strong> ${spot.visitDuration || 0}分钟</div>
+                                            <div><strong>描述:</strong> ${spot.description || '暂无描述'}</div>
+                                        </div>
                                     </div>
                                 </div>
                             `).join('')}
@@ -1063,10 +1287,22 @@
                         <div class="hotel-box">
                             <div class="hotel-name">${hotelName}</div>
                             <div class="hotel-meta">
-                                <div>地址: ${hotelArea}</div>
-                                <div>类型: ${day.hotel?.type || inferHotelType(hotelName)}</div>
-                                <div>价格范围（估算）: ${day.hotel?.priceRange || inferHotelPrice(hotelName)}</div>
-                                <div>评分: ${day.hotel?.rating || `4.${index + 1}`}</div>
+                                <div>
+                                    <span class="hotel-meta-label">地址</span>
+                                    <span class="hotel-meta-value">${hotelArea}</span>
+                                </div>
+                                <div>
+                                    <span class="hotel-meta-label">类型</span>
+                                    <span class="hotel-meta-value">${day.hotel?.type || inferHotelType(hotelName)}</span>
+                                </div>
+                                <div>
+                                    <span class="hotel-meta-label">价格范围（估算）</span>
+                                    <span class="hotel-meta-value">${day.hotel?.priceRange || inferHotelPrice(hotelName)}</span>
+                                </div>
+                                <div>
+                                    <span class="hotel-meta-label">评分</span>
+                                    <span class="hotel-meta-value">${day.hotel?.rating || `4.${index + 1}`}</span>
+                                </div>
                             </div>
                         </div>
 
@@ -1088,17 +1324,29 @@
                             </div>
                         </div>
 
-                        <table class="meal-table">
-                            <tr><td>早餐</td><td>${findMealDescription(day.meals, 'breakfast') || `${payload.city}风味早餐, 轻量开启当天行程。`}</td></tr>
-                            <tr><td>午餐</td><td>${findMealDescription(day.meals, 'lunch') || '在主要景点附近安排简洁午餐, 保证行程节奏。'}</td></tr>
-                            <tr><td>晚餐</td><td>${findMealDescription(day.meals, 'dinner') || '结合用户偏好, 晚上安排本地特色美食体验。'}</td></tr>
-                        </table>
+                        <div class="meal-ticket">
+                            ${[
+                                ['早餐', 'breakfast', `${payload.city}风味早餐, 轻量开启当天行程。`],
+                                ['午餐', 'lunch', '在主要景点附近安排简洁午餐, 保证行程节奏。'],
+                                ['晚餐', 'dinner', '结合用户偏好, 晚上安排本地特色美食体验。'],
+                            ].map(([slot, type, fallback]) => {
+                                const cost = findMealCost(day.meals, type);
+                                return `
+                                    <div class="meal-item">
+                                        <span class="meal-slot">${slot}</span>
+                                        <span class="meal-text">${findMealDescription(day.meals, type) || fallback}</span>
+                                        <span class="meal-price">${cost === null ? '—' : `¥${cost}`}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
                     </div>
                 </div>
             `;
         }).join('');
 
         bindDayToggles();
+        bindDayStubs();
     }
 
     function renderExtraRequirements(payload) {
@@ -1134,20 +1382,20 @@
     function buildSpotPlaceholderImage(spot, city) {
         const text = `${spot.name || ''} ${spot.category || ''} ${spot.description || ''}`;
         let theme = {
-            sky: '#c9e7ff',
-            land: '#7fc69d',
-            accent: '#4f7df3',
+            sky: '#E7EEF4',
+            land: '#7FC69D',
+            accent: '#1B4ED8',
             icon: 'landmark',
             label: city || 'TRAVEL'
         };
         if (text.includes('博物馆') || text.includes('人文') || text.includes('历史')) {
-            theme = { sky: '#dbe7ff', land: '#b9a77a', accent: '#6f56d9', icon: 'museum', label: 'MUSEUM' };
+            theme = { sky: '#E8E4F4', land: '#B9A77A', accent: '#6F56D9', icon: 'museum', label: 'MUSEUM' };
         } else if (text.includes('动物园')) {
-            theme = { sky: '#d8f2ff', land: '#79bf74', accent: '#3d8f5f', icon: 'zoo', label: 'NATURE' };
+            theme = { sky: '#DFF2F0', land: '#79BF74', accent: '#0F7B5F', icon: 'zoo', label: 'NATURE' };
         } else if (text.includes('公园') || text.includes('风景') || text.includes('自然') || text.includes('山')) {
-            theme = { sky: '#d8f2ff', land: '#6fbd84', accent: '#2e7d54', icon: 'park', label: 'PARK' };
+            theme = { sky: '#DFF2EA', land: '#6FBD84', accent: '#16794A', icon: 'park', label: 'PARK' };
         } else if (text.includes('美食') || text.includes('餐饮') || text.includes('小吃')) {
-            theme = { sky: '#ffe8cf', land: '#f0a65a', accent: '#d95757', icon: 'food', label: 'FOOD' };
+            theme = { sky: '#F7E7D2', land: '#F0A65A', accent: '#B45309', icon: 'food', label: 'FOOD' };
         }
         const title = escapeSvgText(spot.name || city || '旅行景点');
         const svg = `
@@ -1155,7 +1403,7 @@
                 <defs>
                     <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
                         <stop offset="0" stop-color="${theme.sky}"/>
-                        <stop offset="1" stop-color="#f8fbff"/>
+                        <stop offset="1" stop-color="#F6EFDD"/>
                     </linearGradient>
                     <linearGradient id="hill" x1="0" x2="1" y1="0" y2="0">
                         <stop offset="0" stop-color="${theme.land}"/>
@@ -1163,12 +1411,12 @@
                     </linearGradient>
                 </defs>
                 <rect width="900" height="520" fill="url(#sky)"/>
-                <circle cx="760" cy="95" r="54" fill="#fff3bd" opacity="0.95"/>
-                <path d="M0 360 C130 285 230 310 360 250 C520 176 670 260 900 190 L900 520 L0 520 Z" fill="url(#hill)" opacity="0.86"/>
-                <path d="M0 420 C170 350 310 400 455 330 C620 248 735 330 900 270 L900 520 L0 520 Z" fill="#263f73" opacity="0.16"/>
+                <circle cx="760" cy="95" r="54" fill="#F7D774" opacity="0.9"/>
+                <path d="M0 360 C130 285 230 310 360 250 C520 176 670 260 900 190 L900 520 L0 520 Z" fill="url(#hill)" opacity="0.6"/>
+                <path d="M0 420 C170 350 310 400 455 330 C620 248 735 330 900 270 L900 520 L0 520 Z" fill="#B99F72" opacity="0.25"/>
                 ${buildSpotIcon(theme.icon, theme.accent)}
-                <text x="56" y="82" fill="#20304f" font-size="34" font-family="Arial, sans-serif" font-weight="700">${title}</text>
-                <text x="58" y="126" fill="#53627f" font-size="20" font-family="Arial, sans-serif" font-weight="700">${theme.label}</text>
+                <text x="56" y="82" fill="#2B2118" font-size="34" font-family="Arial, sans-serif" font-weight="700">${title}</text>
+                <text x="58" y="126" fill="#665843" font-size="20" font-family="Arial, sans-serif" font-weight="700">${theme.label}</text>
             </svg>
         `;
         return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
@@ -1207,11 +1455,35 @@
                 if (caret) {
                     caret.classList.toggle('open', !body.classList.contains('hidden'));
                 }
+                // 联票条的选中态跟着详情一起走：从详情头收起时不选中任何一张券
+                syncDayStubActive(body.classList.contains('hidden') ? -1 : Number(index));
                 if (!body.classList.contains('hidden') && currentTripData && currentPayload) {
                     renderMap(currentTripData, currentPayload, Number(index));
                     updateMapDayTabs(Number(index));
                 }
             });
+        });
+    }
+
+    // 联票条是 index，不是又一套状态：点券、点地图 tab、点详情头，最终都收敛到 openDaySection
+    function bindDayStubs() {
+        document.querySelectorAll('[data-day-stub]').forEach(stub => {
+            stub.addEventListener('click', () => {
+                const index = Number(stub.dataset.dayStub);
+                openDaySection(index);
+                if (currentTripData && currentPayload) {
+                    renderMap(currentTripData, currentPayload, index);
+                    updateMapDayTabs(index);
+                }
+            });
+        });
+    }
+
+    function syncDayStubActive(activeIndex) {
+        document.querySelectorAll('[data-day-stub]').forEach(stub => {
+            const isActive = Number(stub.dataset.dayStub) === activeIndex;
+            stub.classList.toggle('active', isActive);
+            stub.setAttribute('aria-selected', String(isActive));
         });
     }
 
@@ -1252,6 +1524,7 @@
                 caret.classList.toggle('open', shouldOpen);
             }
         });
+        syncDayStubActive(targetIndex);
     }
 
     function updateMapSideMeta(data, activeIndex) {
@@ -1350,7 +1623,9 @@
 
         amapPolyline = new AMap.Polyline({
             path: routePoints.map(point => [point.longitude, point.latitude]),
-            strokeColor: '#5f7dff',
+            // 第 n 天的路线用该天的线路色，和上方联票券左缘那条色条对上。
+            // 原来是写死的 #5f7dff —— 一个不属于任何 token 的颜色，顺手一并清掉。
+            strokeColor: LINE_COLORS[dayIndex % LINE_COLORS.length],
             strokeWeight: 6,
             strokeOpacity: 0.85,
             lineJoin: 'round',
@@ -1379,12 +1654,7 @@
     function buildRoutePoints(day) {
         const points = [];
         const hotel = day.hotel;
-        if (hotel?.location) {
-            points.push({
-                longitude: hotel.location.longitude,
-                latitude: hotel.location.latitude
-            });
-        }
+        // 折线与后端路线同构：首个景点起步，末站回酒店才出现酒店那一段。
         (day.attractions || []).forEach(spot => {
             if (spot.location) {
                 points.push({
@@ -1393,7 +1663,7 @@
                 });
             }
         });
-        if (hotel?.location) {
+        if (hotel?.location && (day.attractions || []).length) {
             points.push({
                 longitude: hotel.location.longitude,
                 latitude: hotel.location.latitude
@@ -1471,6 +1741,16 @@
         navItems.forEach(item => {
             item.classList.toggle('active', item.dataset.target === targetId);
         });
+    }
+
+    // 餐券右侧的等宽价格。Meal.estimatedCost 缺失时不编一个数字出来，直接显示占位符
+    function findMealCost(meals, type) {
+        if (!Array.isArray(meals)) {
+            return null;
+        }
+        const meal = meals.find(item => item.type === type);
+        const cost = Number(meal?.estimatedCost);
+        return Number.isFinite(cost) ? cost : null;
     }
 
     function findMealDescription(meals, type) {

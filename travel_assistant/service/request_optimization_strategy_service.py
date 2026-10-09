@@ -54,6 +54,8 @@ class RequestOptimizationStrategyService:
             hotel_anchor=request.hotel_anchor,
             day_hotel_anchors=dict(request.day_hotel_anchors) if request.day_hotel_anchors else None,
             hotel_continuity=request.hotel_continuity,
+            day_attraction_pins=({day: list(names) for day, names in request.day_attraction_pins.items()}
+                                 if request.day_attraction_pins else None),
         )
 
     def apply_action(self,

@@ -1,4 +1,4 @@
-/* 基础层：重置、排版基线、通用工具类 */
+/* 基础层：重置、排版基线、通用工具类（深色主题） */
 
 * {
     box-sizing: border-box;
@@ -10,7 +10,13 @@ body {
     font-family: var(--font-body);
     font-size: var(--fs-sm);
     line-height: 1.6;
-    background: var(--paper);
+    background-color: var(--paper);
+    /* 调度台台面纹理：48px 方格网 + 320px 等高线，均为 SVG data-URI（非渐变，不占白名单）。
+     * 固定附着，滚动时台面不动、单据在其上走。 */
+    background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cg fill='none' stroke='%232B2118' stroke-opacity='0.07'%3E%3Cpath d='M0 90 C60 70 110 110 170 92 C230 74 270 96 320 80'/%3E%3Cpath d='M0 150 C70 128 120 168 190 148 C250 132 285 152 320 140'/%3E%3Cpath d='M0 220 C55 200 115 236 180 216 C245 198 280 220 320 206'/%3E%3Cpath d='M0 285 C65 268 125 300 195 282 C255 268 290 286 320 274'/%3E%3C/g%3E%3C/svg%3E"),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M48 0H0v48' fill='none' stroke='%232B2118' stroke-opacity='0.05'/%3E%3C/svg%3E");
+    background-attachment: fixed, fixed;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -40,13 +46,27 @@ ul {
     display: none !important;
 }
 
-/* 数据用等宽：日期、天数、金额、编号。
- * tabular-nums 让数字等宽对齐，金额成列时不会左右跳。 */
 .mono,
 .num {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
 }
 
-/* 只读展示框（.readonly-value）与其它控件同层，定义在 controls.css —— 它要在
- * .input 的共享规则之后覆盖底色，放这里会被后加载的 controls.css 盖掉。 */
+/* 滚动条：深色主题下默认滚动条太亮，压暗 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--paper);
+}
+
+::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: var(--line-strong);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+}

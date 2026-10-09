@@ -22,6 +22,10 @@ class AttractionClient(ABC):
     def get_metadata(self) -> ProviderMetadata:
         ...
 
+    def find_attraction_by_name(self, city: str, name: str) -> "Attraction | None":
+        """按名字精确查单个景点（可选能力，供"某天必去某景点"补搜用；默认不支持返回 None）。"""
+        return None
+
 
 class HotelClient(ABC):
     @abstractmethod

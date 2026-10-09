@@ -72,16 +72,78 @@ class TripAdjustmentAgent:
 
     def adjust(self,
                original_request: TripPlanRequest,
-               adjustment_prompt: str | None) -> "TripAdjustmentAgent.TripAdjustmentDecision":
+               adjustment_prompt: str | None,
+               anchor_hint: str | None = None,
+               anchor_day: int | None = None,
+               pin_hints: list[str] | None = None,
+               pin_day: int | None = None,
+               pin_move_hotel: bool = False) -> "TripAdjustmentAgent.TripAdjustmentDecision":
         if self._llm_client.is_available():
             try:
-                return self._adjust_by_llm(original_request, adjustment_prompt)
+                decision = self._adjust_by_llm(original_request, adjustment_prompt)
             except Exception:  # noqa: BLE001 - 对齐 Java：解析阶段任何失败都回退规则解析
-                fallback_decision = self._adjust_by_rules(original_request, adjustment_prompt)
-                fallback_decision.applied_changes.append("LLM 解析失败，已自动回退到规则解析")
-                fallback_decision.adjustment_source = "rule-fallback"
-                return fallback_decision
-        return self._adjust_by_rules(original_request, adjustment_prompt)
+                decision = self._adjust_by_rules(original_request, adjustment_prompt)
+                decision.applied_changes.append("LLM 解析失败，已自动回退到规则解析")
+                decision.adjustment_source = "rule-fallback"
+        else:
+            decision = self._adjust_by_rules(original_request, adjustment_prompt)
+        self._apply_anchor(decision.updated_request, anchor_hint, anchor_day, decision.applied_changes)
+        self._apply_pin(decision.updated_request, pin_hints, pin_day, pin_move_hotel, decision.applied_changes)
+        return decision
+
+    def _apply_pin(self,
+                   updated_request: TripPlanRequest,
+                   pin_hints: list[str] | None,
+                   pin_day: int | None,
+                   move_hotel: bool,
+                   applied_changes: list[str]) -> None:
+        """把追问摘出的"某天必去景点（可多个）"写回 day_attraction_pins；move_hotel 时把住宿锚点也指过去。
+
+        一天可累加多个（一句话点名多个或多次追问）；move_hotel=是 就是替用户填了那格"期望住宿位置"，
+        复用现成酒店锚点链路，最终酒店位置由规划器排完游玩顺序后贴到当天最后一站。
+        """
+        names = [n.strip() for n in (pin_hints or []) if n and n.strip()]
+        if not names:
+            return
+        day = pin_day if (pin_day is not None and pin_day >= 0) else 0
+        pins = {d: list(v) for d, v in (updated_request.day_attraction_pins or {}).items()}
+        day_names = list(pins.get(day) or [])
+        added = [n for n in names if n not in day_names]
+        if not added:
+            return
+        day_names.extend(added)
+        pins[day] = day_names
+        updated_request.day_attraction_pins = pins
+        applied_changes.append(f"已将第 {day + 1} 天必去景点设为 {'、'.join(added)}")
+        if move_hotel:
+            anchors = dict(updated_request.day_hotel_anchors or {})
+            anchors[day] = names[0]
+            updated_request.day_hotel_anchors = anchors
+            applied_changes.append(f"已把第 {day + 1} 天住宿位置也挪到 {names[0]} 附近")
+
+    def _apply_anchor(self,
+                      updated_request: TripPlanRequest,
+                      anchor_hint: str | None,
+                      anchor_day: int | None,
+                      applied_changes: list[str]) -> None:
+        """把追问摘出的住宿地名写回请求那一格：整趟写 hotel_anchor，某天写 day_hotel_anchors。
+
+        这条"整趟 vs 按天"的判断原先在前端抄，挪来后端后 /adjust 是唯一写口；按天写要并入
+        已有 map，否则改一天会把其它天已填的锚点顶掉。
+        """
+        if not anchor_hint or not anchor_hint.strip():
+            return
+        hint = anchor_hint.strip()
+        if anchor_day is None:
+            updated_request.hotel_anchor = hint
+            applied_changes.append(f"已将整趟住宿位置锚点设为 {hint}")
+            return
+        if anchor_day < 0:
+            return
+        day_map = dict(updated_request.day_hotel_anchors or {})
+        day_map[anchor_day] = hint
+        updated_request.day_hotel_anchors = day_map
+        applied_changes.append(f"已将第 {anchor_day + 1} 天住宿位置锚点设为 {hint}")
 
     def _adjust_by_llm(self,
                        original_request: TripPlanRequest,

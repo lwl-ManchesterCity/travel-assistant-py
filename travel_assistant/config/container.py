@@ -102,7 +102,8 @@ def build_container(settings: Settings | None = None) -> Container:
     )
     planner_input_builder = PlannerInputBuilder(
         planning_data_agent, requirement_analysis_service,
-        HotelAnchorService(amap, amap_hotel_client, settings.anchor))
+        HotelAnchorService(amap, amap_hotel_client, settings.anchor),
+        attraction_client)
 
     # Loop 闭环（Java agent/LoopPlanningAgent.java 及其三个协作者）
     request_optimization_strategy_service = RequestOptimizationStrategyService()

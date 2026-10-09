@@ -1,6 +1,7 @@
 from typing import Optional
 
 from .agent_trace import AgentTrace
+from .attraction import Attraction
 from .attraction_search_result import AttractionSearchResult
 from .base import CamelModel
 from .hotel import Hotel
@@ -27,6 +28,14 @@ class PlannerInput(CamelModel):
     # 某天主张了某个位置时，那一天专用的候选池（全城候选 + 那个位置周边的酒店）。
     # 只装"有锚点的那些天"，其余天仍用 hotel_result 里那份全城候选。
     day_hotel_candidates: Optional[dict[int, list[Hotel]]] = None
+    # 某天用户点名必去、且已在候选池里解析出来的景点（Java 没有这格，见 ATTRACTION_PIN_DESIGN.md）。
+    # 规划器把这天其余景点照常选好后再把它们强制塞进去，所以必去景点不会被预算/路线反思裁掉。
+    pinned_attractions_by_day: Optional[dict[int, list[Attraction]]] = None
+
+    def pinned_for_day(self, day_index: int) -> list[Attraction]:
+        if not self.pinned_attractions_by_day:
+            return []
+        return self.pinned_attractions_by_day.get(day_index) or []
 
     def hotel_anchor_for_day(self, day_index: int) -> Optional[Location]:
         if self.day_hotel_anchor_locations:

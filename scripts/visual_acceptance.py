@@ -36,8 +36,19 @@ STATIC_DIR = ROOT / "travel_assistant" / "static"
 # .punch-holes 是委托单左缘的打孔列（FRONTEND_FEEDBACK_CREATIVE_MOTION 辅助创意 A），
 # 同样是纸色圆压白卡，同一类用法。
 # 匹配按元素 className 做子串判断，故缺口的类名（.perforation-notch）也含 "perforation"。
-# 反馈单红线：白名单封顶这四个选择器，不得再增。
-GRADIENT_WHITELIST = [".ticket-barcode", ".ticket-notch", ".perforation", ".punch-holes"]
+# .meal-ticket 是餐饮券上下边的锯齿齿纹（FRONTEND_FEEDBACK_LINE_COLORS 修复 2），
+# 用 45 度线性渐变画三角齿，是该单唯一放行的装饰渐变。
+# .form-zigzag 是着陆页表单外壳顶边的三角撕裂齿（FRONTEND_FEEDBACK_LANDING_BOLD 修复 2），
+# 与餐券同一套齿纹画法。
+# 反馈单红线：白名单封顶这六个选择器，不得再增。
+GRADIENT_WHITELIST = [
+    ".ticket-barcode",
+    ".ticket-notch",
+    ".perforation",
+    ".punch-holes",
+    ".meal-ticket",
+    ".form-zigzag",
+]
 
 EMOJI_RE = re.compile(
     "[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u2700-\u27BF]"

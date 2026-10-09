@@ -33,6 +33,9 @@ class TripPlanRequest(CamelModel):
     hotel_anchor: Optional[str] = None
     day_hotel_anchors: Optional[dict[int, str]] = None
     hotel_continuity: Optional[str] = None
+    # 某天必去的景点名（Java 没有这格）：{第几天(0起) → 景点名列表}，一天可多个。
+    # 与住宿锚点同类——是"这句话没有格子承接"补出来的输入格子，见 ATTRACTION_PIN_DESIGN.md。
+    day_attraction_pins: Optional[dict[int, list[str]]] = None
 
     @field_validator("city", "accommodation")
     @classmethod
@@ -99,6 +102,18 @@ class TripPlanRequest(CamelModel):
             raise ValueError("must be one of: strict, optimal")
         return normalized
 
+    @field_validator("day_attraction_pins")
+    @classmethod
+    def _clean_day_pins(cls, value: Optional[dict[int, list[str]]]) -> Optional[dict[int, list[str]]]:
+        if not value:
+            return None
+        cleaned: dict[int, list[str]] = {}
+        for day, names in value.items():
+            kept = [name.strip() for name in (names or []) if name is not None and name.strip()]
+            if kept:
+                cleaned[int(day)] = kept
+        return cleaned or None
+
     def is_strict_hotel_continuity(self) -> bool:
         return self.hotel_continuity == "strict"
 
@@ -114,6 +129,20 @@ class TripPlanRequest(CamelModel):
             if name and name not in anchors:
                 anchors.append(name)
         return anchors
+
+    def pinned_attractions_for_day(self, day_index: int) -> list[str]:
+        """某天用户点名必去的景点名，没有就空列表。"""
+        if not self.day_attraction_pins:
+            return []
+        return self.day_attraction_pins.get(day_index) or []
+
+    def distinct_pinned_attractions(self) -> list[str]:
+        names: list[str] = []
+        for day_names in (self.day_attraction_pins or {}).values():
+            for name in day_names:
+                if name and name not in names:
+                    names.append(name)
+        return names
 
     def calculate_days(self) -> int:
         start = date.fromisoformat(self.start_date)

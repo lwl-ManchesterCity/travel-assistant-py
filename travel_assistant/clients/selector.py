@@ -23,6 +23,9 @@ class ConfigurableAttractionClient(AttractionClient):
     def find_attractions(self, query: AttractionQuery) -> list[Attraction]:
         return self._get_delegate().find_attractions(query)
 
+    def find_attraction_by_name(self, city: str, name: str) -> Attraction | None:
+        return self._get_delegate().find_attraction_by_name(city, name)
+
     def get_metadata(self) -> ProviderMetadata:
         return self._get_delegate().get_metadata()
 

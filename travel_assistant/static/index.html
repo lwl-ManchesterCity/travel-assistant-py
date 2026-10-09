@@ -5,16 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>智能旅行助手</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='8' width='28' height='16' rx='3' fill='%231B4ED8'/%3E%3Cline x1='21' y1='8' x2='21' y2='24' stroke='%23FFFFFF' stroke-width='1.6' stroke-dasharray='2 2'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="/css/tokens.css">
-    <link rel="stylesheet" href="/css/base.css">
-    <link rel="stylesheet" href="/css/controls.css">
-    <link rel="stylesheet" href="/css/landing.css">
-    <link rel="stylesheet" href="/css/result.css">
+    <link rel="stylesheet" href="/css/tokens.css?v=20261009h">
+    <link rel="stylesheet" href="/css/base.css?v=20261009h">
+    <link rel="stylesheet" href="/css/controls.css?v=20261009h">
+    <link rel="stylesheet" href="/css/landing.css?v=20261009h">
+    <link rel="stylesheet" href="/css/result.css?v=20261009h">
 </head>
 <body>
 <section id="landing-page" class="landing-page">
     <div class="planner-shell">
         <div class="punch-holes" aria-hidden="true"></div>
+        <div class="form-zigzag" aria-hidden="true"></div>
         <div class="punch-tear" aria-hidden="true"></div>
         <header class="doc-head">
             <div class="doc-head-main">
@@ -31,6 +32,18 @@
 
         <form id="trip-form">
             <section class="form-card">
+                <!-- 票头实时预览（FRONTEND_FEEDBACK_LANDING_BOLD 修复 1）：卡内第一行，
+                     随输入实时反映"这张票会长什么样"。文案全部由 app.js 的
+                     updateLandingPreview() 写，不参与任何提交/校验。 -->
+                <div class="preview-band">
+                    <span id="preview-route" class="preview-band-route">
+                        <span id="preview-origin" class="preview-band-city is-placeholder">____</span>
+                        <span class="preview-band-arrow" aria-hidden="true">→</span>
+                        <span id="preview-city" class="preview-band-city is-placeholder">____</span>
+                    </span>
+                    <span id="preview-facts" class="preview-band-facts">-- DAYS · ¥--</span>
+                    <span class="preview-stamp">待出票</span>
+                </div>
                 <h2 class="section-title"><span class="section-no">NO.1</span>行程</h2>
                 <div class="grid-four">
                     <div class="field">
@@ -137,7 +150,7 @@
                 <input id="preferences" name="preferences" type="hidden" value="自然风景,美食,轻松节奏">
                 <p class="form-ticket-note">** 填写完整后提交 · 规划引擎预计运行 30 秒 **</p>
                 <div class="action-wrap">
-                    <button id="submit-btn" class="primary-button" type="submit">生成旅行计划</button>
+                    <button id="submit-btn" class="primary-button" type="submit"><span class="ticket-barcode" aria-hidden="true"></span>打印我的行程票</button>
                     <span class="stamp-accept" aria-hidden="true">受理</span>
                     <div id="status" class="status-text"></div>
                     <div id="progress-panel" class="progress-panel hidden">
@@ -191,7 +204,17 @@
                         <!-- 全页唯一的彩色块。圆角由 .ticket-card 的 overflow: hidden 裁出来，
                              不用自己再写 border-radius。 -->
                         <div class="ticket-band">
-                            <span id="ticket-route" class="ticket-band-route">--</span>
+                            <div class="ticket-band-main">
+                                <!-- 城市对拆成三个节点：箭头要单独走等宽字体，并与城市名拉开 --sp-3
+                                     （FRONTEND_FEEDBACK_BOLD_VISUAL 修复 1）。JS 相应改成分别写两端的 textContent。 -->
+                                <span id="ticket-route" class="ticket-band-route">
+                                    <span id="ticket-origin" class="ticket-band-city">--</span>
+                                    <span class="ticket-band-arrow" aria-hidden="true">→</span>
+                                    <span id="ticket-city" class="ticket-band-city">--</span>
+                                </span>
+                                <!-- 坐标读数由 app.js 用行程里真实景点坐标填；一个都没有时整行隐藏 -->
+                                <span id="ticket-coords" class="ticket-band-coords hidden"></span>
+                            </div>
                             <span class="ticket-band-facts">
                                 <span id="ticket-days">--</span>
                                 <span class="ticket-band-sep" aria-hidden="true">·</span>
@@ -201,6 +224,9 @@
                             <span class="ticket-stamp">已出票</span>
                         </div>
                         <div class="ticket">
+                            <!-- 水印：与骑跨色带的小章一大一小、一虚一实（修复 4）。
+                                 aria-hidden —— 它只是纸上的印记，不该被读屏念第二遍。 -->
+                            <span class="ticket-watermark" aria-hidden="true">已出票</span>
                             <div class="ticket-fields">
                                 <div id="summary-title" class="ticket-title">旅行计划</div>
                                 <div class="ticket-no">
@@ -330,6 +356,11 @@
                             <div id="ask-status" class="ask-status"></div>
                         </div>
                         <div id="ask-answer" class="agent-trace-meta"></div>
+                        <div id="ask-hotel-move" class="ask-confirm hidden">
+                            <span id="ask-hotel-move-text" class="ask-confirm-text"></span>
+                            <button id="ask-hotel-move-yes" class="primary-button" type="button">把酒店挪过去</button>
+                            <button id="ask-hotel-move-no" class="ghost-button" type="button">不挪，只加景点</button>
+                        </div>
                         <div id="ask-confirm" class="ask-confirm hidden">
                             <span id="ask-confirm-text" class="ask-confirm-text"></span>
                             <button id="ask-confirm-yes" class="primary-button" type="button">确认修改</button>
@@ -340,6 +371,9 @@
             </main>
         </div>
     </div>
+    <!-- 测绘图纸右下角的坐标读数（修复 3）。固定于视口角落，随结果页一起显示/隐藏；
+         文案由 app.js 用真实景点坐标填，没有坐标时整块隐藏。 -->
+    <div id="geo-corner" class="geo-corner hidden" aria-hidden="true"></div>
 </section>
 
 <div id="trip-adjust-overlay" class="trip-adjust-overlay hidden">
@@ -352,6 +386,6 @@
 
 <div id="error-toast" class="error-toast hidden"></div>
 
-    <script src="/js/app.js"></script>
+    <script src="/js/app.js?v=20261009h"></script>
 </body>
 </html>

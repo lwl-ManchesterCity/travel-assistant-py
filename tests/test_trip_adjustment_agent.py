@@ -192,6 +192,95 @@ def test_shouldFallbackToRulesAndMarkSourceWhenLlmResponseIsNotJson():
     ]
 
 
+def test_shouldWriteWholeTripAnchorWhenAnchorDayIsNull():
+    agent = _agent(_StubLlmClient(available=False))
+
+    decision = agent.adjust(_request(), "住得离西湖近点", anchor_hint="西湖", anchor_day=None)
+
+    assert decision.updated_request.hotel_anchor == "西湖"
+    assert decision.updated_request.day_hotel_anchors is None
+    assert "已将整趟住宿位置锚点设为 西湖" in decision.applied_changes
+
+
+def test_shouldWritePerDayAnchorWhenAnchorDayGiven():
+    agent = _agent(_StubLlmClient(available=False))
+
+    decision = agent.adjust(_request(), "第二天住西湖附近", anchor_hint="西湖", anchor_day=1)
+
+    assert decision.updated_request.hotel_anchor is None
+    assert decision.updated_request.day_hotel_anchors == {1: "西湖"}
+    assert "已将第 2 天住宿位置锚点设为 西湖" in decision.applied_changes
+
+
+def test_shouldMergePerDayAnchorIntoExistingDayMap():
+    agent = _agent(_StubLlmClient(available=False))
+
+    decision = agent.adjust(_request(day_hotel_anchors={0: "灵隐", 2: "西溪"}),
+                            "第二天住西湖附近", anchor_hint="西湖", anchor_day=1)
+
+    assert decision.updated_request.day_hotel_anchors == {0: "灵隐", 1: "西湖", 2: "西溪"}
+
+
+def test_shouldLeaveAnchorsUntouchedWhenNoAnchorHint():
+    agent = _agent(_StubLlmClient(available=False))
+
+    decision = agent.adjust(_request(), "预算改成5000", anchor_hint=None, anchor_day=1)
+
+    assert decision.updated_request.hotel_anchor is None
+    assert decision.updated_request.day_hotel_anchors is None
+    assert not any("锚点" in change for change in decision.applied_changes)
+
+
+def test_shouldRelayAnchorFieldsFromAdjustRequestToAgent():
+    adjustment_agent = _StubAdjustmentAgent()
+    service = TripPlanningService(adjustment_agent, _StubLoopPlanningAgent())
+
+    service.adjust_trip(TripAdjustmentRequest(
+        original_request=_request(),
+        adjustment_prompt="第二天住西湖附近",
+        anchor_hint="西湖",
+        anchor_day=1,
+    ))
+
+    assert adjustment_agent.calls[0][1:] == ("第二天住西湖附近", "西湖", 1, None, None, False)
+
+
+def test_shouldAppendPinToDayAttractionPins():
+    agent = _agent(_StubLlmClient(available=False))
+
+    decision = agent.adjust(_request(), "第二天要有白云山", pin_hints=["白云山"], pin_day=1)
+
+    assert decision.updated_request.day_attraction_pins == {1: ["白云山"]}
+    assert "已将第 2 天必去景点设为 白云山" in decision.applied_changes
+    assert decision.updated_request.day_hotel_anchors is None
+
+
+def test_shouldMoveHotelToPinWhenMoveHotelTrue():
+    agent = _agent(_StubLlmClient(available=False))
+
+    decision = agent.adjust(_request(), "第二天要有白云山", pin_hints=["白云山"], pin_day=1, pin_move_hotel=True)
+
+    assert decision.updated_request.day_hotel_anchors == {1: "白云山"}
+
+
+def test_shouldMergeSecondPinIntoSameDay():
+    agent = _agent(_StubLlmClient(available=False))
+
+    decision = agent.adjust(_request(day_attraction_pins={1: ["白云山"]}), "再加珠江夜游",
+                            pin_hints=["珠江夜游"], pin_day=1)
+
+    assert decision.updated_request.day_attraction_pins == {1: ["白云山", "珠江夜游"]}
+
+
+def test_shouldLeavePinsUnsetWhenNoPinHint():
+    agent = _agent(_StubLlmClient(available=False))
+
+    decision = agent.adjust(_request(), "预算改成5000", pin_hints=None, pin_day=1, pin_move_hotel=True)
+
+    assert decision.updated_request.day_attraction_pins is None
+    assert decision.updated_request.day_hotel_anchors is None
+
+
 class _StubLoopPlanningAgent:
 
     def __init__(self):
@@ -205,10 +294,18 @@ class _StubLoopPlanningAgent:
 class _StubAdjustmentAgent:
 
     def __init__(self):
-        self.calls: list[tuple[TripPlanRequest, str | None]] = []
+        self.calls: list[tuple] = []
 
-    def adjust(self, original_request: TripPlanRequest, adjustment_prompt: str | None):
-        self.calls.append((original_request, adjustment_prompt))
+    def adjust(self,
+               original_request: TripPlanRequest,
+               adjustment_prompt: str | None,
+               anchor_hint: str | None = None,
+               anchor_day: int | None = None,
+               pin_hints: list[str] | None = None,
+               pin_day: int | None = None,
+               pin_move_hotel: bool = False):
+        self.calls.append((original_request, adjustment_prompt, anchor_hint, anchor_day,
+                           pin_hints, pin_day, pin_move_hotel))
         updated = original_request.model_copy(update={"budget": 5000})
         return TripAdjustmentAgent.TripAdjustmentDecision(
             updated, ["已将预算调整为 5000 元", "已切换为经济型酒店偏好"], "rule"
@@ -226,7 +323,7 @@ def test_shouldReplanThroughLoopEntryAndAppendAdjustmentNotes():
         adjustment_prompt="预算改成5000，改经济型酒店",
     ))
 
-    assert adjustment_agent.calls == [(original, "预算改成5000，改经济型酒店")]
+    assert adjustment_agent.calls == [(original, "预算改成5000，改经济型酒店", None, None, None, None, False)]
     # 改完的请求交给第 1 轮搬好的规划入口，adjust 里没有第二份规划逻辑
     assert loop_agent.calls == [response.updated_request]
     assert response.updated_request.budget == 5000

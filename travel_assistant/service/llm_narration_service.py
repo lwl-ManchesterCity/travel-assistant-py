@@ -1,6 +1,14 @@
-"""对应 Java service/LlmNarrationService.java：只润色文案，不改变任何结构化结果。"""
+"""对应 Java service/LlmNarrationService.java：只润色文案，不改变任何结构化结果。
+
+一处扩展（2026-10-09，见 ATTRACTION_PIN_DESIGN.md）：`order_attractions` 会让模型给"某天必去景点"
+排游玩顺序。它只重排、绝不增删景点，且模型不可用/输出异常一律回落成原顺序——所以"不改变结构化结果"
+这条对内容仍然成立。
+"""
+
+import re
 
 from ..clients.llm import LlmClient
+from ..models.attraction import Attraction
 from ..models.day_plan import DayPlan
 from ..models.trip_plan_request import TripPlanRequest
 from ..models.weather_info import WeatherInfo
@@ -42,6 +50,45 @@ class LlmNarrationService:
             return fallback if result is None or not result.strip() else result.strip()
         except Exception:  # noqa: BLE001
             return fallback
+
+    def order_attractions(self, attractions: list[Attraction], weather: WeatherInfo | None) -> list[Attraction]:
+        """给"某天必去景点"排游玩先后：让模型按天气(雨天先室内)/少折返给序；不可用或输出异常回落原序。
+
+        只重排、不增删——集合内容与传入完全一致。
+        """
+        if len(attractions) < 2:
+            return list(attractions)
+        ordered = self._order_by_llm(attractions, weather)
+        return ordered if ordered is not None else list(attractions)
+
+    def _order_by_llm(self, attractions: list[Attraction], weather: WeatherInfo | None) -> list[Attraction] | None:
+        if not self.is_available():
+            return None
+        names = [a.name for a in attractions]
+        weather_text = "未知" if weather is None else f"{weather.day_weather} {weather.day_temp}℃"
+        listing = "；".join(f"{a.name}[{a.category or '景点'}]" for a in attractions)
+        prompt = (
+            "给这一天必去的景点排一个游玩先后顺序，规则：雨天/高温优先把室内类排前面，整体少折返。\n"
+            f"当日天气：{weather_text}\n"
+            f"景点（含类别）：{listing}\n"
+            f"只输出这些景点名、用|分隔、每个恰好一次：{'、'.join(names)}"
+        )
+        try:
+            result = self._llm_client.chat("你是行程顺序助手，只输出景点名序列，不要解释。", prompt)
+        except Exception:  # noqa: BLE001 - 排序失败回落原序
+            return None
+        if not result or not result.strip():
+            return None
+        by_name = {a.name: a for a in attractions}
+        ordered: list[Attraction] = []
+        for token in re.split(r"[|,，、;；\n]", result):
+            attraction = by_name.get(token.strip())
+            if attraction is not None and attraction not in ordered:
+                ordered.append(attraction)
+        for attraction in attractions:
+            if attraction not in ordered:
+                ordered.append(attraction)
+        return ordered if len(ordered) == len(attractions) else None
 
     def _build_day_prompt(self, request: TripPlanRequest, day_plan: DayPlan) -> str:
         builder = (

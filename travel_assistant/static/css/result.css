@@ -9,9 +9,37 @@
 
 /* ---------- 页面骨架 ---------- */
 
+/* 修复 3：测绘纸纹。牛皮纸上用深墨等高线，opacity 压到 0.05 免得喧宾夺主。
+ * SVG 取不到 CSS 变量，颜色写死 #2B2118（即 --ink）@5%。 */
 .result-page {
     min-height: 100vh;
     padding: var(--sp-4) 0 var(--sp-8);
+    background-color: var(--paper);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600' viewBox='0 0 600 600'%3E%3Cg fill='none' stroke='%232B2118' stroke-opacity='0.05' stroke-width='1.2'%3E%3Cpath d='M60 180 C140 90 260 110 330 170 C400 230 520 210 560 140'/%3E%3Cpath d='M20 266 C130 190 250 200 320 260 C390 320 500 300 580 232'/%3E%3Cpath d='M80 380 C170 300 280 330 350 390 C420 450 520 430 580 370'/%3E%3Cpath d='M10 470 C120 400 240 430 310 490 C380 550 490 530 590 456'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: repeat;
+}
+
+/* 视口右下角的坐标读数，像测绘图纸的角注。pointer-events: none 免得它挡住
+ * 右下角可能存在的可点元素；right 锚定 + max-width 保证 375px 下不撑出横向滚动。 */
+.geo-corner {
+    position: fixed;
+    right: var(--sp-4);
+    bottom: var(--sp-3);
+    z-index: 1;
+    max-width: calc(100vw - var(--sp-6));
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-xs);
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
 }
 
 .result-shell {
@@ -116,13 +144,46 @@
 }
 
 .ticket {
+    position: relative;
     display: flex;
     align-items: stretch;
     gap: var(--sp-5);
     padding: var(--sp-5);
 }
 
+/* ---------- 修复 4：印章水印（票根右下角、条码一侧） ----------
+ *
+ * 与骑跨色带的那枚小章一大一小、一虚一实：小章是「盖上去的」，水印是「纸本身带的」。
+ * 用描边而不是实底：--stamp-red 铺满再压到 8% 只是一块淡粉，看不出是印章；
+ * 描边+红字的轮廓在 8% 下仍读得出形状。
+ * z-index: 0 + 内容层 z-index: 1 —— 反馈单要求「压在票根内容之下、背景之上」，
+ * 而 .ticket-fields 本身没有底色，所以水印能从标题文字背后透出来。 */
+.ticket-watermark {
+    position: absolute;
+    /* 让开条码：条码宽 56px 且不透明、还压在 z-index: 1，水印若从券右边缘起算
+     * 会被整条盖掉 56px（实测 overlap=56），看起来像画坏了一半。 */
+    right: calc(56px + var(--sp-4));
+    top: 50%;
+    z-index: 0;
+    width: 120px;
+    padding: var(--sp-3) 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 5px solid var(--stamp-red);
+    border-radius: var(--radius);
+    color: var(--stamp-red);
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.12em;
+    opacity: 0.08;
+    transform: translateY(-50%) rotate(-12deg);
+    pointer-events: none;
+}
+
 .ticket-fields {
+    position: relative;
+    z-index: 1;
     flex: 1;
     min-width: 0;
     display: grid;
@@ -136,32 +197,76 @@
  * 火车票红底）恰恰敢用色块。纯色 var(--rail-blue)，不是渐变，白名单不变。
  * 上侧圆角由 .ticket-card 的 overflow: hidden 裁出，这里不必再写 border-radius。 */
 
+/* ---------- 修复 1：色带加高到 120px，城市对做成全页最大文字（FRONTEND_FEEDBACK_BOLD_VISUAL） ----------
+ *
+ * 上一单给结果页找回了色彩锚点，但尺度仍全线拉平：色带 64px、城市名 28px，
+ * 和其他卡片标题是同一档视觉重量，一眼扫过去没有落点。这一单把色带和城市名
+ * 一起放大到「全页唯一的大字」，靠尺寸而不是靠新颜色制造记忆点。 */
+
 .ticket-band {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--sp-4);
-    min-height: 64px;
-    padding: var(--sp-4) var(--sp-5);
+    min-height: 120px;
+    padding: var(--sp-3) var(--sp-5);
     background: var(--rail-blue);
     color: #fff;
 }
 
+/* 城市对与坐标竖排成一列；min-width:0 让长城市名在窄屏可收缩而不是撑破色带 */
+.ticket-band-main {
+    min-width: 0;
+    display: grid;
+    gap: var(--sp-1);
+}
+
 .ticket-band-route {
     min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-3);
     font-family: var(--font-title);
-    font-size: 28px;
+    font-size: 72px;
     font-weight: var(--fw-bold);
+    line-height: 1;
     letter-spacing: -0.02em;
     color: #fff; /* 白字压 rail-blue = 6.71，过 AA */
+}
+
+.ticket-band-city {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* 箭头走等宽：得意黑是斜体标题字，箭头在里面会跟着歪，等宽体的箭头是正立的 */
+.ticket-band-arrow {
+    flex: none;
+    font-family: var(--font-mono);
+    font-weight: var(--fw-regular);
+    font-size: 56px;
+    opacity: 0.85;
+}
+
+/* 坐标读数：色带里唯一的次要信息，压在城市对下面当地图注记。
+ * 反馈单写的是白色 70% 透明，实测那个值对 --rail-blue 只有 4.10 —— 12px 小字要 AA 得 4.5，
+ * 故提到 80%（实测 4.88，过 AA）。与本项目 tokens.css 里修过的三处对比度缺陷同一口径。 */
+.ticket-band-coords {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+    letter-spacing: 0.1em;
+    color: #fff;
+    opacity: 0.8;
 }
 
 .ticket-band-facts {
     flex: none;
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-size: var(--fs-md);
+    font-size: var(--fs-lg);
     font-weight: var(--fw-bold);
     color: #fff;
     white-space: nowrap;
@@ -228,6 +333,8 @@
 /* 渐变白名单 #1：票根条码。纯 CSS 重复线性渐变即可，不需要图片。
  * 除本条与下方 .ticket-notch 外，全站不应再有任何 gradient。 */
 .ticket-barcode {
+    position: relative;
+    z-index: 1;
     flex: none;
     width: 56px;
     align-self: stretch;
@@ -419,22 +526,33 @@
 }
 
 .overview-item {
-    padding: var(--sp-4);
+    position: relative;
+    padding: var(--sp-4) var(--sp-4) var(--sp-3);
     border: 1px solid var(--line);
+    border-top: 3px solid var(--line-color, var(--rail-blue));
     border-radius: var(--radius-lg);
     background: var(--card);
     box-shadow: var(--shadow-card);
 }
 
+/* 五格统计按线路色循环顶边，与每日联票同一套取模 */
+.overview-item:nth-child(4n+1) { --line-color: var(--rail-blue); }
+.overview-item:nth-child(4n+2) { --line-color: var(--line-emerald); }
+.overview-item:nth-child(4n+3) { --line-color: var(--line-amber); }
+.overview-item:nth-child(4n+4) { --line-color: var(--line-cyan); }
+.overview-item:nth-child(4n+5) { --line-color: var(--stamp-red); }
+
+/* 翻牌屏式大数字：数据是这页的主角，字号直接拉到标题级 */
 .overview-item strong {
     display: block;
     margin-bottom: var(--sp-2);
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-size: var(--fs-xl);
+    font-size: 40px;
     font-weight: var(--fw-bold);
     letter-spacing: -0.02em;
-    color: var(--rail-blue);
+    line-height: 1.1;
+    color: var(--line-color, var(--rail-blue));
 }
 
 .overview-item span {
@@ -490,7 +608,7 @@
     padding: var(--sp-5);
 }
 
-/* ---------- 预算 ---------- */
+/* ---------- 预算：账本翻页质感 ---------- */
 
 .budget-progress-shell {
     margin-bottom: var(--sp-3);
@@ -518,27 +636,59 @@
     color: var(--ink);
 }
 
+/* 双线轨道：像账本的横线格 */
 .budget-progress-track {
     width: 100%;
-    height: 10px;
+    height: 12px;
     overflow: hidden;
     border-radius: var(--radius-pill);
-    background: var(--line);
+    background:
+        linear-gradient(to bottom, transparent 45%, var(--line-strong) 45%, var(--line-strong) 55%, transparent 55%),
+        var(--line);
 }
 
-/* 原为绿→蓝→紫三段渐变 */
+/* 填充色跟预算状态走：健康绿 / 偏紧红。JS 通过 .budget-progress-fill.ok / .warn 切换 */
 .budget-progress-fill {
     height: 100%;
     width: 0;
     border-radius: var(--radius-pill);
-    background: var(--rail-blue);
-    transition: width 0.45s ease;
+    background: var(--ok-green);
+    transition: width 0.45s ease, background 0.3s ease;
 }
 
+.budget-progress-fill.warn {
+    background: var(--stamp-red);
+}
+
+/* 账本底色：深色卡片 + 左侧红线竖栏（模拟金额栏线） */
 .budget-grid {
+    position: relative;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--sp-3);
+    padding: var(--sp-4) var(--sp-4) var(--sp-4) calc(var(--sp-4) + 20px);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background-color: var(--card);
+    background-image:
+        linear-gradient(to right, transparent 19px, rgba(201, 58, 43, 0.30) 19px, rgba(201, 58, 43, 0.30) 20px, transparent 20px);
+}
+
+/* 锯齿撕边：齿色 = 卡片色 */
+.budget-grid::after {
+    content: "";
+    position: absolute;
+    left: -1px;
+    right: -1px;
+    bottom: -8px;
+    height: 8px;
+    background-repeat: repeat-x;
+    background-size: 16px 8px;
+    background-position: 0 0, 8px 0;
+    background-image:
+        linear-gradient(135deg, var(--card) 50%, transparent 50%),
+        linear-gradient(225deg, var(--card) 50%, transparent 50%);
+    pointer-events: none;
 }
 
 .budget-item {
@@ -576,26 +726,44 @@
     font-size: var(--fs-xs);
 }
 
-/* 原为整条渐变横幅；改为浅蓝底 + 等宽金额，克制用色 */
+/* 结账单：深色底 + 白字 + 等宽大数字 + 右下红色"合计"印章 */
 .budget-total {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--sp-3);
     margin-top: var(--sp-4);
-    padding: var(--sp-4);
-    border: 1px solid var(--rail-blue);
+    padding: var(--sp-5) var(--sp-5);
+    border: 1px solid var(--ink);
     border-radius: var(--radius);
-    background: var(--rail-blue-tint);
-    color: var(--ink);
+    background: var(--ink);
+    color: #fff;
     font-weight: var(--fw-bold);
+}
+
+.budget-total::after {
+    content: "合计";
+    position: absolute;
+    right: var(--sp-4);
+    bottom: -10px;
+    padding: 2px 10px;
+    border: 2px solid var(--stamp-red);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    color: var(--stamp-red);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.12em;
+    transform: rotate(-4deg);
 }
 
 .budget-total strong {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     font-size: var(--fs-xl);
-    color: var(--rail-blue);
+    color: #fff;
 }
 
 .budget-status {
@@ -763,7 +931,7 @@
     align-items: center;
     justify-content: center;
     color: #fff;
-    box-shadow: 0 10px 22px rgba(68, 86, 152, 0.26);
+    box-shadow: 0 10px 22px rgba(90, 70, 40, 0.35);
 }
 
 .map-marker-pin span {
@@ -796,7 +964,7 @@
     font-size: var(--fs-sm);
 }
 
-/* ---------- 天气 ---------- */
+/* ---------- 天气：气象观测站记录卡 ---------- */
 
 .weather-panel {
     display: grid;
@@ -804,12 +972,37 @@
     gap: var(--sp-4);
 }
 
-/* 原为浅蓝渐变底 */
+/* 观测站主面板：左侧加一条温度计图形（纯 CSS 竖条+圆底） */
 .weather-main {
-    padding: var(--sp-4);
+    position: relative;
+    padding: var(--sp-4) var(--sp-4) var(--sp-4) calc(var(--sp-4) + 28px);
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--paper);
+}
+
+/* 温度计：竖条 + 底部圆球。高度固定，颜色跟温度语义走（暖=红、凉=蓝），
+ * 这里用 rail-blue 做默认色，不引入新 token。 */
+.weather-main::before {
+    content: "";
+    position: absolute;
+    left: var(--sp-4);
+    top: var(--sp-4);
+    bottom: var(--sp-4);
+    width: 6px;
+    border-radius: 3px 3px 0 0;
+    background: var(--rail-blue);
+}
+
+.weather-main::after {
+    content: "";
+    position: absolute;
+    left: calc(var(--sp-4) - 5px);
+    bottom: var(--sp-4);
+    width: 16px;
+    height: 16px;
+    border-radius: var(--radius-pill);
+    background: var(--rail-blue);
 }
 
 .weather-main strong {
@@ -821,6 +1014,7 @@
     color: var(--ink);
 }
 
+/* 逐日预报改成竖向时间轴：左侧圆点+竖线连接，右侧等宽数据 */
 .weather-tips {
     padding: var(--sp-4);
     border: 1px solid var(--line);
@@ -829,28 +1023,62 @@
 }
 
 .weather-tips ul {
-    padding-left: var(--sp-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
     color: var(--ink);
     font-size: var(--fs-sm);
     line-height: 1.85;
 }
 
+.weather-tips li {
+    position: relative;
+    padding-left: 24px;
+    padding-bottom: var(--sp-3);
+    border-left: 2px solid var(--line);
+    margin-left: 6px;
+}
+
+.weather-tips li:last-child {
+    padding-bottom: 0;
+    border-left-color: transparent;
+}
+
+/* 时间轴节点圆点 */
+.weather-tips li::before {
+    content: "";
+    position: absolute;
+    left: -5px;
+    top: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-pill);
+    background: var(--rail-blue);
+    border: 2px solid var(--card);
+}
+
+/* 数据来源戳记：与票根印章同族（描边+旋转），不再是 pill 胶囊 */
 .weather-source-chip {
     display: inline-flex;
     align-items: center;
     margin-top: var(--sp-3);
-    padding: 6px 12px;
-    border-radius: var(--radius-pill);
-    background: var(--rail-blue-tint);
+    padding: 3px 10px;
+    border: 1.5px solid var(--rail-blue);
+    border-radius: var(--radius-sm);
+    background: transparent;
     color: var(--rail-blue);
+    font-family: var(--font-mono);
     font-size: var(--fs-xs);
     font-weight: var(--fw-bold);
+    letter-spacing: 0.08em;
+    transform: rotate(-2deg);
 }
 
 /* 原 #d94457 压浅红底仅 3.80，不达 AA */
 .weather-source-chip.warn {
-    background: var(--stamp-red-tint);
+    border-color: var(--stamp-red);
     color: var(--stamp-red-ink);
+    transform: rotate(-3deg);
 }
 
 /* ---------- 每日行程 ---------- */
@@ -859,11 +1087,193 @@
     padding-top: var(--sp-3);
 }
 
+/* ---------- 修复 2：每日行程的「联票」索引条 ----------
+ *
+ * N 张天票券首尾相接成一整条，券与券之间是打孔线（2px 虚线 + 上下半圆缺口）。
+ * 券本身只当索引用：点哪张就在下方展开那一天原有的完整详情（景点大图卡 / 酒店 /
+ * 逐段路线 / 餐饮表全部保留）—— 内容做加法，不做替换。
+ *
+ * 打孔线的画法沿用 .ticket-notch 的 radial-gradient 半圆缺口，故其类名必须含
+ * "ticket-notch"，探针的渐变白名单才认（白名单按类名子串匹配，封顶四个选择器）。 */
+
+.day-strip {
+    display: flex;
+    align-items: stretch;
+    margin-bottom: var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    /* 这里刻意不写 overflow: hidden —— hover 要把券抬起 4px，会被裁掉；
+       缺口都画在券与券的交界处（首尾两张的外侧边缘没有缺口），本就不需要裁。 */
+}
+
+.day-stub {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    display: grid;
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-3) var(--sp-4);
+    /* 券宽随天数变化：3 天时每张约 152px，7 天时只剩 64px。字号要跟着券宽走，
+       所以把券设为容器，下面的 DAY 标签用 cqi 定字号（见 .day-stub-day）。 */
+    container-type: inline-size;
+    border: 0;
+    border-left: 2px dashed var(--line-strong);
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    overflow: visible;
+    /* 券左缘的线路色竖条。用 inset 阴影而不是 border-left：border 会挤占内容宽度，
+     * 把已经算得很紧的 DAY 徽标再挤窄；而且 border-left 已经被 2px 虚线打孔线占着了。 */
+    box-shadow: inset 4px 0 0 var(--line-color, var(--rail-blue));
+}
+
+/* 线路色按 DAY 序号取模循环，与 tokens.css「线路色」小节一一对应：
+ * day1 蓝 / day2 祖母绿 / day3 琥珀 / day4 青 / day5 回到蓝。 */
+.day-stub:nth-child(4n+1) { --line-color: var(--rail-blue); }
+.day-stub:nth-child(4n+2) { --line-color: var(--line-emerald); }
+.day-stub:nth-child(4n+3) { --line-color: var(--line-amber); }
+.day-stub:nth-child(4n+4) { --line-color: var(--line-cyan); }
+
+.day-stub:first-child {
+    border-left: 0;
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
+
+.day-stub:last-child {
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+}
+
+.day-stub:only-child {
+    border-radius: var(--radius-lg);
+}
+
+/* 选中底色跟着该券的线路色走，而不是固定用蓝色浅底 ——
+ * 否则第 2 天（祖母绿条）配蓝色底会撞色。 */
+.day-stub.active {
+    background: color-mix(in srgb, var(--line-color, var(--rail-blue)) 12%, var(--card));
+}
+
+/* 券首竖排而不是并排：主列宽约 500px，3 天的券每张只有约 152px、内容区 120px，
+ * 而「DAY 2」24px 等宽就占 74px、日期 12px 占 72px —— 并排必然把两者都折成两行
+ * （实测过，截出来的是 DAY / 2 和 2026- / 10-16）。竖排后各自独占一行。
+ * 两个都 nowrap：宁可让文字顶到券边，也不要再折行。 */
+.day-stub-head {
+    display: grid;
+    gap: 2px;
+}
+
+/* cqi 的基准是容器的**内容盒**，不是边框盒：3 天时券宽 152px、左右各 12px 内边距，
+ * 内容盒 128px，故 18.75cqi = 24px（正好 --fs-xl，即反馈单要的那一档）。
+ * 天数越多券越窄、字号自动降档；13px 是下限，再窄交给 text-overflow 省略 ——
+ * 宁可截断，也不让「DAY 7」溢出到隔壁那张券上（实测不加限制时 7 天溢 26px、10 天溢 46px）。 */
+/* DAY n 从「蓝色文字」升级成「线路徽章」：线路色底 + 白字，地铁图语言。
+ * 白字压线路色实测 5.02~6.71，四色都过 AA（见 tokens.css 里的逐条注释）。 */
+.day-stub-day {
+    justify-self: start;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--line-color, var(--rail-blue));
+    color: #fff;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(13px, 18.75cqi, var(--fs-xl));
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.02em;
+}
+
+.day-stub-date {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    color: var(--muted);
+}
+
+/* 券身：当天景点/餐饮的一行摘要。min-height 让各券高度不被摘要长短拉开 */
+.day-stub-body {
+    min-height: 36px;
+    font-size: var(--fs-xs);
+    line-height: 1.6;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+/* 券尾：迷你检票章。逐张角度微差，像一张张盖上去的（反馈单 -2 / -4 / -3） */
+.day-stub-stamp {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: var(--radius-sm);
+    background: var(--stamp-red);
+    color: #fff;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.12em;
+}
+
+.day-stub:nth-child(3n+1) .day-stub-stamp { transform: rotate(-2deg); }
+.day-stub:nth-child(3n+2) .day-stub-stamp { transform: rotate(-4deg); }
+.day-stub:nth-child(3n+3) .day-stub-stamp { transform: rotate(-3deg); }
+
+/* 券底：迷你条码。复用 .ticket-barcode 这个类名，一是直接继承它的渐变，
+ * 二是探针的白名单按类名认，改名就得多占一个名额。这里只压扁尺寸。
+ * background-image 显式重写：720px 那条响应式规则会把 .ticket-barcode 改成竖条纹，
+ * 那是给票根大条码用的，迷你条码在任何宽度都得是横的。 */
+.day-stub .ticket-barcode {
+    width: 100%;
+    height: 10px;
+    min-height: 0;
+    align-self: auto;
+    border-radius: 2px;
+    opacity: 0.55;
+    background-image: repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 5px);
+}
+
+/* 打孔线两端的半圆缺口：纸色圆压在券的交界处，外半侧落在页面上看不见，
+ * 内半侧咬掉白卡一条边，看起来就是从联票上撕开的口子。 */
+.day-stub .ticket-notch {
+    left: -11px;
+}
+
+.day-stub .ticket-notch-strip-top {
+    top: -9px;
+}
+
+.day-stub .ticket-notch-strip-bottom {
+    top: auto;
+    bottom: -9px;
+}
+
 .day-section + .day-section {
     margin-top: var(--sp-3);
 }
 
-/* 原为浅蓝渐变底 */
+/* ---------- 线路色贯穿详情区 ----------
+ *
+ * 联票条已经按天着色，但展开后的详情区全是蓝+灰，视觉上"索引是彩色的、内容是黑白的"。
+ * 这里把线路色灌进详情区的五个强调位：day-header 左边框、spot-head 底色、spot-index 底色、
+ * route-step 数据色、meta-chip 描边与文字。选择器用 .day-section:nth-child 取模循环，
+ * 与联票条的 .day-stub:nth-child 同一套算法，保证券和详情同色。 */
+
+.day-section:nth-child(4n+1) { --line-color: var(--rail-blue); }
+.day-section:nth-child(4n+2) { --line-color: var(--line-emerald); }
+.day-section:nth-child(4n+3) { --line-color: var(--line-amber); }
+.day-section:nth-child(4n+4) { --line-color: var(--line-cyan); }
+
 .day-header {
     display: flex;
     align-items: center;
@@ -871,13 +1281,15 @@
     gap: var(--sp-3);
     padding: var(--sp-4);
     border: 1px solid var(--line);
+    border-left: 4px solid var(--line-color, var(--rail-blue));
     border-radius: var(--radius);
     background: var(--paper);
     cursor: pointer;
 }
 
 .day-header:hover {
-    border-color: var(--rail-blue);
+    border-color: var(--line-color, var(--rail-blue));
+    border-left-color: var(--line-color, var(--rail-blue));
 }
 
 .day-header strong {
@@ -885,7 +1297,7 @@
     align-items: center;
     font-size: var(--fs-md);
     font-weight: var(--fw-bold);
-    color: var(--ink);
+    color: var(--line-color, var(--ink));
 }
 
 /* 展开箭头：原为 ⌄ / › 字形，各平台渲染不一致，改用边框画的直角旋转而成 */
@@ -923,6 +1335,78 @@
     background: var(--card);
 }
 
+/* ---------- 地铁线路图式当日路线 ----------
+ * 站点=酒店/景点，站间粗线=线路色，线上标通勤分钟。
+ * 横向 flex：节点定宽、线段吃掉剩余宽度，站名交替上下会打架，统一放下侧。 */
+.rline {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: var(--sp-4);
+    padding: var(--sp-4) var(--sp-2) var(--sp-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(43, 33, 24, 0.03);
+    overflow-x: auto;
+}
+
+.rline-node {
+    flex: none;
+    width: 92px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-2);
+}
+
+.rline-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: var(--radius-pill);
+    background: var(--card);
+    border: 4px solid var(--line-color, var(--rail-blue));
+    box-shadow: 0 0 0 2px var(--card);
+}
+
+/* 酒店站用方点，与景点圆点区分 */
+.rline-node.hotel .rline-dot {
+    border-radius: 3px;
+}
+
+.rline-name {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    color: var(--ink);
+    text-align: center;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.rline-seg {
+    flex: 1;
+    min-width: 36px;
+    position: relative;
+    height: 4px;
+    margin-top: 5px;
+    border-radius: 2px;
+    background: var(--line-color, var(--rail-blue));
+}
+
+.rline-time {
+    position: absolute;
+    left: 50%;
+    top: -20px;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: var(--fw-bold);
+    color: var(--muted);
+    white-space: nowrap;
+}
+
 .meta-box {
     padding: var(--sp-3) var(--sp-4);
     border: 1px solid var(--line);
@@ -947,22 +1431,22 @@
     margin-top: var(--sp-3);
 }
 
-/* 当日预估/通勤/里程：都是数字，用等宽 */
+/* 当日预估/通勤/里程：都是数字，用等宽；描边与文字跟当天线路色 */
 .meta-chip {
     display: inline-flex;
     align-items: center;
     padding: 6px 12px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-color, var(--line));
     border-radius: var(--radius-pill);
     background: var(--card);
-    color: var(--ink);
+    color: var(--line-color, var(--ink));
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     font-size: var(--fs-xs);
     font-weight: var(--fw-bold);
 }
 
-/* ---------- 景点 ---------- */
+/* ---------- 景点：明信片质感 ---------- */
 
 .spot-grid {
     display: grid;
@@ -976,92 +1460,218 @@
     justify-content: center;
 }
 
+/* 登机牌式景点卡：左存根（编号+类别+条码）+ 打孔撕缝 + 右主联 */
 .spot-card {
+    position: relative;
+    display: flex;
     overflow: hidden;
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--card);
+    box-shadow: var(--shadow-card);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* 原为紫蓝渐变底 */
-.spot-head {
-    padding: var(--sp-3) var(--sp-4);
-    background: var(--rail-blue);
-    color: #fff;
-    font-size: var(--fs-sm);
+.spot-stub {
+    position: relative;
+    flex: none;
+    width: 88px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-2);
+    border-right: 2px dashed var(--line-strong);
+    background: rgba(43, 33, 24, 0.05);
+}
+
+/* 撕缝两端的半圆缺口：圆心压在卡边与撕缝交点，overflow:hidden 裁掉外半 */
+.spot-stub::before,
+.spot-stub::after {
+    content: "";
+    position: absolute;
+    right: -11px;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-pill);
+    background: var(--card);
+}
+
+.spot-stub::before {
+    top: -11px;
+}
+
+.spot-stub::after {
+    bottom: -11px;
+}
+
+.spot-stub-no {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 40px;
     font-weight: var(--fw-bold);
+    line-height: 1;
+    color: var(--line-color, var(--rail-blue));
 }
 
+.spot-stub-cat {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.spot-stub .ticket-barcode {
+    width: 100%;
+    min-height: 22px;
+}
+
+.spot-main {
+    min-width: 0;
+    flex: 1;
+}
+
+.spot-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-bold);
+    color: var(--ink);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .spot-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-pop), var(--glow-blue);
+    }
+}
+
+/* 图片区改为主联内的横幅，存根已承担编号职责 */
 .spot-image {
     position: relative;
-    height: 192px;
+    height: 150px;
     overflow: hidden;
     background: var(--paper);
     background-position: center;
     background-size: cover;
 }
 
+.spot-image::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+}
+
 /* 原 ::after 是压暗渐变；景区图上的两个角标各自有实色底，不依赖它保证可读性，故整体删除 */
 
-.spot-index,
+/* 邮戳式价格：圆形、旋转 -8°、stamp-red 描边+文字。
+ * 登机牌改版后落在标题行右端，不再压照片。白字对 --stamp-red = 4.57 AA。 */
 .spot-price {
-    position: absolute;
-    z-index: 2;
+    flex: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    min-width: 48px;
+    height: 48px;
+    padding: 0 var(--sp-1);
+    border: 2px solid var(--stamp-red);
     border-radius: var(--radius-pill);
-    color: #fff;
+    background: var(--stamp-red-tint);
+    color: var(--stamp-red);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
     font-size: var(--fs-xs);
     font-weight: var(--fw-bold);
+    letter-spacing: 0.04em;
+    transform: rotate(-8deg);
+    text-align: center;
+    line-height: 1.2;
 }
 
-.spot-index {
-    top: var(--sp-4);
-    left: var(--sp-4);
-    width: 34px;
-    height: 34px;
-    background: var(--ink);
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-}
-
-/* 原 rgba(255,86,96,.9)；改实色 --stamp-red，白字 4.57 过 AA */
-.spot-price {
-    top: var(--sp-4);
-    right: var(--sp-4);
-    min-width: 46px;
-    height: 28px;
-    padding: 0 10px;
-    background: var(--stamp-red);
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-}
-
+/* 明信片信息区：左侧 2px 虚线模拟书写引导线，行高放宽到手写感 */
 .spot-info {
-    padding: var(--sp-3) var(--sp-4) var(--sp-4);
+    position: relative;
+    padding: var(--sp-3) var(--sp-4) var(--sp-4) calc(var(--sp-4) + 14px);
     font-size: var(--fs-sm);
-    line-height: 1.7;
+    line-height: 1.85;
     color: var(--ink);
+}
+
+.spot-info::before {
+    content: "";
+    position: absolute;
+    left: var(--sp-4);
+    top: var(--sp-3);
+    bottom: var(--sp-4);
+    width: 0;
+    border-left: 2px dashed var(--line-strong);
 }
 
 /* ---------- 酒店 ---------- */
 
 /* 原为蓝→浅蓝整块渐变 + 白字，改白底卡 + 浅蓝标题带 */
+/* ---------- 修复 2.1：酒店卡改成「行李牌」（FRONTEND_FEEDBACK_LINE_COLORS） ----------
+ *
+ * 真挂牌从不端正，所以整张卡微斜 -0.5deg；左上角一个挂孔，孔上牵一段短线当挂绳。
+ * 分区物料封顶两种（行李牌 + 餐券），其余 section 一律不动 —— 物料超过两种就是杂货铺。 */
 .hotel-box {
+    position: relative;
     margin-top: var(--sp-4);
     overflow: hidden;
     border: 1px solid var(--line);
     border-radius: var(--radius);
     background: var(--card);
+    transform: rotate(-0.5deg);
+}
+
+/* 挂孔：纸色圆压白卡，看起来就是从卡片上冲出来的孔 */
+.hotel-box::before {
+    content: "";
+    position: absolute;
+    left: 18px;
+    top: 18px;
+    z-index: 2;
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    background: var(--paper);
+    pointer-events: none;
+}
+
+/* 挂绳：从孔的右缘往右上牵 20px 虚线，压在卡片内（卡片 overflow: hidden，
+   伸到卡外的部分会被裁掉，所以角度取得陡一些，整段都留在牌面里） */
+.hotel-box::after {
+    content: "";
+    position: absolute;
+    left: 30px;
+    top: 24px;
+    z-index: 2;
+    width: 20px;
+    border-top: 1px dashed var(--line-strong);
+    transform: rotate(-60deg);
+    transform-origin: left center;
+    pointer-events: none;
 }
 
 .hotel-name {
-    padding: var(--sp-3) var(--sp-4);
+    /* 左边距留给挂孔与挂绳，不然酒店名会被压在孔上 */
+    padding: var(--sp-3) var(--sp-4) var(--sp-3) 46px;
     background: var(--rail-blue-tint);
     color: var(--ink);
+    font-family: var(--font-mono);
     font-size: var(--fs-md);
     font-weight: var(--fw-bold);
+    overflow-wrap: anywhere;
 }
 
 /* auto-fit 而不是写死两列：按天卡窄的时候两列各只有约 290px，
@@ -1073,6 +1683,21 @@
     gap: var(--sp-2) var(--sp-4);
     color: var(--ink);
     font-size: var(--fs-sm);
+}
+
+/* 房型信息用「小字标签 + 值」：地址这种长值之前和标签挤在同一行，读起来是一整句。 */
+.hotel-meta-label {
+    display: block;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.06em;
+}
+
+.hotel-meta-value {
+    display: block;
+    margin-top: 2px;
+    overflow-wrap: anywhere;
 }
 
 /* ---------- 路线 ---------- */
@@ -1142,7 +1767,7 @@
 .route-step-main span:last-child {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    color: var(--rail-blue);
+    color: var(--line-color, var(--rail-blue));
     white-space: nowrap;
 }
 
@@ -1155,26 +1780,78 @@
 
 /* ---------- 餐饮 ---------- */
 
-.meal-table {
-    width: 100%;
+/* ---------- 修复 2.2：餐饮表改成「餐券」（FRONTEND_FEEDBACK_LINE_COLORS） ----------
+ *
+ * 券面用纸色而不是白色：它贴在同样白色的 .day-body 上，同色的话上下锯齿边根本看不出来。
+ * 齿纹是 45 度线性渐变铺的三角（白名单 #5 .meal-ticket），齿色 = 券面纸色，
+ * 锯齿探出券体、咬进白色详情底，看上去就是从整张券上撕出来的齿。 */
+.meal-ticket {
+    position: relative;
     margin-top: var(--sp-4);
-    border-collapse: collapse;
-    overflow: hidden;
-    border-radius: var(--radius);
+    padding: var(--sp-3) 0;
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    background: var(--paper);
 }
 
-.meal-table td {
-    border: 1px solid var(--line);
+.meal-ticket::before,
+.meal-ticket::after {
+    content: "";
+    position: absolute;
+    left: -1px;
+    right: -1px;
+    height: 8px;
+    background-repeat: repeat-x;
+    background-size: 16px 8px;
+    background-position: 0 0, 8px 0;
+    background-image:
+        linear-gradient(135deg, var(--paper) 50%, transparent 50%),
+        linear-gradient(225deg, var(--paper) 50%, transparent 50%);
+    pointer-events: none;
+}
+
+.meal-ticket::before {
+    top: -8px;
+}
+
+.meal-ticket::after {
+    bottom: -8px;
+    transform: scaleY(-1);
+}
+
+.meal-item {
+    display: grid;
+    /* 左菜品名 / 1px 竖撕线 / 右等宽价格 */
+    grid-template-columns: 52px minmax(0, 1fr) 84px;
+    align-items: baseline;
+    gap: var(--sp-3);
     padding: var(--sp-3) var(--sp-4);
     font-size: var(--fs-sm);
     color: var(--ink);
-    background: var(--card);
 }
 
-.meal-table td:first-child {
-    width: 88px;
+.meal-item + .meal-item {
+    border-top: 1px dashed var(--line-strong);
+}
+
+.meal-slot {
     font-weight: var(--fw-bold);
-    background: var(--paper);
+}
+
+.meal-text {
+    min-width: 0;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+}
+
+.meal-price {
+    padding-left: var(--sp-3);
+    border-left: 1px dashed var(--line-strong);
+    text-align: right;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--fw-bold);
+    white-space: nowrap;
 }
 
 /* ---------- Agent 轨迹 ---------- */
@@ -1358,7 +2035,7 @@ details[open] > .agent-collapse-summary::after {
     right: 0;
     height: 8px;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    background: color-mix(in srgb, var(--ink) 10%, transparent);
+    background: rgba(43, 33, 24, 0.10);
     z-index: 2;
     pointer-events: none;
 }
@@ -1391,6 +2068,20 @@ details[open] > .agent-collapse-summary::after {
         }
     }
 
+    /* 联票条唯一的微交互：指到哪张，那张被「捏起来」一点。
+     * 动效只动 transform / opacity，且整块写在 no-preference 里 —— reduced-motion 下
+     * 既不位移也不过渡，券是静止的。 */
+    .day-stub {
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    /* 必须把左缘那条 inset 色条一起写回来：box-shadow 是整条覆盖的，
+       只给 --shadow-pop 的话，鼠标一碰上去线路色条就消失了（实测过）。 */
+    .day-stub:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-pop), inset 4px 0 0 var(--line-color, var(--rail-blue));
+    }
+
     /* 其余结果页内容正常淡入，不做花样 */
     .result-page {
         animation: result-fade 0.35s ease-out both;
@@ -1403,6 +2094,13 @@ details[open] > .agent-collapse-summary::after {
 }
 
 /* ---------- 响应式 ---------- */
+
+/* 登机牌存根占 88px，中宽度下两列会把主联压到竖排换行，故单列阈值提到 1400 */
+@media (max-width: 1400px) {
+    .spot-grid {
+        grid-template-columns: 1fr;
+    }
+}
 
 @media (max-width: 1180px) {
     .overview-strip,
@@ -1462,10 +2160,77 @@ details[open] > .agent-collapse-summary::after {
         width: 100%;
     }
 
+    /* 城市对降到 40px（反馈单指定的 375 视口档），色带内容改为两行叠放：
+     * 72px 城市对 + 18px 的「3 DAYS · ¥2976」并排时在 375px 下会撑破卡片。 */
+    .ticket-band {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--sp-2);
+    }
+
+    .ticket-band-route {
+        font-size: 40px;
+    }
+
+    .ticket-band-arrow {
+        font-size: 32px;
+    }
+
+    /* 联票条改为竖向堆叠：券间的打孔线横置，缺口挪到横线的左右两端，券仍相连 */
+    .day-strip {
+        flex-direction: column;
+    }
+
+    .day-stub {
+        border-left: 0;
+        border-top: 2px dashed var(--line-strong);
+    }
+
+    .day-stub:first-child {
+        border-top: 0;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    .day-stub:last-child {
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+
+    .day-stub:only-child {
+        border-radius: var(--radius-lg);
+    }
+
+    .day-stub .ticket-notch {
+        left: -9px;
+    }
+
+    .day-stub .ticket-notch-strip-top {
+        top: -11px;
+    }
+
+    .day-stub .ticket-notch-strip-bottom {
+        top: -11px;
+        bottom: auto;
+        left: auto;
+        right: -9px;
+    }
+
     /* 票根在窄屏改为竖排：条码移到标题带下方，别挤掉城市名 */
     .ticket {
         flex-direction: column;
         gap: var(--sp-4);
+    }
+
+    /* 条码改到下方通栏后，水印不必再为它让位（那个 56px 是竖排时条码的宽度） */
+    .ticket-watermark {
+        right: var(--sp-4);
+    }
+
+    /* 餐券在 375px 下两侧固定列吃掉太多：菜品描述只剩 89px，一份午餐折成四行。
+     * 收窄「餐段」与「价格」两列并压缩间距，描述列回到 160px 左右。 */
+    .meal-item {
+        grid-template-columns: 40px minmax(0, 1fr) 64px;
+        gap: var(--sp-2);
+        padding: var(--sp-3);
     }
 
     .ticket-barcode {

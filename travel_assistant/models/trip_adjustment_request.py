@@ -19,6 +19,15 @@ class TripAdjustmentRequest(CamelModel):
 
     original_request: Optional[TripPlanRequest] = None
     adjustment_prompt: Optional[str] = None
+    # 追问 agent 从用户原话里摘出的住宿地名与天数（天数从 0 起，null=整趟）。
+    # 由后端写回请求的锚点格子，前端只转达、不再自己判断"整趟 vs 按天"。
+    anchor_hint: Optional[str] = None
+    anchor_day: Optional[int] = None
+    # 追问 agent 摘出的"某天必去景点名（可多个）"与天数（从 0 起）。
+    # pin_move_hotel：那张"要不要把酒店也挪过去"确认卡的选择——真=复用住宿锚点把酒店挪到景点旁。
+    pin_hints: Optional[list[str]] = None
+    pin_day: Optional[int] = None
+    pin_move_hotel: bool = False
 
     @field_validator("original_request")
     @classmethod

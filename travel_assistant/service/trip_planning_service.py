@@ -31,6 +31,11 @@ class TripPlanningService:
         decision = self._trip_adjustment_agent.adjust(
             request.original_request,
             request.adjustment_prompt,
+            request.anchor_hint,
+            request.anchor_day,
+            request.pin_hints,
+            request.pin_day,
+            request.pin_move_hotel,
         )
         trip_plan = self.plan_trip(decision.updated_request)
         planning_notes = [] if trip_plan.planning_notes is None else list(trip_plan.planning_notes)

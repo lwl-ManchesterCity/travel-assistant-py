@@ -117,7 +117,7 @@
 select.input {
     appearance: none;
     -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%236B7280' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23665843' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 14px center;
     padding-right: 38px;
@@ -214,7 +214,7 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     flex: none;
     width: 18px;
     height: 18px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Crect x='2.25' y='3.75' width='13.5' height='12' rx='2.25' fill='none' stroke='%236B7280' stroke-width='1.5'/%3E%3Cline x1='2.25' y1='7.5' x2='15.75' y2='7.5' stroke='%236B7280' stroke-width='1.5'/%3E%3Cline x1='6' y1='1.7' x2='6' y2='4.6' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='12' y1='1.7' x2='12' y2='4.6' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Crect x='2.25' y='3.75' width='13.5' height='12' rx='2.25' fill='none' stroke='%23665843' stroke-width='1.5'/%3E%3Cline x1='2.25' y1='7.5' x2='15.75' y2='7.5' stroke='%23665843' stroke-width='1.5'/%3E%3Cline x1='6' y1='1.7' x2='6' y2='4.6' stroke='%23665843' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='12' y1='1.7' x2='12' y2='4.6' stroke='%23665843' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: center;
     background-size: 18px 18px;
@@ -482,7 +482,7 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 /* 打印口：与结果页票根顶部的「出票口」同一画法 */
 .print-slot {
     height: 8px;
-    background: color-mix(in srgb, var(--ink) 10%, transparent);
+    background: rgba(43, 33, 24, 0.08);
 }
 
 .print-body {
@@ -628,6 +628,7 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 
 .ask-confirm {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--sp-3);
     margin-top: var(--sp-3);
@@ -637,16 +638,30 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     background: var(--rail-blue-tint);
 }
 
+/* 确认文案独占一行，按钮换到下一行右对齐——
+ * 否则 .primary-button 的 width:100% 会把句子挤成一列竖排。 */
 .ask-confirm-text {
-    flex: 1;
+    flex: 1 1 100%;
     color: var(--ink);
-    font-size: var(--fs-xs);
-    font-weight: var(--fw-bold);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    line-height: 1.6;
+}
+
+.ask-confirm .primary-button {
+    width: auto;
+    flex: 0 0 auto;
+    margin-left: auto;
+    min-height: 40px;
+    padding: 0 var(--sp-5);
+    font-size: var(--fs-sm);
 }
 
 .ask-confirm .ghost-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
     padding: 8px 14px;
-    font-size: var(--fs-xs);
+    font-size: var(--fs-sm);
 }
 
 /* ---------- 全屏等待浮层（调整行程） ---------- */
@@ -658,7 +673,7 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(22, 24, 29, 0.32);
+    background: rgba(43, 33, 24, 0.45);
 }
 
 .trip-adjust-panel {

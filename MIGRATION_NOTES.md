@@ -230,7 +230,7 @@ Java 侧不再有未搬的 controller、model 或静态资源。
 | 一个字段多条约束同时违反 | 每个约束各产生一条 FieldError（如 `endDate` 同时报 NotBlank 和 Pattern） | pydantic 每字段只报第一条 |
 | 请求体缺失/JSON 语法错 | 落 `Exception` 分支 -> 500 `INTERNAL_ERROR` | FastAPI 自己返回 422/400，不是 Java 的错误体 |
 | 类型不匹配（如 budget 传字符串） | Jackson 抛错 -> 500 `INTERNAL_ERROR` | pydantic 归入校验失败 -> 400 `VALIDATION_ERROR` |
-| `TripPlanningException` | 400 `TRIP_PLANNING_ERROR` + `["请调整输入条件后重试"]` | 一致 |
+| `TripPlanningException` | 400 `TRIP_PLANNING_ERROR` + 恒为 `["请调整输入条件后重试"]` | 错误码与文案一致；`details` 改为**按异常类型分流**：高德限流/配额类失败（`is_quota_exhausted`）回 `["地图数据接口调用过于频繁，请稍后重试"]`，其余仍是 `["请调整输入条件后重试"]`。Java 那句对限流同样会把人带偏，见第七节 |
 | 时间戳 | `LocalDateTime.now()`，Jackson 输出纳秒精度 | `datetime.now()`，输出微秒精度，都是无时区 ISO 串 |
 
 ### 12. 启动日志
@@ -531,6 +531,8 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
   `高德景点检索失败：CUQPS_HAS_EXCEEDED_THE_LIMIT（infocode=10021）` —— 外部高德个人 key 的每秒调用配额被打满，
   不是移植缺陷（同一份请求重试即 **200**，本轮共 3 次 400 / 1 次 200）；页面渲染结果后自行发起的
   `GET /api/map/config` 返回 **200**；根路径 `GET /` 返回 200 `text/html`。
+  这条也是第七节「高德限流处理」那行的由来：既然重试一次就能过，就不该让用户看到 400 —— 现在由
+  `fetch_json` 自动退避重试，重试打光才抛，`details` 也不再误指用户输入。
 - 字段对账：页面 JS 读取的 13 个数据结构（TripPlan / DayPlan / Attraction / Hotel / Meal / RoutePlan /
   RouteStep / Budget / WeatherInfo / AgentTrace / LoopExecutionSummary / LoopIterationTrace / MapConfigResponse）
   逐字段与 Python 响应体吐出的驼峰键比对，**页面读取但后端不吐的字段 0 条**，因此 `index.html` 零改动拷贝，
@@ -592,16 +594,22 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
 
 ## 七、主动偏离源项目（不是移植差异，是产品扩展）
 
-第三节记的是"不得不的差异"，这一节记的是**故意做得和 Java 不一样**的四处。
-判定基准：请求里不填新字段时，`/api/trips/plan` 的逐天酒店、通勤、预算与留痕条数都必须与 Java 一致，
+第三节记的是"不得不的差异"，这一节记的是**故意做得和 Java 不一样**的四处（2026-10-09 追加第五处：选景点贴酒店；第六处：某天必去某景点；第七处：当日路线不再从酒店发车）。
+判定基准：请求里不填新字段时，`/api/trips/plan` 的逐天酒店、**景点顺序**、预算与留痕条数都必须与 Java 一致，
 这条写成用例钉住（`tests/test_hotel_anchor.py::test_shouldKeepWholeCityCandidatesWhenAnchorIsNotFilled`）。
+**唯一的例外是第七处的通勤数字**：那条改动不分"填没填新字段"，任何一天的 `totalDistanceKm` / `totalDurationMinutes`
+都比 Java 少一段（早上酒店→首个景点那段），因为它改的是路线本身的起讫点，不是某个可选开关。
 
 | 偏离点 | Java 行为 | Python 行为 | 影响范围 |
 | --- | --- | --- | --- |
+| 当日路线起讫点（2026-10-09 追加） | 规则与高德两条路线都排成 `酒店 → 景点… → 酒店`，第一段永远是"从酒店出发" | 排成 `首个景点 → 景点… → 酒店`：早上那段不计（游客自行抵达首站，不存在"从酒店发车"），只保留收工回酒店那一段。酒店仍按到当天景点中心的距离挑，且点了必去景点时锚在最后一站附近——压的正是最后那段回程 | **默认路径也生效**：每天少一段里程与分钟，当日 `estimatedCost` 随通勤成本一起降；前端折线（`buildRoutePoints`）同步去掉起点那个酒店节点 |
 | `TripPlanRequest` | 8 个字段，没有住宿位置与连续性 | 多 `hotelAnchor` / `dayHotelAnchors` / `hotelContinuity`，全可空，空串归一成未填 | 请求体向后兼容，老请求照常 |
 | `PlannerAgent` 选酒店 | `_select_hotel(hotels, attractions, dailyBudget)` 三项打分（价位惩罚 0/8/12/24/50 + 到当天景点中心公里数 + 预算≥1600 才有的质量加成），候选就是全城那 10 家 | 打分公式与常数**一字未改**；改的是进入打分的集合——先按锚点半径圈掉远处，再按远近分档（一档 1.5km、二档 3km），最低非空档才交给原打分 | 只在用户填了住宿位置时生效 |
+| `PlannerAgent` 选景点（2026-10-09 追加） | `_prioritize_candidate_attractions` 只按 `_score_attraction` 降序、票价升序排；`_filter_nearby_attractions` 用 25km 硬顶，距离完全不进分 | 排序前面加一档"离酒店距离"（≤5km / ≤10km / 其余，近档整档先选，同档内仍跑原 `_score_attraction` 一字未改）；硬顶从 25km 收到 15km（圈内不足 2 个仍回落全城，防某天选空）。初步景点趟无酒店、档恒 0，退化成纯分数，故酒店选取不受影响 | 每次带酒店的最终选点趟都生效（即任何一次真实规划） |
+| `PlannerAgent` 必去景点（2026-10-09 追加） | 请求里没有"某天必去某景点"这格；用户这句只能落进 `extra_requirements` 而没人按域读 | 新增 `day_attraction_pins`（第几天→景点名列表，一次追问可点名多个）。**只在有必去景点那天生效、普通链路一行不动**：只 1 个→以它为中心补附近高分（酒店锚到它+就近档），它留作最后一站；2 个及以上→这天就=点名的这些、不再补别的，游玩顺序交给 `LlmNarrationService.order_attractions`（按天气/环境，不可用回落原序）。酒店（用户同意挪时）从全量酒店取离最后一站最近的一家。景点名先池内按名字对上、对不上 `find_attraction_by_name` 补搜、还没有才记"未找到未排入"；进循环前先占住 `used` 防别天抢；超预算/多绕以具体数字写进备注 | 只在用户点名必去某景点时生效；不填逐天与现状一字不变 |
 | `PlannerAgent` 逐天循环 | 每天独立选店、中途换店零代价，`reduce_budget` 分支还会再换一次（`_select_budget_friendly_hotel`） | `hotelContinuity=strict` 时第 1 天定店后逐天沿用，并把两处入口的候选都收成那一家；同时在当天 `optimizationNotes` 写明它比最近的一家远多少公里 | 只在选"整趟同一家"时生效 |
 | 高德调用次数 | 酒店只发 `/v3/place/text`（按关键词相关性返回 10 家） | 填了锚点时多发两类：`/v3/place/text`（地名→坐标）与 `/v3/place/around`（锚点周边酒店，按距离排序） | 每个不同地名各一次，3 天最多 3+3 次；都走既有 curl 兜底与配额重试 |
+| 高德限流处理 | 只有路线识别 `infocode=10021` / `CUQPS_HAS_EXCEEDED_THE_LIMIT` 并降级到规则路线；景点、天气、酒店撞限流直接抛，`raise_planning_errors` 把整个请求打成 400 | `fetch_json` 统一加一层短退避重试（默认退避 0.8s、2.0s；`AMAP_RATE_LIMIT_RETRY_ATTEMPTS=0` 即关闭、退回 Java 原行为）。重试打光才抛，路线原有的降级路径不变 | 只对配额/频率类失败生效，参数错、key 错不重试；撞限流的请求最多多等 2.8 秒。判定收敛在 `exceptions.is_quota_exhausted`，重试、路线降级、错误文案三处共用一套标准 |
 
 另外三处小偏离，一并记下：
 
@@ -614,6 +622,11 @@ Java 代码里的字段初值与 `application.yml` 不一致（yml 覆盖代码�
 4. 配置新增 `travel` 的锚点段：`TRAVEL_HOTEL_ANCHOR_RADIUS_KM`（默认 5.0）、
    `TRAVEL_HOTEL_ANCHOR_NEAR_KM`（1.5）、`TRAVEL_HOTEL_ANCHOR_MID_KM`（3.0）。
    这三个数只决定谁有资格进打分，不参与任何分数计算。
+5. 追问 agent 的提示词补第 8 条：`pinHints` / `anchorHint` 只填用户说出口的地名原词，**不要求它先出现在方案或候选清单里**——
+   下游会按名字补搜（`find_attraction_by_name`），补搜也没有才写进"未找到未排入"备注。
+   起因是 2026-10-09 实测：用户点名"广州图书馆"，模型按第 1、4 条"事实只能来自工具返回值"把它判成做不到的诉求，
+   直接回"方案里查不到，这条加不进去"而没判 `need_change`；而高德按名字检索是有的（`科教文化服务;图书馆`，坐标 113.326020,23.116225）。
+   规则层没改，改的是模型的判定口径。
 
 为什么第 4 行那两类额外请求是必需的，不是锦上添花（2026-10-08 实测）：
 杭州、预算 3000、3 天、舒适型酒店的真实候选池只有 10 家，它们到西湖的距离升序是

@@ -25,19 +25,22 @@ class RuleBasedRouteClient(RouteClient):
         hotel = query.hotel
         attractions = query.attractions or []
         steps: list[RouteStep] = []
-        start_point = self._build_hotel_point(hotel)
+        # 白天从第一个景点起算（用户是先到景点再开始玩的，不存在"早上从酒店发车"这一段），
+        # 只有收工时那段回酒店保留——酒店锚在最后一站附近，就是为了这一段短。
+        start_point = (self._build_attraction_point(attractions[0]) if attractions
+                       else self._build_hotel_point(hotel))
         current_point = start_point
         total_distance_km = 0.0
         total_duration_minutes = 0
 
-        for index, attraction in enumerate(attractions):
+        for index, attraction in enumerate(attractions[1:], start=1):
             next_point = self._build_attraction_point(attraction)
             distance_km = self._estimate_distance(current_point.location, next_point.location)
             duration_minutes = self._estimate_duration(distance_km, query.transportation)
             total_distance_km += distance_km
             total_duration_minutes += duration_minutes
             steps.append(RouteStep(
-                order_index=index + 1,
+                order_index=index,
                 from_name=current_point.name,
                 to_name=next_point.name,
                 transportation_mode=query.transportation,
@@ -49,7 +52,7 @@ class RuleBasedRouteClient(RouteClient):
             ))
             current_point = next_point
 
-        if hotel is not None and current_point.location is not None:
+        if attractions and hotel is not None and current_point.location is not None:
             back_distance_km = self._estimate_distance(current_point.location, hotel.location)
             back_duration_minutes = self._estimate_duration(back_distance_km, query.transportation)
             total_distance_km += back_distance_km

@@ -40,17 +40,23 @@ _SYSTEM_PROMPT = (
     "5. 工具返回值里标了「估算」的价格，转述时必须保留「估算」二字，不许说成实时票价或实际收费。\n"
     "6. 先判意图。只是问这份方案写了什么、为什么这么排、怎么办 → answer；"
     "提出要改预算、改交通方式、改住宿档位、增加或删除偏好、调节奏松紧、"
-    "指定住宿位置（整趟或某一天）、要求整趟住同一家 → need_change。拿不准就按 answer 处理。\n"
+    "指定住宿位置（整趟或某一天）、要求整趟住同一家、指定某天必去某个景点 → need_change。"
+    "拿不准就按 answer 处理。\n"
     "7. 判成 need_change 时，adjustmentPrompt 只许写下游做得到的那些：预算金额、交通方式、"
-    "住宿档位、偏好增删、节奏松紧、整趟住同一家；要指定住宿位置就把地名原样放进 anchorHint，"
-    "只指定某一天就同时把那天写进 anchorDay（第一天是 0）。"
-    "改天数、指定某一家酒店、改某个景点这类做不到的诉求，不要转过去，"
-    "在 answer 里当场说明当前版本改不了。\n"
-    "8. 最后一轮只输出一个 JSON 对象，二选一，不要任何多余文字：\n"
+    "住宿档位、偏好增删、节奏松紧、整趟住同一家；要指定住宿位置就把地名放进 anchorHint、"
+    "只指定某一天就同时写 anchorDay（第一天是 0）；要指定某天必去一个或多个景点，就把景点名都放进 "
+    "pinHints（数组）、那天写进 pinDay（第一天是 0）。改天数、指定某一家具体酒店、删除或替换某个景点"
+    "这类做不到的诉求，不要转过去，在 answer 里当场说明当前版本改不了。\n"
+    "8. pinHints 与 anchorHint 只填用户说出口的地名原词，不要求它先出现在方案或候选清单里："
+    "下游会按名字重新检索一次，检索不到才会在备注里写明白。"
+    "「方案里查不到这个景点」不是拒绝的理由，这类诉求照样判 need_change；"
+    "你自己不要凭知识断言这个地点存不存在。\n"
+    "9. 最后一轮只输出一个 JSON 对象，二选一，不要任何多余文字：\n"
     "   {\"intent\":\"answer\",\"answer\":\"…\"}\n"
     "   {\"intent\":\"need_change\",\"answer\":\"…\",\"adjustmentPrompt\":\"…\"}\n"
-    "   需要指定住宿位置时再加 \"anchorHint\":\"西湖\" 与 \"anchorDay\":1。\n"
-    "9. answer 用中文，控制在三句以内，不要复述整份方案；"
+    "   需要指定住宿位置时再加 \"anchorHint\":\"西湖\" 与 \"anchorDay\":1；"
+    "需要指定某天必去某景点时再加 \"pinHints\":[\"白云山\",\"广州塔\"] 与 \"pinDay\":1。\n"
+    "10. answer 用中文，控制在三句以内，不要复述整份方案；"
     "用户还没确认改不改之前，不许用完成时态说已经帮他改好了。\n"
 )
 
@@ -62,12 +68,15 @@ class _Decision:
 
     def __init__(self, intent: str = "answer", answer: str = "",
                  adjustment_prompt: str | None = None,
-                 anchor_hint: str | None = None, anchor_day: int | None = None):
+                 anchor_hint: str | None = None, anchor_day: int | None = None,
+                 pin_hints: list[str] | None = None, pin_day: int | None = None):
         self.intent = intent
         self.answer = answer
         self.adjustment_prompt = adjustment_prompt
         self.anchor_hint = anchor_hint
         self.anchor_day = anchor_day
+        self.pin_hints = pin_hints or []
+        self.pin_day = pin_day
 
 
 class AskAgent:
@@ -107,6 +116,8 @@ class AskAgent:
             adjustment_prompt=decision.adjustment_prompt,
             anchor_hint=decision.anchor_hint,
             anchor_day=decision.anchor_day,
+            pin_hints=decision.pin_hints,
+            pin_day=decision.pin_day,
             traces=context.traces,
         )
 
@@ -148,7 +159,8 @@ class AskAgent:
                 self._record_fallback(context, raw, "说要改但没给出改哪句，回落成只是回答")
                 return _Decision(answer=answer or raw)
             return _Decision(intent="need_change", answer=answer, adjustment_prompt=prompt,
-                             anchor_hint=self._anchor_hint(parsed), anchor_day=self._anchor_day(parsed))
+                             anchor_hint=self._anchor_hint(parsed), anchor_day=self._anchor_day(parsed),
+                             pin_hints=self._pin_hints(parsed), pin_day=self._pin_day(parsed))
         return _Decision(intent="answer", answer=answer or raw)
 
     def _record_fallback(self, context: AskContext, raw: str, why: str) -> None:
@@ -176,6 +188,33 @@ class AskAgent:
     @staticmethod
     def _anchor_day(parsed: dict) -> int | None:
         value = parsed.get("anchorDay")
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            return None
+        try:
+            day = int(value)
+        except (TypeError, ValueError):
+            return None
+        return day if day >= 0 else None
+
+    @staticmethod
+    def _pin_hints(parsed: dict) -> list[str]:
+        raw = parsed.get("pinHints")
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, list):
+            legacy = str(parsed.get("pinHint") or "").strip()
+            raw = [legacy] if legacy else []
+        cleaned: list[str] = []
+        for item in raw:
+            name = item if isinstance(item, str) else ""
+            name = name.strip()
+            if name and name not in cleaned:
+                cleaned.append(name)
+        return cleaned
+
+    @staticmethod
+    def _pin_day(parsed: dict) -> int | None:
+        value = parsed.get("pinDay")
         if isinstance(value, bool) or not isinstance(value, (int, str)):
             return None
         try:

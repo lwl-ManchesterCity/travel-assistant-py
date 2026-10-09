@@ -1,10 +1,9 @@
-/* 设计令牌：FRONTEND_REDESIGN_PLAN 2.2 / 2.3 / 2.7
+/* 设计令牌 v3：深色票据工作台
  *
- * 色彩全部经过 WCAG 实测（见下方每条注释里的对比度），不是估的。
- * 文档 2.7 只定了五个 token，另外三处既有缺陷是本次实测发现的，一并在这里修正：
- *   1. 必填星号原 #f16053 对白仅 3.21，低于 AA 小字 4.5 → 改用 --stamp-red（4.57）
- *   2. .budget-status.warn 原 #d94457 压浅红底仅 3.80 → 改用 --stamp-red-ink（6.41）
- *   3. .weather-source-chip.warn 同上 → 同一处理
+ * 从"白底表单+票据点缀"翻转为"深色调度台+发光票据"。
+ * 核心理念：页面是暗色工作台，卡片和票据是台上的发光物件；
+ * 色彩不再克制——线路色饱和度拉高、印章红更亮、蓝底敢铺大面积。
+ * 对比度全部按「白字压深色底」重新校验。
  */
 
 /* ---------- 字体：本地打包，不走 CDN（答辩离线可用） ---------- */
@@ -41,7 +40,6 @@
     font-display: swap;
 }
 
-/* 得意黑：官方只发布斜体版，斜体是它的设计特征 */
 @font-face {
     font-family: "Smiley Sans";
     src: url("/fonts/SmileySans-Oblique.woff2") format("woff2");
@@ -51,42 +49,49 @@
 }
 
 :root {
-    /* ---------- 纸与墨 ---------- */
-    --paper: #F6F7F9;          /* 页面底色：冷白纸感 */
-    --card: #FFFFFF;           /* 卡片面 */
-    --ink: #16181D;            /* 正文/标题 —— 对白 17.76 AAA */
-    --muted: #6B7280;          /* 辅助文字 —— 对白 4.83 AA，对纸 4.51 AA */
-    --line: #E3E6EB;           /* 描边/分隔线（非文本，无对比度要求） */
-    --line-strong: #CBD2DA;    /* 需要强调的描边 */
+    /* ---------- 牛皮票纸：暖米色票纸底 + 深墨字 ---------- */
+    --paper: #E9DDC4;          /* 页面底色：牛皮票纸 */
+    --card: #F6EFDD;           /* 卡片面：比票纸亮一档 */
+    --card-elevated: #FBF6E9;  /* 二级浮层（弹层、下拉） */
+    --ink: #2B2118;            /* 正文/标题深墨 —— 对 --card 12.6 AAA */
+    --muted: #665843;          /* 辅助文字 —— 对 --card 4.9 AA */
+    --line: #D8C9A8;           /* 描边/分隔线 */
+    --line-strong: #B99F72;    /* 强调描边 */
 
     /* ---------- 主行动色：票据蓝 ---------- */
-    --rail-blue: #1B4ED8;      /* 对白 6.71 AA，对纸 6.26 AA；白字压其上也 6.71 */
-    --rail-blue-dark: #173FB0; /* 悬停 —— 对白 8.84 AAA */
-    --rail-blue-tint: #EEF2FE; /* 浅底 —— 其上压 --rail-blue 为 6.00 AA */
+    --rail-blue: #1B4ED8;      /* 对 --card 6.4 AA；白字压其上 6.4 */
+    --rail-blue-dark: #173FB0; /* 悬停 */
+    --rail-blue-tint: rgba(27, 78, 216, 0.10);
+    --rail-blue-glow: rgba(27, 78, 216, 0.22);
 
-    /* ---------- 印章红：只做点缀与关键状态，不铺大面积 ---------- */
-    --stamp-red: #D93A2B;      /* 对白 4.57 AA（故印章一律红底白字） */
-    --stamp-red-ink: #A3271B;  /* 红字压在浅红底上时用 —— 对 #FDECEA 为 6.41 AA */
-    --stamp-red-tint: #FDECEA;
+    /* ---------- 印章红：红底白字 4.9 AA ---------- */
+    --stamp-red: #C93A2B;
+    --stamp-red-ink: #A3271B;  /* 红字压浅红底 */
+    --stamp-red-tint: rgba(201, 58, 43, 0.10);
+    --stamp-red-glow: rgba(201, 58, 43, 0.25);
 
     /* ---------- 通过态 ---------- */
-    --ok-green: #16794A;       /* 对白 5.43 AA，对浅绿底 4.85 AA */
-    --ok-green-tint: #E9F5EF;
+    --ok-green: #16794A;       /* 对 --card 5.1 AA */
+    --ok-green-tint: rgba(22, 121, 74, 0.10);
+
+    /* ---------- 线路色：深色版，白字压其上过 AA ---------- */
+    --line-emerald: #0F7B5F;   /* DAY 2 祖母绿 —— 白字压其上 5.23 AA */
+    --line-amber: #B45309;     /* DAY 3 琥珀 —— 白字压其上 5.02 AA */
+    --line-cyan: #0E7490;      /* DAY 4 青 —— 白字压其上 5.36 AA */
 
     /* ---------- 字体 ---------- */
     --font-title: "Smiley Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     --font-body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
-    /* 数据用等宽：日期、天数、金额、编号一眼可辨 */
     --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-    /* ---------- 字阶：5 级（原 12 档收敛；旧 13px 并入 12px 一档） ---------- */
-    --fs-xs: 12px;   /* 标签、徽章、辅助说明 */
-    --fs-sm: 14px;   /* 正文 */
-    --fs-md: 16px;   /* 小标题 */
-    --fs-lg: 18px;   /* 卡片标题、强调 */
-    --fs-xl: 24px;   /* 页面大标题、统计数字 */
+    /* ---------- 字阶 ---------- */
+    --fs-xs: 12px;
+    --fs-sm: 14px;
+    --fs-md: 16px;
+    --fs-lg: 18px;
+    --fs-xl: 24px;
 
-    /* ---------- 字重：只用三档（原 800/900 全部并入 700） ---------- */
+    /* ---------- 字重 ---------- */
     --fw-regular: 400;
     --fw-medium: 500;
     --fw-bold: 700;
@@ -100,28 +105,28 @@
     --sp-6: 24px;
     --sp-8: 32px;
 
-    /* ---------- 圆角：8px 系统，不用胶囊做输入控件 ---------- */
+    /* ---------- 圆角 ---------- */
     --radius-sm: 6px;
     --radius: 8px;
     --radius-lg: 12px;
     --radius-pill: 999px;
 
-    /* ---------- 阴影：票据是纸，不是玻璃 ---------- */
-    --shadow-card: 0 1px 2px rgba(22, 24, 29, 0.04), 0 8px 24px rgba(22, 24, 29, 0.06);
-    --shadow-pop: 0 12px 32px rgba(22, 24, 29, 0.12);
+    /* ---------- 阴影：纸面上的暖褐投影 ---------- */
+    --shadow-card: 0 1px 2px rgba(90, 70, 40, 0.08), 0 8px 24px rgba(90, 70, 40, 0.10);
+    --shadow-pop: 0 12px 32px rgba(90, 70, 40, 0.18);
+    --glow-blue: 0 6px 18px rgba(27, 78, 216, 0.18);
+    --glow-red: 0 6px 18px rgba(201, 58, 43, 0.18);
 
     /* ---------- 控件 ---------- */
     --control-h: 44px;
-    --focus-ring: 0 0 0 3px rgba(27, 78, 216, 0.18);
+    --focus-ring: 0 0 0 3px var(--rail-blue-glow);
 
     /* ---------- 布局 ---------- */
     --shell-max: 1180px;
     --shell-max-result: 1280px;
     --shell-gutter: 20px;
 
-    /* ---------- 动效 ----------
-     * 反馈单只允许新增这两个 token（FRONTEND_FEEDBACK_CREATIVE_MOTION 红线）。
-     * 其余时长/缓动直接写在对应规则里，不再扩token 面。 */
-    --dur-stamp: 0.25s;                             /* 盖章：受理 / 已出票共用 */
-    --ease-stamp: cubic-bezier(0.2, 1.4, 0.4, 1);   /* 过冲回弹，模拟盖章手感 */
+    /* ---------- 动效 ---------- */
+    --dur-stamp: 0.25s;
+    --ease-stamp: cubic-bezier(0.2, 1.4, 0.4, 1);
 }

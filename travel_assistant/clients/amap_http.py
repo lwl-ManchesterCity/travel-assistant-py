@@ -8,12 +8,13 @@ Java 在四个 client 中各自复制了一份「候选 URL 依次尝试 + curl 
 import json
 import logging
 import subprocess
+import time
 from urllib.parse import quote, urlencode
 
 import httpx
 
 from ..config.settings import AmapSettings
-from ..exceptions import TripPlanningException
+from ..exceptions import TripPlanningException, is_quota_exhausted
 
 log = logging.getLogger(__name__)
 
@@ -67,9 +68,53 @@ def fetch_json(
     curl_exception_prefix: str,
     catch_curl_errors: bool,
 ) -> dict:
-    """对应 Java fetchXxxResponse：先用 http client 逐个候选地址请求，失败后按开关走 curl fallback。"""
-    failures: list[str] = []
+    """对应 Java fetchXxxResponse，外加一层 Java 没有的限流退避重试。
 
+    Java 只给路线做了限流降级，景点/天气/酒店撞上 CUQPS 会直接把整个请求打成 400；
+    而一次规划里这三路是被并行调用的，个人 key 的并发配额很容易瞬时打满。
+    退避几百毫秒重试通常就能过，比重试失败再降级更能保住真实数据。
+
+    重试只针对配额/频率类失败：参数错、key 错这类重试多少次都一样，直接抛更快。
+    """
+    failures: list[str] = []
+    backoffs = amap.rate_limit_retry_backoffs()
+    attempt = 0
+
+    while True:
+        try:
+            return _fetch_once(
+                amap,
+                candidate_urls,
+                failures,
+                log_scope=log_scope,
+                error_prefix=error_prefix,
+                request_exception_prefix=request_exception_prefix,
+                curl_exception_prefix=curl_exception_prefix,
+                catch_curl_errors=catch_curl_errors,
+            )
+        except TripPlanningException as exception:
+            if attempt >= len(backoffs) or not is_quota_exhausted(exception):
+                raise
+            backoff = backoffs[attempt]
+            attempt += 1
+            # 用 warning 而不是 info：撞限流是外部依赖降级的信号，运维要在默认日志级别下看见。
+            log.warning("%s命中高德配额限制，%.1fs 后重试（第 %d 次）: %s",
+                        log_scope, backoff, attempt, exception)
+            time.sleep(backoff)
+
+
+def _fetch_once(
+    amap: AmapSettings,
+    candidate_urls: list[str],
+    failures: list[str],
+    *,
+    log_scope: str,
+    error_prefix: str,
+    request_exception_prefix: str,
+    curl_exception_prefix: str,
+    catch_curl_errors: bool,
+) -> dict:
+    """一次完整尝试：先用 http client 逐个候选地址请求，失败后按开关走 curl fallback。"""
     for url in candidate_urls:
         display = _redact(url, amap.api_key)
         try:

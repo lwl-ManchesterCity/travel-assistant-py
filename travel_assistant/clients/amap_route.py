@@ -3,7 +3,7 @@
 import logging
 
 from ..config.settings import AmapSettings
-from ..exceptions import TripPlanningException
+from ..exceptions import TripPlanningException, is_quota_exhausted
 from ..models.location import Location
 from ..models.map_point import MapPoint
 from ..models.provider_metadata import ProviderMetadata
@@ -53,7 +53,7 @@ class AmapRouteClient(RouteClient):
             raise TripPlanningException("已选择高德路线 provider，但尚未配置 travel.providers.amap.api-key")
 
     def _request_route_plan(self, query: RouteQuery) -> RoutePlan:
-        # points 相当于构建了酒店-景点-酒店这条链路，每一段都要单独请求一次高德
+        # points 是"首个景点→…→末个景点→酒店"这条链路，相邻两点逐段各请求一次高德
         points = self._build_route_points(query)
         if len(points) < 2:
             raise TripPlanningException("高德路线规划至少需要两个有效坐标点")
@@ -98,11 +98,11 @@ class AmapRouteClient(RouteClient):
         )
 
     def _build_route_points(self, query: RouteQuery) -> list[MapPoint]:
+        # 与规则路线同构：第一个景点起步，只在收工时回酒店。早上那段"酒店→首个景点"不计入，
+        # 因为游客是自行抵达首站的；酒店锚在最后一站附近，压的就是最后那段回程。
         points: list[MapPoint] = []
         hotel = query.hotel
         attractions = query.attractions or []
-        if hotel is not None and hotel.location is not None:
-            points.append(MapPoint(name=hotel.name, address=hotel.address, location=hotel.location, point_type="hotel"))
         for attraction in attractions:
             if attraction.location is not None:
                 points.append(MapPoint(
@@ -165,15 +165,9 @@ class AmapRouteClient(RouteClient):
         return transportation is not None and "步行" in transportation
 
     def _should_fallback_to_rule_route(self, exception: TripPlanningException) -> bool:
-        message = str(exception)
-        if message is None or not message.strip():
-            return False
-        return (
-            "infocode=10021" in message
-            or "CUQPS_HAS_EXCEEDED_THE_LIMIT" in message
-            or "USER_DAILY_QUERY_OVER_LIMIT" in message
-            or "ACCESS_TOO_FREQUENT" in message
-        )
+        # 判定收敛到 exceptions.is_quota_exhausted：client 层的退避重试、这里的降级、
+        # API 层的错误文案必须对「什么算限流」持同一套标准，否则会出现「重试了但文案说参数错」这种自相矛盾。
+        return is_quota_exhausted(exception)
 
     def _format_location(self, location: Location | None) -> str:
         if location is None:

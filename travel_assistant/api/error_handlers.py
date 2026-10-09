@@ -8,12 +8,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic.alias_generators import to_camel
 
-from ..exceptions import TripPlanningException
+from ..exceptions import TripPlanningException, is_quota_exhausted
 from ..models.api_error_response import ApiErrorResponse
 
 log = logging.getLogger(__name__)
 
 _VALUE_ERROR_PREFIX = "Value error, "
+# 原来这里对所有 TripPlanningException 一律回「请调整输入条件后重试」，但高德限流/配额类失败
+# 与用户的输入毫无关系，这句话会把人往错的方向带（撞 10021 时用户的第一反应是"我是不是没填全"）。
+_PLANNING_ERROR_DETAIL = "请调整输入条件后重试"
+_QUOTA_ERROR_DETAIL = "地图数据接口调用过于频繁，请稍后重试"
 
 
 def _field_name(loc: tuple) -> str:
@@ -58,12 +62,13 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(TripPlanningException)
     async def handle_trip_planning_exception(request: Request, exc: TripPlanningException) -> JSONResponse:
         log.warning("旅行规划异常: %s", exc, exc_info=True)
+        detail = _QUOTA_ERROR_DETAIL if is_quota_exhausted(exc) else _PLANNING_ERROR_DETAIL
         return _json_response(
             400,
             ApiErrorResponse(
                 code="TRIP_PLANNING_ERROR",
                 message=str(exc),
-                details=["请调整输入条件后重试"],
+                details=[detail],
                 timestamp=datetime.now(),
             ),
         )

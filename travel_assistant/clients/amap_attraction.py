@@ -33,6 +33,28 @@ class AmapAttractionClient(AttractionClient):
             return self._fallback_client.find_attractions(query)
         return attractions
 
+    def find_attraction_by_name(self, city: str, name: str) -> Attraction | None:
+        """按名字精确查一个景点（"某天必去某景点"补搜用）：优先同名，多个取评分最高。"""
+        if not name or not name.strip():
+            return None
+        name = name.strip()
+        if self._amap.mock_response:
+            return self._fallback_client.find_attraction_by_name(city, name)
+        try:
+            response = self._fetch_poi_response(city, name)
+        except TripPlanningException:
+            return None
+        pois = response.get("pois") or []
+        candidates = [
+            attraction
+            for attraction in (self._to_attraction(poi) for poi in pois if self._is_valid_attraction_poi(poi))
+            if attraction.location is not None and attraction.name
+        ]
+        if not candidates:
+            return None
+        exact = [a for a in candidates if a.name == name] or candidates
+        return max(exact, key=lambda a: a.rating if a.rating is not None else 0.0)
+
     def get_metadata(self) -> ProviderMetadata:
         return ProviderMetadata(
             provider_code="amap-poi-search",

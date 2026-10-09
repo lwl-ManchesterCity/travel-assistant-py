@@ -5,6 +5,7 @@ from ..agent.orchestration import PlanningDataAgent
 from ..agent.planning_context import PlanningContext
 from ..exceptions import TripPlanningException
 from ..models.agent_trace import AgentTrace
+from ..models.attraction import Attraction
 from ..models.attraction_search_result import AttractionSearchResult
 from ..models.hotel_search_result import HotelSearchResult
 from ..models.planner_input import PlannerInput
@@ -20,10 +21,12 @@ class PlannerInputBuilder:
     def __init__(self,
                  planning_data_agent: PlanningDataAgent,
                  requirement_analysis_service: RequirementAnalysisService,
-                 hotel_anchor_service: HotelAnchorService):
+                 hotel_anchor_service: HotelAnchorService,
+                 attraction_client=None):
         self._planning_data_agent = planning_data_agent
         self._requirement_analysis_service = requirement_analysis_service
         self._hotel_anchor_service = hotel_anchor_service
+        self._attraction_client = attraction_client
 
     def build(self, request: TripPlanRequest) -> PlannerInput:
         context = PlanningContext(request=request)
@@ -44,6 +47,11 @@ class PlannerInputBuilder:
         if anchor_trace is not None:
             agent_traces.append(anchor_trace)
 
+        pinned_by_day, unresolved_pins = self._resolve_pinned_attractions(
+            request, list(attraction_result.attractions or []))
+        if unresolved_pins:
+            planning_notes.append("这些必去景点没在候选里找到、未排入：" + "、".join(unresolved_pins))
+
         return PlannerInput(
             request=request,
             attraction_result=attraction_result,
@@ -56,7 +64,35 @@ class PlannerInputBuilder:
             hotel_anchor_location=anchors.whole_trip,
             day_hotel_anchor_locations=anchors.by_day,
             day_hotel_candidates=day_candidates,
+            pinned_attractions_by_day=pinned_by_day,
         )
+
+    def _resolve_pinned_attractions(self,
+                                    request: TripPlanRequest,
+                                    attractions: list[Attraction]) -> tuple[dict[int, list[Attraction]], list[str]]:
+        """把 day_attraction_pins 里的景点名在已抓到的候选池里按名字对上；对不上再按名补搜一次。
+
+        先池内匹配（省一次请求），命中不了才用 attraction_client.find_attraction_by_name 补搜；
+        补搜也没有的才记进 unresolved——宁可不排并写明，也不凭空造一个景点。
+        """
+        pins_map: dict[int, list[Attraction]] = {}
+        unresolved: list[str] = []
+        for raw_day, names in (request.day_attraction_pins or {}).items():
+            day = int(raw_day)
+            resolved: list[Attraction] = []
+            for name in names:
+                match = next((a for a in attractions if a.name == name), None) \
+                    or next((a for a in attractions if a.name and (name in a.name or a.name in name)), None)
+                if match is None and self._attraction_client is not None:
+                    match = self._attraction_client.find_attraction_by_name(request.city, name)
+                if match is not None:
+                    if not any(a.name == match.name for a in resolved):
+                        resolved.append(match)
+                else:
+                    unresolved.append(f"第{day + 1}天『{name}』")
+            if resolved:
+                pins_map[day] = resolved
+        return pins_map, unresolved
 
     def _build_anchor_trace(self,
                             request: TripPlanRequest,

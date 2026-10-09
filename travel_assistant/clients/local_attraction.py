@@ -20,5 +20,14 @@ class InMemoryAttractionClient(AttractionClient):
     def find_attractions(self, query: AttractionQuery) -> list[Attraction]:
         return self._travel_knowledge_service.find_attractions(query.city)
 
+    def find_attraction_by_name(self, city: str, name: str) -> Attraction | None:
+        if not name or not name.strip():
+            return None
+        name = name.strip()
+        attractions = self._travel_knowledge_service.find_attractions(city)
+        exact = [a for a in attractions if a.name == name]
+        pool = exact or [a for a in attractions if a.name and (name in a.name or a.name in name)]
+        return pool[0] if pool else None
+
     def get_metadata(self) -> ProviderMetadata:
         return _PROVIDER

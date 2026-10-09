@@ -21,4 +21,7 @@ class AskResponse(CamelModel):
     adjustment_prompt: Optional[str] = None
     anchor_hint: Optional[str] = None
     anchor_day: Optional[int] = None
+    # 模型从原话里摘出的"某天必去景点名（可多个）"与天数（从 0 起）。同 anchor 一样是意图不是事实。
+    pin_hints: Optional[list[str]] = None
+    pin_day: Optional[int] = None
     traces: Optional[list[AgentTrace]] = None
