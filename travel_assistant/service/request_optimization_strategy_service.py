@@ -56,6 +56,7 @@ class RequestOptimizationStrategyService:
             hotel_continuity=request.hotel_continuity,
             day_attraction_pins=({day: list(names) for day, names in request.day_attraction_pins.items()}
                                  if request.day_attraction_pins else None),
+            origin_city=request.origin_city,
         )
 
     def apply_action(self,

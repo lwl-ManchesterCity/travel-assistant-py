@@ -726,6 +726,17 @@
     font-size: var(--fs-xs);
 }
 
+/* 超支那一格要一眼看见，不能和其余五格同色——它是这张账上唯一需要用户决策的数字 */
+.budget-item.is-over {
+    border-color: var(--stamp-red);
+    background: var(--stamp-red-tint);
+}
+
+.budget-item.is-over strong,
+.budget-item.is-over .budget-item-label {
+    color: var(--stamp-red);
+}
+
 /* 结账单：深色底 + 白字 + 等宽大数字 + 右下红色"合计"印章 */
 .budget-total {
     position: relative;
@@ -947,6 +958,11 @@
 
 .map-marker-pin.hotel {
     background: var(--stamp-red);
+}
+
+/* 到达口岸／返程站：既不是景点也不是住宿，给第三种颜色才不会被误读成"又一个景点" */
+.map-marker-pin.station {
+    background: var(--rail-ink);
 }
 
 .map-info {
@@ -1370,6 +1386,13 @@
 /* 酒店站用方点，与景点圆点区分 */
 .rline-node.hotel .rline-dot {
     border-radius: 3px;
+}
+
+/* 口岸站用菱形点：景点圆点、酒店方点、口岸菱形点，三种一眼分得开 */
+.rline-node.station .rline-dot {
+    border-radius: 3px;
+    transform: rotate(45deg);
+    border-color: var(--rail-ink);
 }
 
 .rline-name {

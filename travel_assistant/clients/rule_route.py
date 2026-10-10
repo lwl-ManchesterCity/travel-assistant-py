@@ -25,22 +25,27 @@ class RuleBasedRouteClient(RouteClient):
         hotel = query.hotel
         attractions = query.attractions or []
         steps: list[RouteStep] = []
-        # 白天从第一个景点起算（用户是先到景点再开始玩的，不存在"早上从酒店发车"这一段），
-        # 只有收工时那段回酒店保留——酒店锚在最后一站附近，就是为了这一段短。
-        start_point = (self._build_attraction_point(attractions[0]) if attractions
-                       else self._build_hotel_point(hotel))
-        current_point = start_point
+        # 起点＝这天真正开始走的地方（前一晚住的酒店，或第一天的到达口岸）；没给就是第一个景点，
+        # 因为游客是自行抵达首站的，不存在"早上从当晚还没入住的酒店发车"那一段。
+        start_point = query.start_point if query.start_point is not None else (
+            self._build_attraction_point(attractions[0]) if attractions else self._build_hotel_point(hotel))
+        # 终点＝当晚酒店；最后一天给的是返程口岸。
+        end_point = query.end_point if query.end_point is not None else (
+            self._build_hotel_point(hotel) if hotel is not None else None)
         total_distance_km = 0.0
         total_duration_minutes = 0
+        current_point = start_point
+        # 起点不是第一个景点时，去第一个景点那一段也要算；否则从第二个景点开始串。
+        pending = attractions if query.start_point is not None else attractions[1:]
 
-        for index, attraction in enumerate(attractions[1:], start=1):
+        for attraction in pending:
             next_point = self._build_attraction_point(attraction)
             distance_km = self._estimate_distance(current_point.location, next_point.location)
             duration_minutes = self._estimate_duration(distance_km, query.transportation)
             total_distance_km += distance_km
             total_duration_minutes += duration_minutes
             steps.append(RouteStep(
-                order_index=index,
+                order_index=len(steps) + 1,
                 from_name=current_point.name,
                 to_name=next_point.name,
                 transportation_mode=query.transportation,
@@ -52,29 +57,30 @@ class RuleBasedRouteClient(RouteClient):
             ))
             current_point = next_point
 
-        if attractions and hotel is not None and current_point.location is not None:
-            back_distance_km = self._estimate_distance(current_point.location, hotel.location)
+        if (end_point is not None and current_point.location is not None
+                and end_point.location is not None and end_point.name != current_point.name):
+            back_distance_km = self._estimate_distance(current_point.location, end_point.location)
             back_duration_minutes = self._estimate_duration(back_distance_km, query.transportation)
             total_distance_km += back_distance_km
             total_duration_minutes += back_duration_minutes
             steps.append(RouteStep(
                 order_index=len(steps) + 1,
                 from_name=current_point.name,
-                to_name=hotel.name,
+                to_name=end_point.name,
                 transportation_mode=query.transportation,
                 distance_km=round1(back_distance_km),
                 duration_minutes=back_duration_minutes,
                 instruction=self._build_instruction(
-                    current_point.name, hotel.name, query.transportation, back_distance_km
+                    current_point.name, end_point.name, query.transportation, back_distance_km
                 ),
             ))
+            current_point = end_point
 
-        end_point = self._build_hotel_point(hotel) if hotel is not None else current_point
         return RoutePlan(
             city=query.city,
             day_index=query.day_index,
             start_point=start_point,
-            end_point=end_point,
+            end_point=end_point if end_point is not None else current_point,
             steps=steps,
             total_distance_km=round1(total_distance_km),
             total_duration_minutes=total_duration_minutes,

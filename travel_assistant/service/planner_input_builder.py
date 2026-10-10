@@ -8,6 +8,7 @@ from ..models.agent_trace import AgentTrace
 from ..models.attraction import Attraction
 from ..models.attraction_search_result import AttractionSearchResult
 from ..models.hotel_search_result import HotelSearchResult
+from ..models.intercity_plan import InterCityPlan
 from ..models.planner_input import PlannerInput
 from ..models.planning_constraints import PlanningConstraints
 from ..models.trip_plan_request import TripPlanRequest
@@ -22,11 +23,13 @@ class PlannerInputBuilder:
                  planning_data_agent: PlanningDataAgent,
                  requirement_analysis_service: RequirementAnalysisService,
                  hotel_anchor_service: HotelAnchorService,
-                 attraction_client=None):
+                 attraction_client=None,
+                 intercity_service=None):
         self._planning_data_agent = planning_data_agent
         self._requirement_analysis_service = requirement_analysis_service
         self._hotel_anchor_service = hotel_anchor_service
         self._attraction_client = attraction_client
+        self._intercity_service = intercity_service
 
     def build(self, request: TripPlanRequest) -> PlannerInput:
         context = PlanningContext(request=request)
@@ -52,6 +55,11 @@ class PlannerInputBuilder:
         if unresolved_pins:
             planning_notes.append("这些必去景点没在候选里找到、未排入：" + "、".join(unresolved_pins))
 
+        intercity = self._plan_intercity(request, agent_traces)
+        if intercity.notes:
+            planning_notes.extend(intercity.notes)
+        last_day = request.calculate_days() - 1
+
         return PlannerInput(
             request=request,
             attraction_result=attraction_result,
@@ -65,7 +73,29 @@ class PlannerInputBuilder:
             day_hotel_anchor_locations=anchors.by_day,
             day_hotel_candidates=day_candidates,
             pinned_attractions_by_day=pinned_by_day,
+            intercity_cost=intercity.cost,
+            intercity_mode=intercity.option.mode if intercity.option else None,
+            intercity_estimated=bool(intercity.option and intercity.option.estimated),
+            arrival_point=intercity.arrival_point,
+            day_end_points=({last_day: intercity.departure_point} if intercity.departure_point else None),
         )
+
+    def _plan_intercity(self, request: TripPlanRequest, agent_traces: list[AgentTrace]) -> InterCityPlan:
+        """城际那一笔钱与到达口岸。没接这个服务（或没填出发城市）时返回空方案，逐天与现状一致。"""
+        if self._intercity_service is None:
+            return InterCityPlan()
+        plan = self._intercity_service.plan(request)
+        agent_traces.append(AgentTrace(
+            agent_name="IntercityService",
+            action="估算往返大交通",
+            input_summary=f"{request.origin_city or '未填出发城市'} → {request.city}",
+            output_summary=("未启用" if plan.option is None else
+                            f"{plan.option.mode} 往返约 {plan.option.round_trip_cost} 元"
+                            f"{'（估算）' if plan.option.estimated else '（高德换乘方案参考价）'}"
+                            + (f"，到达 {plan.option.arrival_station}" if plan.arrival_point else "")),
+            status="success" if plan.option is not None else "skipped",
+        ))
+        return plan
 
     def _resolve_pinned_attractions(self,
                                     request: TripPlanRequest,

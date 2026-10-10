@@ -36,6 +36,17 @@ class TripPlanRequest(CamelModel):
     # 某天必去的景点名（Java 没有这格）：{第几天(0起) → 景点名列表}，一天可多个。
     # 与住宿锚点同类——是"这句话没有格子承接"补出来的输入格子，见 ATTRACTION_PIN_DESIGN.md。
     day_attraction_pins: Optional[dict[int, list[str]]] = None
+    # 出发城市（Java 没有这格）：前端那个"出发城市"输入框以前只做预览展示、不进请求体。
+    # 填了才会算城际往返票价、才会把第一天的起点换成到达口岸；空＝整套大交通逻辑不启用。
+    origin_city: Optional[str] = None
+
+    @field_validator("origin_city")
+    @classmethod
+    def _clean_origin(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        text = value.strip()
+        return text or None
 
     @field_validator("city", "accommodation")
     @classmethod

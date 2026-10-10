@@ -183,6 +183,11 @@
             accommodation: document.getElementById('accommodation').value,
             extraRequirements: document.getElementById('extraRequirements').value.trim()
         };
+        // 出发城市现在真的进请求体了：填了才会算往返大交通、才会把第一天起点换成到达口岸
+        const originCity = document.getElementById('origin')?.value.trim();
+        if (originCity) {
+            payload.originCity = originCity;
+        }
         if (hotelAnchor) {
             payload.hotelAnchor = hotelAnchor;
         }
@@ -952,6 +957,7 @@
         const stayCost = budget.totalHotels || 0;
         const foodCost = budget.totalMeals || 0;
         const transportCost = budget.totalTransportation || 0;
+        const intercityCost = budget.totalIntercity || 0;
         const estimatedTotal = budget.total || 0;
         const requestedBudget = budget.requestedBudget || payload.budget || 0;
         const remainingBudget = budget.remainingBudget ?? (payload.budget - estimatedTotal);
@@ -984,7 +990,15 @@
                 <strong>¥${transportCost}</strong>
                 <small>根据路线距离与方式估算</small>
             </div>
+            ${intercityCost > 0 ? `
             <div class="budget-item">
+                <span class="budget-item-label">往返大交通</span>
+                <strong>¥${intercityCost}</strong>
+                <small>${budget.intercityEstimated
+                    ? `${budget.intercityMode || ''}价格按直线距离估算，非实时票价`
+                    : `${budget.intercityMode || ''}高德换乘方案参考价，含两端接驳`}</small>
+            </div>` : ''}
+            <div class="budget-item${(budget.withinBudget === false || (budget.remainingBudget ?? 0) < 0) ? ' is-over' : ''}">
                 <span class="budget-item-label">剩余预算</span>
                 <strong>¥${remainingBudget}</strong>
                 <small>${remainingBudget >= 0 ? '当前方案仍在预算内' : '当前方案已超出预算'}</small>
@@ -1171,9 +1185,9 @@
         return text.length >= 10 ? text.slice(5) : (text || '--');
     }
 
-    // 地铁线路图式当日路线：站点=酒店/景点，站间=路线段的通勤分钟。
+    // 地铁线路图式当日路线：站点＝口岸/酒店/景点，站间＝路线段的通勤分钟。
     // 数据全部来自 routePlan.steps，没有路线时整条不渲染。
-    function buildRouteLine(routeSteps, hotelName) {
+    function buildRouteLine(routeSteps, hotelName, routePlan) {
         const steps = routeSteps || [];
         if (!steps.length) return '';
         const stations = [];
@@ -1185,10 +1199,21 @@
             stations.push(step.toName);
             segs.push(step.durationMinutes || 0);
         });
+        const pointName = point => (point && point.name) || '';
+        const special = {};
+        // 端点自带 point_type：口岸画菱形点、酒店画方点，第 N 天的起点是"前一晚那家酒店"时也要认出来
+        const mark = point => {
+            const type = point && (point.point_type || point.pointType);
+            if (!pointName(point) || !type) return;
+            special[pointName(point)] = type === 'station' ? 'station' : 'hotel';
+        };
+        mark(routePlan && routePlan.startPoint);
+        mark(routePlan && routePlan.endPoint);
+        if (hotelName) special[hotelName] = 'hotel';
         return `
             <div class="rline" aria-label="当日路线示意图">
                 ${stations.map((name, i) => `
-                    <div class="rline-node${name === hotelName ? ' hotel' : ''}">
+                    <div class="rline-node${special[name] ? ' ' + special[name] : ''}">
                         <span class="rline-dot"></span>
                         <span class="rline-name">${name}</span>
                     </div>
@@ -1246,7 +1271,7 @@
                         <span class="day-date">${dateText}</span>
                     </div>
                     <div class="day-body ${index === 0 ? '' : 'hidden'}" data-day-body="${index}">
-                        ${buildRouteLine(routeSteps, hotelName)}
+                        ${buildRouteLine(routeSteps, hotelName, routePlan)}
                         <div class="meta-box">
                             <div class="meta-row">行程描述: ${day.description || '暂无描述'}</div>
                             <div class="meta-row">交通方式: ${day.transportation || payload.transportation}</div>
@@ -1653,21 +1678,23 @@
 
     function buildRoutePoints(day) {
         const points = [];
-        const hotel = day.hotel;
-        // 折线与后端路线同构：首个景点起步，末站回酒店才出现酒店那一段。
-        (day.attractions || []).forEach(spot => {
-            if (spot.location) {
-                points.push({
-                    longitude: spot.location.longitude,
-                    latitude: spot.location.latitude
-                });
+        const seen = new Set();
+        const routePlan = day.routePlan || {};
+        const push = (point) => {
+            const location = point && point.location;
+            if (!location || !point.name || seen.has(point.name)) {
+                return;
             }
-        });
-        if (hotel?.location && (day.attractions || []).length) {
-            points.push({
-                longitude: hotel.location.longitude,
-                latitude: hotel.location.latitude
-            });
+            seen.add(point.name);
+            points.push({ longitude: location.longitude, latitude: location.latitude });
+        };
+        // 与后端路线同构：起点（前一晚酒店／到达口岸）→ 各景点 → 终点（当晚酒店／返程口岸）。
+        // 后端没给端点时，startPoint 就是第一个景点，push 里的按名去重会避免画出零长度的一段。
+        push(routePlan.startPoint);
+        (day.attractions || []).forEach(push);
+        push(routePlan.endPoint);
+        if (points.length < 2) {
+            push(day.hotel);
         }
         return points;
     }
@@ -1707,6 +1734,29 @@
                 markerLabel: String(index + 1),
                 type: 'attraction',
                 detail: `停留约 ${spot.visitDuration || 0} 分钟 · 门票 ¥${spot.ticketPrice || 0}（估算）`
+            });
+        });
+        // 到达口岸／返程站这类端点：它们既不是景点也不是酒店，不补就会在地图上消失，
+        // 而"从哪个站到广州塔"正是这条路线最想给人看的那一段。
+        const routePlan = day.routePlan || {};
+        [routePlan.startPoint, routePlan.endPoint].forEach(point => {
+            if (!point || !point.location || (point.point_type || point.pointType) !== 'station') {
+                return;
+            }
+            const key = `${point.name}-${point.location.longitude}-${point.location.latitude}`;
+            if (seen.has(key)) {
+                return;
+            }
+            seen.add(key);
+            points.push({
+                id: `station-${point.name}`,
+                name: point.name,
+                address: point.address || '到达／返程站点',
+                longitude: point.location.longitude,
+                latitude: point.location.latitude,
+                markerLabel: '站',
+                type: 'station',
+                detail: '城际大交通的落地站点'
             });
         });
         return points;

@@ -6,6 +6,8 @@ from ..models.attraction import Attraction
 from ..models.attraction_query import AttractionQuery
 from ..models.hotel import Hotel
 from ..models.hotel_query import HotelQuery
+from ..models.intercity_plan import InterCityOption
+from ..models.location import Location
 from ..models.provider_metadata import ProviderMetadata
 from ..models.route_plan import RoutePlan
 from ..models.route_query import RouteQuery
@@ -51,6 +53,19 @@ class RouteClient(ABC):
     @abstractmethod
     def plan_route(self, query: RouteQuery) -> RoutePlan:
         ...
+
+    def plan_intercity(self,
+                       origin_city: str,
+                       origin: Location,
+                       destination_city: str,
+                       destination: Location,
+                       straight_km: float) -> list[InterCityOption]:
+        """跨城方案（票价＋到达站）。默认一条都不给＝这个 provider 查不到大交通。
+
+        不做成 @abstractmethod：Java 侧没有这一层，本地/规则那几个兜底实现没必要都被迫写一遍，
+        由调用方（IntercityService）在拿不到方案时按直线距离估。
+        """
+        return []
 
     @abstractmethod
     def get_metadata(self) -> ProviderMetadata:

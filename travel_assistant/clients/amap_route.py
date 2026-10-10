@@ -1,9 +1,15 @@
 """对应 Java client/impl/AmapRouteClient.java（高德路线分段规划，仅限流时回退规则路线）。"""
 
 import logging
+import re
 
 from ..config.settings import AmapSettings
 from ..exceptions import TripPlanningException, is_quota_exhausted
+from ..models.intercity_plan import (
+    MODE_HIGH_SPEED_RAIL,
+    MODE_ORDINARY_RAIL,
+    InterCityOption,
+)
 from ..models.location import Location
 from ..models.map_point import MapPoint
 from ..models.provider_metadata import ProviderMetadata
@@ -16,6 +22,23 @@ from .base import RouteClient
 from .rule_route import RuleBasedRouteClient
 
 log = logging.getLogger(__name__)
+
+# 车次首字母：G/D/C/S 是高铁动车城际，T/K/Z 和纯数字是普速。
+_HIGH_SPEED_PREFIX = re.compile(r"^[GDCS]")
+
+
+def _parse_stop_location(raw: object) -> Location | None:
+    """站点坐标。高德这里给的是空格分隔的 "113.246341 23.190910"，而别处用逗号分隔，两种都收。"""
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    parts = re.split(r"[,\s]+", text)
+    if len(parts) != 2:
+        return None
+    try:
+        return Location(longitude=float(parts[0]), latitude=float(parts[1]))
+    except ValueError:
+        return None
 
 
 class AmapRouteClient(RouteClient):
@@ -47,6 +70,91 @@ class AmapRouteClient(RouteClient):
             provider_name="高德地图路线规划",
             mock=self._amap.mock_response,
         )
+
+    def plan_intercity(self,
+                       origin_city: str,
+                       origin: Location,
+                       destination_city: str,
+                       destination: Location,
+                       straight_km: float) -> list[InterCityOption]:
+        """跨城换乘方案：只取其中的铁路主段，按 G/D/C/S 字头分高铁、其余分普速。
+
+        接口给的 `cost` 是"这一条方案全程花费"（含两端地铁），所以它是估算口径；
+        `duration` 只留档不进计算——本版按"早上出发、中午前后到"的统一假设排景点。
+        请求失败返回空列表，由上层按直线距离兜底，不让一次跨城查询打断整单规划。
+        """
+        if self._amap.mock_response:
+            return []
+        try:
+            response = self._fetch_intercity(origin_city, origin, destination_city, destination)
+        except TripPlanningException as exception:
+            log.warning("高德跨城检索失败，改由直线距离估算大交通: %s", exception)
+            return []
+        except Exception as exception:  # noqa: BLE001 - 可选增强，异常不打断规划
+            log.warning("高德跨城检索异常，改由直线距离估算大交通: %s", type(exception).__name__)
+            return []
+
+        options: list[InterCityOption] = []
+        for transit in (response.get("route") or {}).get("transits") or []:
+            option = self._to_intercity_option(transit)
+            if option is not None:
+                options.append(option)
+        return options
+
+    def _fetch_intercity(self,
+                         origin_city: str,
+                         origin: Location,
+                         destination_city: str,
+                         destination: Location) -> dict:
+        # extensions=all 才带 arrival_stop/departure_stop：车次名里的"广州南"是这趟车的终点站，
+        # 乘客真正下车的那一站要看 arrival_stop（实测 G251 名写"湛江北"、arrival_stop 是"广州白云"）。
+        candidate_urls = build_candidate_urls(self._amap, "/v3/direction/transit/integrated", {
+            "key": self._amap.api_key,
+            "origin": self._format_location(origin),
+            "destination": self._format_location(destination),
+            "city1": origin_city,
+            "city2": destination_city,
+            "strategy": "0",
+            "extensions": "all",
+        })
+        return fetch_json(
+            self._amap,
+            candidate_urls,
+            log_scope="高德跨城",
+            error_prefix="高德跨城检索",
+            request_exception_prefix="高德跨城检索请求异常：",
+            curl_exception_prefix="curl fallback 未获取到有效跨城响应：",
+            catch_curl_errors=True,
+        )
+
+    def _to_intercity_option(self, transit: dict) -> InterCityOption | None:
+        one_way_cost = self._parse_double(transit.get("cost"))
+        railway = self._dominant_railway(transit)
+        if one_way_cost <= 0 or railway is None:
+            return None
+        name = str(railway.get("name") or "").strip()
+        trip = str(railway.get("trip") or name).strip()
+        arrival = railway.get("arrival_stop") if isinstance(railway.get("arrival_stop"), dict) else {}
+        return InterCityOption(
+            mode=MODE_HIGH_SPEED_RAIL if _HIGH_SPEED_PREFIX.match(trip) else MODE_ORDINARY_RAIL,
+            round_trip_cost=max(1, jround(one_way_cost * 2)),
+            one_way_minutes=max(1, jround(self._parse_double(railway.get("time") or transit.get("duration")) / 60.0)),
+            arrival_station=str(arrival.get("name") or "").strip() or None,
+            arrival_location=_parse_stop_location(arrival.get("location")),
+        )
+
+    def _dominant_railway(self, transit: dict) -> dict | None:
+        """取这条方案里唯一那段铁路的完整对象。
+
+        只有一趟铁路才认：两头地铁加一趟车是跨城的常态；出现两段以上铁路说明这不是"一趟车到"，
+        价格与落地站都不可信，宁可交给直线估。
+        """
+        found: list[dict] = []
+        for segment in transit.get("segments") or []:
+            railway = segment.get("railway")
+            if isinstance(railway, dict) and str(railway.get("name") or "").strip():
+                found.append(railway)
+        return found[0] if len(found) == 1 else None
 
     def _validate_amap_configuration(self) -> None:
         if self._amap.api_key is None or not self._amap.api_key.strip():
@@ -98,21 +206,29 @@ class AmapRouteClient(RouteClient):
         )
 
     def _build_route_points(self, query: RouteQuery) -> list[MapPoint]:
-        # 与规则路线同构：第一个景点起步，只在收工时回酒店。早上那段"酒店→首个景点"不计入，
-        # 因为游客是自行抵达首站的；酒店锚在最后一站附近，压的就是最后那段回程。
+        """点位链：起点（前一晚酒店／到达口岸，没给就是第一个景点）→ 各景点 → 终点（当晚酒店／返程口岸）。
+
+        早上那段"从当晚还没入住的酒店出发"不算——游客是自行抵达首站的；
+        酒店锚在最后一站附近，压的正是最后那段回程。
+        """
+        attractions = [a for a in (query.attractions or []) if a.location is not None]
         points: list[MapPoint] = []
-        hotel = query.hotel
-        attractions = query.attractions or []
+        start = query.start_point
+        if start is not None and start.location is not None:
+            points.append(start)
         for attraction in attractions:
-            if attraction.location is not None:
-                points.append(MapPoint(
-                    name=attraction.name,
-                    address=attraction.address,
-                    location=attraction.location,
-                    point_type="attraction",
-                ))
-        if hotel is not None and hotel.location is not None and attractions:
-            points.append(MapPoint(name=hotel.name, address=hotel.address, location=hotel.location, point_type="hotel"))
+            points.append(MapPoint(
+                name=attraction.name,
+                address=attraction.address,
+                location=attraction.location,
+                point_type="attraction",
+            ))
+        end = query.end_point
+        if end is None and query.hotel is not None and query.hotel.location is not None and attractions:
+            end = MapPoint(name=query.hotel.name, address=query.hotel.address,
+                           location=query.hotel.location, point_type="hotel")
+        if end is not None and end.location is not None and (not points or points[-1].name != end.name):
+            points.append(end)
         return points
 
     def _extract_route_summary(self, response: dict, transportation: str) -> dict:

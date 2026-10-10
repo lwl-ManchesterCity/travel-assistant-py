@@ -5,6 +5,8 @@ from ..models.attraction import Attraction
 from ..models.attraction_query import AttractionQuery
 from ..models.hotel import Hotel
 from ..models.hotel_query import HotelQuery
+from ..models.intercity_plan import InterCityOption
+from ..models.location import Location
 from ..models.provider_metadata import ProviderMetadata
 from ..models.route_plan import RoutePlan
 from ..models.route_query import RouteQuery
@@ -82,6 +84,16 @@ class ConfigurableRouteClient(RouteClient):
 
     def plan_route(self, query: RouteQuery) -> RoutePlan:
         return self._get_delegate().plan_route(query)
+
+    def plan_intercity(self,
+                       origin_city: str,
+                       origin: Location,
+                       destination_city: str,
+                       destination: Location,
+                       straight_km: float) -> list[InterCityOption]:
+        # 选规则路线时这里返回空列表，IntercityService 会改用直线距离估价
+        return self._get_delegate().plan_intercity(
+            origin_city, origin, destination_city, destination, straight_km)
 
     def get_metadata(self) -> ProviderMetadata:
         return self._get_delegate().get_metadata()
