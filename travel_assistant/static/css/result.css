@@ -960,9 +960,13 @@
     background: var(--stamp-red);
 }
 
-/* 到达口岸／返程站：既不是景点也不是住宿，给第三种颜色才不会被误读成"又一个景点" */
-.map-marker-pin.station {
-    background: var(--rail-ink);
+/* 到达口岸／返程站、以及"前一晚那家酒店"这类路线端点：既不是景点也不是本晚住宿，
+   给中性深墨而不是第四条线路色——四种天数配色已经占了蓝/橙/青/绿，再抢一个色反而分不清。
+   外圈压一道卡色环，浅色瓦片和深色瓦片上都分得出来。 */
+.map-marker-pin.station,
+.map-marker-pin.endpoint {
+    background: var(--ink);
+    box-shadow: 0 0 0 3px var(--card), 0 10px 22px rgba(43, 33, 24, 0.35);
 }
 
 .map-info {
@@ -1392,7 +1396,7 @@
 .rline-node.station .rline-dot {
     border-radius: 3px;
     transform: rotate(45deg);
-    border-color: var(--rail-ink);
+    border-color: var(--ink);
 }
 
 .rline-name {

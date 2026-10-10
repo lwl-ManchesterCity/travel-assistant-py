@@ -34,6 +34,8 @@ _STRAIGHT_COST_PER_KM = {
     MODE_FLIGHT: 0.9,
 }
 _FLIGHT_MIN_COST = 400
+# 直线不到这个公里数就不给"飞机"这一档：近程高铁本来就更快更省，造一条飞机只是噪声。
+_FLIGHT_MIN_KM = 800.0
 # 两城直线不到这个数就不算大交通：同城或近郊，硬造一笔"往返票价"只会污染预算。
 _MIN_INTERCITY_KM = 150.0
 # 往返总花费超过总预算这个比例就淘汰该档；全被淘汰时取最便宜的一条并让方案标红。
@@ -74,8 +76,9 @@ class IntercityService:
             options = estimated_options
         elif not any(option.mode == MODE_FLIGHT for option in options):
             # 接口不含航班，飞机只能估出来；不进这一格就永远比不出"长途飞机更便宜"
-            flight = next(option for option in estimated_options if option.mode == MODE_FLIGHT)
-            options = [*options, flight]
+            flight = next((option for option in estimated_options if option.mode == MODE_FLIGHT), None)
+            if flight is not None:
+                options = [*options, flight]
 
         chosen, dropped = self._pick_option(options, request, destination_location)
         if chosen is None:
@@ -142,14 +145,26 @@ def _straight_km(first: Location, second: Location) -> float:
 
 
 def _straight_line_options(straight_km: float) -> list[InterCityOption]:
-    return [
+    """按直线距离估各档价格；**飞机只在够远的段才给这一档**。
+
+    163 公里的上海→杭州不该出现"飞机 800 元"这种选项：近程本来就是火车高铁的事，
+    硬凑三档只会多一条没人会坐的推荐。早先这里"估不到 400 元就跳过这一档"配的是
+    上面一句找不到飞机就抛 StopIteration 的 `next(...)`，两者叠在一起把 150~444 公里
+    这一段打成了 500——抛错那半改成"找不到就不加"，这一半按"近程不给飞机"保留。
+    """
+    options = [
         InterCityOption(
             mode=mode,
             round_trip_cost=max(2, jround(straight_km * factor * 2)),
             estimated=True,
         )
-        for mode, factor in _STRAIGHT_COST_PER_KM.items()
-        if not (mode == MODE_FLIGHT and straight_km * factor < _FLIGHT_MIN_COST)
-    ] or [
-        InterCityOption(mode=MODE_FLIGHT, round_trip_cost=_FLIGHT_MIN_COST * 2, estimated=True)
+        for mode, factor in _STRAIGHT_COST_PER_KM.items() if mode != MODE_FLIGHT
     ]
+    if straight_km >= _FLIGHT_MIN_KM:
+        options.append(InterCityOption(
+            mode=MODE_FLIGHT,
+            round_trip_cost=max(2, jround(
+                max(_FLIGHT_MIN_COST, straight_km * _STRAIGHT_COST_PER_KM[MODE_FLIGHT]) * 2)),
+            estimated=True,
+        ))
+    return options

@@ -465,55 +465,88 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 
 /* ---------- 进度与状态 ---------- */
 
-/* ---------- 出票机 · 第 2 幕「打印中」（FRONTEND_FEEDBACK_CREATIVE_MOTION 第一节）
+/* ---------- 出票机 · 等待期面板 ----------
  *
- * 原细进度条的可视层被替换成「打印口 + 走纸线 + 等宽读数」。
- * #progress-fill 仍留在 DOM 里作为进度数据的出口 —— 反馈单红线要求原有进度数据流不动，
- * JS 照旧会写它的 width；这里把它从视觉上摘掉，免得它在新布局里多画一条。 */
+ * 这块面板不在 .planner-shell 里面，是故意的：委托单播"被吸进打印机"时整层压到 40% 透明，
+ * 面板放进去会跟着一起淡掉，等待期看着就像白屏（2026-10-10 就是这么被看到的）。
+ * #progress-fill 仍是 JS 写 width 的那根条，原有进度数据流不动。 */
 
 .progress-panel {
-    margin-top: var(--sp-4);
-    overflow: hidden;
+    display: grid;
+    grid-template-columns: 104px 1fr;
+    align-items: center;
+    gap: var(--sp-5);
+    margin-top: var(--sp-5);
+    padding: var(--sp-5);
     border: 1px solid var(--line);
     border-radius: var(--radius-lg);
     background: var(--card);
+    box-shadow: 0 10px 26px rgba(43, 33, 24, 0.10);
 }
 
-/* 打印口：与结果页票根顶部的「出票口」同一画法 */
-.print-slot {
-    height: 8px;
-    background: rgba(43, 33, 24, 0.08);
+/* 打印机本体：出票口、从口里持续往下走的票带、来回扫的打印头 */
+.printer {
+    position: relative;
+    height: 96px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--paper);
 }
 
-.print-body {
-    display: flex;
-    align-items: stretch;
-    gap: var(--sp-4);
-    padding: var(--sp-4);
+.printer-slot {
+    position: absolute;
+    top: 10px;
+    left: 14px;
+    right: 14px;
+    height: 6px;
+    border-radius: var(--radius-pill);
+    background: rgba(43, 33, 24, 0.16);
 }
 
-/* 走纸线：2px 竖向虚线。
- * 虚线图案用 mask 切出来而不是写进 SVG —— 那样颜色只能硬编码在 data-URI 里，
- * 会绕过 token；mask 只管形状，颜色仍由 --line-strong 决定。 */
-.print-line {
-    flex: none;
-    width: 2px;
-    align-self: stretch;
-    min-height: 56px;
-    background: var(--line-strong);
-    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='8'%3E%3Crect width='2' height='4' fill='%23fff'/%3E%3C/svg%3E");
-    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='8'%3E%3Crect width='2' height='4' fill='%23fff'/%3E%3C/svg%3E");
-    -webkit-mask-repeat: repeat-y;
-    mask-repeat: repeat-y;
-    -webkit-mask-size: 2px 8px;
-    mask-size: 2px 8px;
+/* 票带上的齿孔每 22 px 一组，位移一个周期正好接回原点，看不出接缝 */
+.printer-tape {
+    position: absolute;
+    top: 22px;
+    left: 18px;
+    right: 18px;
+    bottom: -28px;
+    border: 1px dashed var(--line-strong);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    background:
+        repeating-linear-gradient(180deg,
+            rgba(43, 33, 24, 0.00) 0 10px,
+            rgba(43, 33, 24, 0.14) 10px 12px,
+            rgba(43, 33, 24, 0.00) 12px 22px),
+        var(--card-elevated);
+    animation: ticket-crawl 1.6s linear infinite;
 }
 
-.print-readout {
-    flex: 1;
-    min-width: 0;
+@keyframes ticket-crawl {
+    from { background-position: 0 0, 0 0; }
+    to { background-position: 0 22px, 0 0; }
+}
+
+.printer-head {
+    position: absolute;
+    top: 26px;
+    left: 18px;
+    right: 18px;
+    height: 3px;
+    border-radius: var(--radius-pill);
+    background: linear-gradient(90deg, transparent, var(--rail-blue), transparent);
+    animation: head-sweep 1.15s ease-in-out infinite alternate;
+}
+
+@keyframes head-sweep {
+    from { transform: translateY(0) scaleX(0.84); opacity: 0.5; }
+    to { transform: translateY(50px) scaleX(1); opacity: 1; }
+}
+
+.printer-readout {
     display: grid;
-    align-content: center;
+    min-width: 0;
     gap: var(--sp-2);
 }
 
@@ -528,31 +561,31 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     color: var(--muted);
 }
 
+.print-track {
+    height: 6px;
+    overflow: hidden;
+    border-radius: var(--radius-pill);
+    background: rgba(43, 33, 24, 0.10);
+}
+
+.progress-fill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--line-emerald);
+    transition: width var(--dur-settle) var(--ease-settle);
+}
+
 .print-note {
     font-size: var(--fs-xs);
     color: var(--muted);
 }
 
-.progress-fill {
-    display: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    /* 走纸感：虚线整周期位移，0.8s 一轮正好接回原点，看不出接缝。
-     * 反馈单允许这里用 background-position 一类位移（性能无害），此处用 mask-position 同理。 */
-    .print-line {
-        animation: paper-feed 0.8s linear infinite;
-    }
-
-    @keyframes paper-feed {
-        from {
-            -webkit-mask-position: 0 0;
-            mask-position: 0 0;
-        }
-        to {
-            -webkit-mask-position: 0 8px;
-            mask-position: 0 8px;
-        }
+@media (prefers-reduced-motion: reduce) {
+    /* 走纸和打印头停下，但百分比与阶段文字照旧更新——那是进度信息，不是装饰 */
+    .printer-tape,
+    .printer-head {
+        animation: none;
     }
 }
 

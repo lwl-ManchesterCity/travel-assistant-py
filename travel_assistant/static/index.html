@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>智能旅行助手</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='8' width='28' height='16' rx='3' fill='%231B4ED8'/%3E%3Cline x1='21' y1='8' x2='21' y2='24' stroke='%23FFFFFF' stroke-width='1.6' stroke-dasharray='2 2'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="/css/tokens.css?v=20261010c">
-    <link rel="stylesheet" href="/css/base.css?v=20261010c">
-    <link rel="stylesheet" href="/css/controls.css?v=20261010c">
-    <link rel="stylesheet" href="/css/landing.css?v=20261010c">
-    <link rel="stylesheet" href="/css/result.css?v=20261010c">
+    <link rel="stylesheet" href="/css/tokens.css?v=20261010g">
+    <link rel="stylesheet" href="/css/base.css?v=20261010g">
+    <link rel="stylesheet" href="/css/controls.css?v=20261010g">
+    <link rel="stylesheet" href="/css/landing.css?v=20261010g">
+    <link rel="stylesheet" href="/css/result.css?v=20261010g">
 </head>
 <body>
 <section id="landing-page" class="landing-page">
@@ -153,25 +153,28 @@
                     <button id="submit-btn" class="primary-button" type="submit"><span class="ticket-barcode" aria-hidden="true"></span>打印我的行程票</button>
                     <span class="stamp-accept" aria-hidden="true">受理</span>
                     <div id="status" class="status-text"></div>
-                    <div id="progress-panel" class="progress-panel hidden">
-                        <div class="print-slot" aria-hidden="true"></div>
-                        <div class="print-body">
-                            <div class="print-line" aria-hidden="true"></div>
-                            <div class="print-readout">
-                                <div class="print-status">
-                                    <span>PRINTING…</span>
-                                    <span id="progress-percent" class="mono">0%</span>
-                                </div>
-                                <div id="progress-label" class="print-note">正在生成行程计划...</div>
-                            </div>
-                        </div>
-                        <div id="progress-fill" class="progress-fill"></div>
-                    </div>
-                    <div id="error-box" class="error-box hidden"></div>
                 </div>
             </section>
         </form>
     </div>
+    <!-- 等待面板必须在 .planner-shell 之外：委托单播"被吸进打印机"时整层压到 40% 透明，
+         面板放在里面会跟着一起淡掉，等待期看着就像白屏 -->
+    <div id="progress-panel" class="progress-panel hidden" role="status" aria-live="polite">
+        <div class="printer" aria-hidden="true">
+            <div class="printer-slot"></div>
+            <div class="printer-tape"></div>
+            <div class="printer-head"></div>
+        </div>
+        <div class="printer-readout">
+            <div class="print-status">
+                <span id="progress-stage">PRINTING…</span>
+                <span id="progress-percent" class="mono">0%</span>
+            </div>
+            <div class="print-track"><div id="progress-fill" class="progress-fill"></div></div>
+            <div id="progress-label" class="print-note">正在生成行程计划...</div>
+        </div>
+    </div>
+    <div id="error-box" class="error-box hidden"></div>
 </section>
 
 <section id="result-page" class="result-page hidden">
@@ -386,6 +389,6 @@
 
 <div id="error-toast" class="error-toast hidden"></div>
 
-    <script src="/js/app.js?v=20261010c"></script>
+    <script src="/js/app.js?v=20261010g"></script>
 </body>
 </html>

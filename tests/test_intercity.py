@@ -162,11 +162,14 @@ def test_route_client_failure_degrades_to_straight_line_estimates(any_city_geoco
     assert plan.option is not None and plan.option.estimated is True
 
 
-def test_straight_line_options_cover_three_modes_with_a_flight_floor():
-    modes = {option.mode for option in mod._straight_line_options(1200.0)}
-    assert modes == {MODE_HIGH_SPEED_RAIL, MODE_ORDINARY_RAIL, MODE_FLIGHT}
-    short = mod._straight_line_options(60.0)          # 60 公里：飞机估价低于 400 下限，被抬到下限
-    assert min(option.round_trip_cost for option in short) >= 1
+def test_flight_only_enters_the_pool_far_enough_to_be_real():
+    """近程不造飞机这一档：163 公里的上海→杭州给"飞机 800 元"是噪声，不是选择。"""
+    near = {option.mode for option in mod._straight_line_options(163.0)}
+    assert near == {MODE_HIGH_SPEED_RAIL, MODE_ORDINARY_RAIL}
+
+    far = {option.mode for option in mod._straight_line_options(1200.0)}
+    assert far == {MODE_HIGH_SPEED_RAIL, MODE_ORDINARY_RAIL, MODE_FLIGHT}
+    assert min(option.round_trip_cost for option in mod._straight_line_options(163.0)) >= 1
 
 
 # 2026-10-10 真跑 /v3/direction/transit/integrated（上海→广州）拿到的响应，只留解析用到的字段。
@@ -252,3 +255,30 @@ def test_a_cheaper_plan_landing_in_the_wrong_city_is_rejected(monkeypatch):
 
     assert plan.cost == 1766 and plan.arrival_point.name == "广州南"
     assert any("湛江北" in note and "排除" in note for note in plan.notes)
+
+
+def test_flight_price_respects_the_floor_when_it_is_offered():
+    """够远才给这一档；给了之后 400 元/人是价格下限（不是"估不到就消失"）。"""
+    options = mod._straight_line_options(820.0)   # 0.9×820=738 > 400，按里程算
+    assert next(o for o in options if o.mode == MODE_FLIGHT).round_trip_cost == 1476
+    short_flight = mod._straight_line_options(900.0)
+    assert next(o for o in short_flight if o.mode == MODE_FLIGHT).round_trip_cost == 1620
+
+
+def test_short_hop_with_a_real_rail_plan_does_not_break(monkeypatch):
+    """接口只给高铁、距离又近到不该有飞机时：不加飞机这一档，也不能抛（曾经 500）。"""
+    HANGZHOU = Location(longitude=120.155, latitude=30.274)
+
+    def fake(amap, city, keyword):
+        return SHANGHAI if keyword == "上海" else HANGZHOU
+
+    monkeypatch.setattr(mod, "resolve_anchor_location", fake)
+    client = _StubRouteClient([InterCityOption(
+        mode=MODE_HIGH_SPEED_RAIL, round_trip_cost=140, arrival_station="杭州东",
+        arrival_location=HANGZHOU)])
+    service = IntercityService(AmapSettings(api_key="k"), client)
+
+    plan = service.plan(_request(city="杭州", origin_city="上海", budget=2000))
+
+    assert plan.option.mode == MODE_HIGH_SPEED_RAIL and plan.cost == 140
+    assert plan.arrival_point.name == "杭州东"

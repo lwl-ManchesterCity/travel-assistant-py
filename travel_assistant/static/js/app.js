@@ -8,6 +8,7 @@
     const progressPanel = document.getElementById('progress-panel');
     const progressFill = document.getElementById('progress-fill');
     const progressLabel = document.getElementById('progress-label');
+    const progressStage = document.getElementById('progress-stage');
     const progressPercent = document.getElementById('progress-percent');
     const backHomeBtn = document.getElementById('back-home-btn');
     const editTripBtn = document.getElementById('edit-trip-btn');
@@ -498,22 +499,42 @@
         tripAdjustOverlay.classList.toggle('hidden', !isLoading);
     }
 
+    // 等待期文案按后端真实做的事按序播一遍（一轮约 27 秒，之后停在最后一步继续等）。
+    // 原来只有两句、且百分比爬到 90 就 stopProgress()，剩下的 30~150 秒画面一动不动，
+    // 委托单又被压到 40% 透明，看着就像白屏卡死（2026-10-10 反馈）。
+    const PROGRESS_STAGES = [
+        ['STEP 1/6 检索景点', '正在按偏好检索候选景点...'],
+        ['STEP 2/6 查询天气', '正在查这几天的天气与气温...'],
+        ['STEP 3/6 挑选住宿', '正在按价位与远近挑住宿...'],
+        ['STEP 4/6 串联路线', '正在串每天的走法与通勤...'],
+        ['STEP 5/6 反思修正', '正在按预算和天气回头修正...'],
+        ['STEP 6/6 核算打印', '正在算账并打印行程票...']
+    ];
+    const PROGRESS_TICK_MS = 900;
+    const PROGRESS_TICKS_PER_STAGE = 5;
+
     function startFakeProgress() {
         stopProgress();
-        let current = 8;
-        updateProgress(current, '正在生成行程计划...');
+        let current = 6;
+        let tick = 0;
+        updateProgress(current, PROGRESS_STAGES[0][0], PROGRESS_STAGES[0][1]);
         progressTimer = setInterval(() => {
-            current = Math.min(current + Math.floor(Math.random() * 13) + 4, 90);
-            updateProgress(current, current < 45 ? '正在分析目的地与偏好...' : '正在整理每日安排与预算...');
-            if (current >= 90) {
-                stopProgress();
+            tick += 1;
+            // 前段爬得快，60% 之后每跳最多 1%，且永远停在 97 以下，给"完成"留最后一步
+            if (current < 60) {
+                current = Math.min(current + 7 + Math.floor(Math.random() * 6), 60);
+            } else if (Math.random() < 0.4) {
+                current = Math.min(current + 1, 97);
             }
-        }, 520);
+            const stage = PROGRESS_STAGES[Math.min(Math.floor(tick / PROGRESS_TICKS_PER_STAGE),
+                                                   PROGRESS_STAGES.length - 1)];
+            updateProgress(current, stage[0], stage[1]);
+        }, PROGRESS_TICK_MS);
     }
 
     function completeProgress() {
         stopProgress();
-        updateProgress(100, '旅行计划已生成完成');
+        updateProgress(100, 'DONE 6/6', '旅行计划已生成完成');
     }
 
     function stopProgress() {
@@ -523,10 +544,13 @@
         }
     }
 
-    function updateProgress(value, label) {
+    function updateProgress(value, stageText, noteText) {
         progressFill.style.width = `${value}%`;
         progressPercent.textContent = `${value}%`;
-        progressLabel.textContent = label;
+        progressLabel.textContent = noteText;
+        if (progressStage && stageText) {
+            progressStage.textContent = stageText;
+        }
     }
 
     function showError(message) {
@@ -1710,9 +1734,9 @@
                 address: hotel.address || '暂无地址',
                 longitude: hotel.location.longitude,
                 latitude: hotel.location.latitude,
-                markerLabel: 'H',
+                markerLabel: '住',
                 type: 'hotel',
-                detail: `住宿 · ${hotel.type || '酒店'} · ${hotel.priceRange || '价格待补充'}`
+                detail: `当晚住宿 · ${hotel.type || '酒店'} · ${hotel.priceRange || '价格待补充'}`
             });
             seen.add(`${hotel.name}-${hotel.location.longitude}-${hotel.location.latitude}`);
         }
@@ -1736,11 +1760,13 @@
                 detail: `停留约 ${spot.visitDuration || 0} 分钟 · 门票 ¥${spot.ticketPrice || 0}（估算）`
             });
         });
-        // 到达口岸／返程站这类端点：它们既不是景点也不是酒店，不补就会在地图上消失，
-        // 而"从哪个站到广州塔"正是这条路线最想给人看的那一段。
+        // 路线端点里"既不是本晚酒店也不是景点"的那些（到达口岸、前一晚那家酒店）：
+        // 不补就会在地图上只剩一条没有起点的线，而"今天从昨晚那家出发"正是这条线最想讲的事。
         const routePlan = day.routePlan || {};
-        [routePlan.startPoint, routePlan.endPoint].forEach(point => {
-            if (!point || !point.location || (point.point_type || point.pointType) !== 'station') {
+        [[routePlan.startPoint, '起', '前一晚住的酒店 · 今天从这里出发'],
+         [routePlan.endPoint, '终', '当天收工要回的地点']].forEach(([point, label, detail]) => {
+            const type = point && (point.point_type || point.pointType);
+            if (!point || !point.location || !type || type === 'attraction') {
                 return;
             }
             const key = `${point.name}-${point.location.longitude}-${point.location.latitude}`;
@@ -1749,14 +1775,14 @@
             }
             seen.add(key);
             points.push({
-                id: `station-${point.name}`,
+                id: `endpoint-${label}-${point.name}`,
                 name: point.name,
-                address: point.address || '到达／返程站点',
+                address: point.address || '路线端点',
                 longitude: point.location.longitude,
                 latitude: point.location.latitude,
-                markerLabel: '站',
-                type: 'station',
-                detail: '城际大交通的落地站点'
+                markerLabel: type === 'station' ? '站' : label,
+                type: type === 'station' ? 'station' : 'endpoint',
+                detail: type === 'station' ? '城际大交通的落地站点' : detail
             });
         });
         return points;
