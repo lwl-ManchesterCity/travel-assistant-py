@@ -5,6 +5,8 @@ from travel_assistant.agent.planner_agent import (
     _DAY_ROUTE_CAP_KM,
     _DEPARTURE_DAY,
     PlannerAgent,
+    _meal_cost_for_day,
+    estimate_trip_spend,
 )
 from travel_assistant.agent.route_agent import RouteAgent
 from travel_assistant.clients.llm import LlmClient
@@ -706,3 +708,36 @@ def test_intercity_endpoints_reach_the_daily_routes():
     assert trip_plan.budget.intercity_mode == "普速火车"
     # 490 先扣掉，日预算从 1000 降到 836 —— 头尾天仍 1 个、中间天按新钱排
     assert trip_plan.budget.total >= 490
+
+
+def test_the_meal_ladder_matches_what_the_meal_builder_actually_charges():
+    """大交通试算里的餐饮阶梯是从 `_build_meals` 抄下来的**和**——抄的东西必须有人钉着。
+
+    两处一旦分家，试算就会低估或高估，而它的结论是"升不升级"。
+    """
+    agent = build_planner_agent()
+    attraction = _attraction("吃饭的地方", 120.15, 30.27, "自然风景", 4.0)
+
+    for daily_budget in (300, 400, 600, 900, 1700, 2600):
+        real = sum(meal.estimated_cost for meal in agent._build_meals(
+            "杭州", ["自然风景"], None, [attraction], daily_budget))
+        assert _meal_cost_for_day(daily_budget) == real, f"日预算 {daily_budget} 那档对不上"
+
+
+def test_the_intercity_estimate_never_underestimates_a_real_plan():
+    """试算只回答"升不升级"，但它**不能低估**。
+
+    低估就意味着"试算说升得起、真跑却超支了"——那是风险 9 里最坏的方向。
+    不需要估得准，只需要偏大：宁可少升一级，不可超支。
+    """
+    planner_input = build_planner_input()
+    planner_input.intercity_cost = 0
+    trip_plan = build_planner_agent().build_plan(planner_input)
+
+    estimated = estimate_trip_spend(
+        budget=planner_input.request.budget,
+        days=planner_input.request.calculate_days(),
+        hotels=planner_input.hotel_result.hotels,
+        intercity_cost=0)
+
+    assert estimated >= trip_plan.budget.total, (estimated, trip_plan.budget.total)

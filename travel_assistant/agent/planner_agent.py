@@ -94,6 +94,98 @@ _TAXI_COST_PER_KM = 9.0
 _TAXI_MIN_COST = 60
 _SELF_DRIVE_COST_PER_KM = 1.2
 
+# 一天吃多少钱，按日预算分档。**和 `_build_meals` 那张三档表是同一个数**，
+# 只是那边要生成三条 Meal 记录、这里只要那个和。两边一起改，有测试钉着。
+_MEAL_COST_LADDER: tuple[tuple[int, int], ...] = (
+    (2500, 464),    # 奢华：58 + 168 + 238
+    (1600, 328),    # 升级：42 + 118 + 168
+    (700, 180),     # 常规：30 + 60 + 90
+    (520, 135),     # 偏紧：20 + 45 + 70
+    (380, 100),     # 很紧：15 + 35 + 50
+    (0, 72),        # 极紧：12 + 25 + 35
+)
+
+
+def hotel_budget_cap(daily_budget_limit: int, target_count: int) -> int:
+    """酒店一晚最多能花多少：日预算的 45%，与"扣掉门票和吃行后剩下的"取小的那个。
+
+    提到模块层是因为**有两个调用方**：`PlannerAgent` 分预算用它，大交通选档的试算
+    （`estimate_trip_spend`）也要用它。各写一份必然漂移。
+    """
+    by_factor = daily_budget_limit * _HOTEL_BUDGET_FACTOR
+    by_leftover = daily_budget_limit - target_count * _TICKET_RESERVE_PER_ATTRACTION \
+        - _MEALS_RESERVE - _LOCAL_TRANSPORT_RESERVE
+    return max(120, int(min(by_factor, by_leftover)))
+
+
+def _meal_cost_for_day(daily_budget_limit: int) -> int:
+    for floor, cost in _MEAL_COST_LADDER:
+        if daily_budget_limit >= floor:
+            return cost
+    return _MEAL_COST_LADDER[-1][1]
+
+
+def _target_count_for_day(day_index: int, days: int, daily_budget_limit: int) -> int:
+    """`_determine_target_count` 的简化版：**只留跟钱有关的那部分**。
+
+    被砍掉的是 `relaxed_pace` 和天气那两条——它们只会把数字**调小**，
+    而它们跟选哪一档大交通毫无关系。所以砍掉之后试算偏大，方向是安全的（见风险 9）。
+    """
+    if day_index == 0 or day_index == days - 1:
+        return 1
+    if daily_budget_limit < 450:
+        return 1
+    if daily_budget_limit >= 1800:
+        return 4
+    if daily_budget_limit >= 1000:
+        return 3
+    return 2
+
+
+def _hotel_cost_for_estimate(hotels: list[Hotel], cap: int) -> int:
+    """复刻 `_cap_hotel_candidates` + `_select_hotel` 会落到哪个价位。
+
+    上限内挑"离理想价最近"的那家（选酒店现在的判据）；一家都不在上限内时按最便宜的算
+    （那是 `_cap_hotel_candidates` 的回落）。
+    """
+    if not hotels:
+        return 0
+    inside = [hotel for hotel in hotels if hotel.estimated_cost <= cap]
+    if not inside:
+        return min(hotel.estimated_cost for hotel in hotels)
+    ideal = cap * _HOTEL_IDEAL_SHARE_OF_CAP
+    return min(inside, key=lambda hotel: abs(hotel.estimated_cost - ideal)).estimated_cost
+
+
+def estimate_trip_spend(budget: int,
+                        days: int,
+                        hotels: list[Hotel],
+                        intercity_cost: int) -> int:
+    """试算"大交通花这么多时，整趟大概花多少"。**只回答"升不升级"，不出最终数字。**
+
+    大交通换一档只影响**钱**：可玩预算变小 → 日预算变小 → 酒店上限跟着变小、
+    每天景点数可能掉一档。所以这里复刻的就是这条链，不重新调高德。
+    定档之后仍会跑一次真实的 `build_plan`，最终数字以那次为准。
+
+    门票按 `_TICKET_RESERVE_PER_ATTRACTION` 这条**系统自己的单景点预留**算，
+    不是去数候选池里每张票——那既要拿到景点池、又会低估（挑出来的通常比池子均价贵）。
+
+    已知不精确：打车／自驾档的市内通勤按里程算，这里一律用公共交通那个定额。
+    这条**不随大交通档位变化的部分会抵消**，只影响"升不升级"的判断。
+    """
+    playable = max(200, budget - intercity_cost)
+    daily = max(200, playable // days)
+    total = intercity_cost
+    for day_index in range(days):
+        target = _target_count_for_day(day_index, days, daily)
+        total += target * _TICKET_RESERVE_PER_ATTRACTION
+        total += _meal_cost_for_day(daily)
+        total += _LOCAL_TRANSPORT_FLAT_COST
+        # 返程那天没有住宿（见 build_plan 里那一支）：3 天的行程本来就只该有 2 晚。
+        if day_index != days - 1:
+            total += _hotel_cost_for_estimate(hotels, hotel_budget_cap(daily, target))
+    return total
+
 
 class _DailyPlanDecision:
     """对应 Java PlannerAgent.DailyPlanDecision。"""
@@ -461,11 +553,8 @@ class PlannerAgent:
         return max(1, target_count)
 
     def _hotel_budget_cap(self, daily_budget_limit: int, target_count: int) -> int:
-        """酒店一晚最多能花多少：日预算的 45%，与"扣掉门票和吃行后剩下的"取小的那个。"""
-        by_factor = daily_budget_limit * _HOTEL_BUDGET_FACTOR
-        by_leftover = daily_budget_limit - target_count * _TICKET_RESERVE_PER_ATTRACTION \
-            - _MEALS_RESERVE - _LOCAL_TRANSPORT_RESERVE
-        return max(120, int(min(by_factor, by_leftover)))
+        """只是转发到模块层的 `hotel_budget_cap`——那份要跟大交通选档的试算共用。"""
+        return hotel_budget_cap(daily_budget_limit, target_count)
 
     def _cap_hotel_candidates(self, hotels: list[Hotel], cap: int, notes: list[str]) -> list[Hotel]:
         """超上限的酒店直接不进候选——是资格过滤，不是扣分项。

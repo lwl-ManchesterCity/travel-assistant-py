@@ -11,6 +11,7 @@ from travel_assistant.models.intercity_plan import (
     MODE_HIGH_SPEED_RAIL,
     MODE_ORDINARY_RAIL,
     InterCityOption,
+    InterCityPlan,
 )
 from travel_assistant.models.location import Location
 from travel_assistant.models.trip_plan_request import TripPlanRequest
@@ -123,6 +124,113 @@ def test_everything_over_the_gate_still_plans_the_cheapest_and_flags_it(any_city
 
     assert plan.cost == 490
     assert "已超出预算的 35%" in plan.notes[0] and "按超支继续排" in plan.notes[0]
+
+
+def test_estimated_options_carry_a_derived_duration():
+    """判据 5⑤ 的前提：估算档也得有耗时。
+
+    `one_way_minutes` 不填就是 0，而选档第二道是"从最快往慢试"——0 会被当成第一名，
+    飞机于是无条件夺冠。这里钉的是**排序关系**，不是具体数字（数字是推算的，会调）。
+    """
+    minutes = {option.mode: option.one_way_minutes
+               for option in mod._straight_line_options(1120.0)}
+
+    assert all(value > 0 for value in minutes.values())
+    assert minutes[MODE_FLIGHT] < minutes[MODE_HIGH_SPEED_RAIL] < minutes[MODE_ORDINARY_RAIL]
+    assert minutes[MODE_ORDINARY_RAIL] > 600          # 1120 公里普速本来就是十几个小时
+
+
+def test_a_roomy_budget_upgrades_to_the_faster_mode(any_city_geocoding):
+    """判据 5③：杭州→北京那种单子。
+
+    预算 5000、闸门 1750：高铁 1077 只占预算 21%，原来会落到 400 元的普速
+    （单程 16 小时，3 天行程实际只剩 1 天可玩）。现在从最快试起，高铁整趟不超支 → 升上去。
+    """
+    client = _StubRouteClient([
+        InterCityOption(mode=MODE_HIGH_SPEED_RAIL, round_trip_cost=1077, one_way_minutes=269),
+        InterCityOption(mode=MODE_ORDINARY_RAIL, round_trip_cost=400, one_way_minutes=896),
+    ])
+    service = IntercityService(AmapSettings(api_key="k"), client)
+
+    plan = service.plan(_request(origin_city="上海", budget=5000),
+                        spend_estimator=lambda cost: cost + 2000)
+
+    assert plan.option.mode == MODE_HIGH_SPEED_RAIL and plan.cost == 1077
+    assert "已从更便宜的 400 元一档升上来" in plan.notes[0]
+
+
+def test_a_tight_budget_stays_on_the_cheap_mode(any_city_geocoding):
+    """反例：同一批档、预算只够便宜的——升级后整趟超支，退回普速。"""
+    client = _StubRouteClient([
+        InterCityOption(mode=MODE_HIGH_SPEED_RAIL, round_trip_cost=1077, one_way_minutes=269),
+        InterCityOption(mode=MODE_ORDINARY_RAIL, round_trip_cost=400, one_way_minutes=896),
+    ])
+    service = IntercityService(AmapSettings(api_key="k"), client)
+
+    # 预算 4000、闸门 1400：两档都过闸门，但高铁那档算下来 4077 超了
+    plan = service.plan(_request(origin_city="上海", budget=4000),
+                        spend_estimator=lambda cost: cost + 3000)
+
+    assert plan.option.mode == MODE_ORDINARY_RAIL and plan.cost == 400
+    assert "预算闸门 1400 元内最省的一档" in plan.notes[0]
+
+
+def test_when_everything_is_over_the_gate_it_still_takes_the_cheapest(any_city_geocoding):
+    """判据 5④：全超闸门时**不**按耗时往上挑——已经超支了，雪上加霜没有道理。
+
+    estimator 一律回 0（"都付得起"）是为了让这条最能暴露问题：
+    真按耗时挑的话，120 分钟的高铁会赢过 900 分钟的普速。
+    """
+    client = _StubRouteClient([
+        InterCityOption(mode=MODE_HIGH_SPEED_RAIL, round_trip_cost=900, one_way_minutes=120),
+        InterCityOption(mode=MODE_ORDINARY_RAIL, round_trip_cost=700, one_way_minutes=900),
+    ])
+    service = IntercityService(AmapSettings(api_key="k"), client)
+
+    plan = service.plan(_request(origin_city="上海", budget=1000),
+                        spend_estimator=lambda cost: 0)
+
+    assert plan.option.mode == MODE_ORDINARY_RAIL and plan.cost == 700
+
+
+def test_without_an_estimator_it_keeps_the_old_price_only_behaviour(any_city_geocoding):
+    """没接规划侧时退回老行为——这条是"没有试算就不升级"的护栏。"""
+    client = _StubRouteClient([
+        InterCityOption(mode=MODE_HIGH_SPEED_RAIL, round_trip_cost=1077, one_way_minutes=269),
+        InterCityOption(mode=MODE_ORDINARY_RAIL, round_trip_cost=400, one_way_minutes=896),
+    ])
+    service = IntercityService(AmapSettings(api_key="k"), client)
+
+    plan = service.plan(_request(origin_city="上海", budget=5000))
+
+    assert plan.option.mode == MODE_ORDINARY_RAIL and plan.cost == 400
+
+
+def test_the_builder_hands_the_intercity_service_a_working_spend_estimator():
+    """接线检查：选档第二道全靠这个回调。
+
+    它断了**不会报错**，只会悄悄退回"只挑最便宜"——所以要有东西钉住它是真传进去的、
+    而且拿着真酒店池子算得出来。这里只验"接上了且算得出数"，算得准不准由
+    `test_planner_agent.py` 那条 `never_underestimates` 管。
+    """
+    from travel_assistant.models.hotel import Hotel
+    from travel_assistant.service.planner_input_builder import PlannerInputBuilder
+
+    seen = {}
+
+    class _SpyService:
+        def plan(self, request, spend_estimator=None):
+            seen["estimator"] = spend_estimator
+            return InterCityPlan()
+
+    # 这条路只用到 _intercity_service，前面四个依赖传 None 就够
+    builder = PlannerInputBuilder(None, None, None, None, _SpyService())
+
+    builder._plan_intercity(_request(), [], [Hotel(name="杭州酒店", estimated_cost=560)])
+
+    estimator = seen["estimator"]
+    assert estimator is not None
+    assert estimator(1077) > 1077          # 大交通之外还有住宿吃行，总花费必然大于票价本身
 
 
 def test_arrival_station_becomes_the_day_one_start_point(any_city_geocoding):

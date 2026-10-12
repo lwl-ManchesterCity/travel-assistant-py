@@ -2,11 +2,13 @@
 
 from ..agent.data_tools import raise_planning_errors
 from ..agent.orchestration import PlanningDataAgent
+from ..agent.planner_agent import estimate_trip_spend
 from ..agent.planning_context import PlanningContext
 from ..exceptions import TripPlanningException
 from ..models.agent_trace import AgentTrace
 from ..models.attraction import Attraction
 from ..models.attraction_search_result import AttractionSearchResult
+from ..models.hotel import Hotel
 from ..models.hotel_search_result import HotelSearchResult
 from ..models.intercity_plan import InterCityPlan
 from ..models.planner_input import PlannerInput
@@ -55,7 +57,7 @@ class PlannerInputBuilder:
         if unresolved_pins:
             planning_notes.append("这些必去景点没在候选里找到、未排入：" + "、".join(unresolved_pins))
 
-        intercity = self._plan_intercity(request, agent_traces)
+        intercity = self._plan_intercity(request, agent_traces, list(hotel_result.hotels or []))
         if intercity.notes:
             planning_notes.extend(intercity.notes)
         last_day = request.calculate_days() - 1
@@ -80,11 +82,23 @@ class PlannerInputBuilder:
             day_end_points=({last_day: intercity.departure_point} if intercity.departure_point else None),
         )
 
-    def _plan_intercity(self, request: TripPlanRequest, agent_traces: list[AgentTrace]) -> InterCityPlan:
-        """城际那一笔钱与到达口岸。没接这个服务（或没填出发城市）时返回空方案，逐天与现状一致。"""
+    def _plan_intercity(self,
+                        request: TripPlanRequest,
+                        agent_traces: list[AgentTrace],
+                        hotels: list[Hotel]) -> InterCityPlan:
+        """城际那一笔钱与到达口岸。没接这个服务（或没填出发城市）时返回空方案，逐天与现状一致。
+
+        `hotels` 是给选档第二道用的：判断"升级之后整趟还超不超支"要在**已经抓到的**
+        酒店候选池里重选一次（docs/INTERCITY_TRANSPORT_DESIGN.md 4.2），不再调高德。
+        """
         if self._intercity_service is None:
             return InterCityPlan()
-        plan = self._intercity_service.plan(request)
+        days = request.calculate_days()
+        plan = self._intercity_service.plan(
+            request,
+            spend_estimator=lambda cost: estimate_trip_spend(
+                budget=request.budget, days=days, hotels=hotels, intercity_cost=cost),
+        )
         agent_traces.append(AgentTrace(
             agent_name="IntercityService",
             action="估算往返大交通",

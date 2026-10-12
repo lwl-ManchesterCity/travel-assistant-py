@@ -34,6 +34,18 @@ _STRAIGHT_COST_PER_KM = {
     MODE_FLIGHT: 0.9,
 }
 _FLIGHT_MIN_COST = 400
+# 估算档的耗时按"公里 ÷ 速度"推（公里/小时）。**接口给了真实 duration 时用真实的**，
+# 这几个数只在估算时用，包括永远没有真实数据的飞机。
+#
+# 为什么要推：选档第二道是"从最快往慢试"（见 `_pick_option`），而 `one_way_minutes`
+# 不填就是 0——0 会被排序当成"最快"，飞机于是无条件夺冠。宁可推一个也不留 0。
+_STRAIGHT_SPEED_KMH = {
+    MODE_HIGH_SPEED_RAIL: 250.0,
+    MODE_ORDINARY_RAIL: 75.0,
+    MODE_FLIGHT: 700.0,
+}
+# 飞机那两小时是候机＋两端接驳，跟距离无关，单加而不是折进速度里。
+_FLIGHT_FIXED_MINUTES = 120
 # 直线不到这个公里数就不给"飞机"这一档：近程高铁本来就更快更省，造一条飞机只是噪声。
 _FLIGHT_MIN_KM = 800.0
 # 两城直线不到这个数就不算大交通：同城或近郊，硬造一笔"往返票价"只会污染预算。
@@ -50,7 +62,14 @@ class IntercityService:
         self._amap = amap
         self._route_client = route_client
 
-    def plan(self, request: TripPlanRequest, destination_center: Optional[Location] = None) -> InterCityPlan:
+    def plan(self,
+             request: TripPlanRequest,
+             destination_center: Optional[Location] = None,
+             spend_estimator=None) -> InterCityPlan:
+        """`spend_estimator(大交通费用) -> 整趟总花费` 是选档第二道的判据，见 `_pick_option`。
+
+        不传就退回"过闸门里挑最便宜"的老行为——单测和没接规划侧的调用方都走那一条。
+        """
         origin_city = (request.origin_city or "").strip()
         if not origin_city or origin_city == (request.city or "").strip():
             return InterCityPlan()
@@ -80,7 +99,7 @@ class IntercityService:
             if flight is not None:
                 options = [*options, flight]
 
-        chosen, dropped = self._pick_option(options, request, destination_location)
+        chosen, dropped = self._pick_option(options, request, destination_location, spend_estimator)
         if chosen is None:
             return InterCityPlan(notes=[f"{request.city}市内没有可落地的跨城方案" + (
                 f"（排除了 {len(dropped)} 条到达站不在本市的方案）" if dropped else "")])
@@ -105,12 +124,21 @@ class IntercityService:
                         location=option.arrival_location, point_type="station")
 
     def _pick_option(self, options: list[InterCityOption], request: TripPlanRequest,
-                     destination: Location) -> tuple[Optional[InterCityOption], list[str]]:
-        """先按"下车站在不在目的城市里"筛，再按价格选。
+                     destination: Location,
+                     spend_estimator=None) -> tuple[Optional[InterCityOption], list[str]]:
+        """两道：先按"下车站在不在目的城市里"筛，再按"过闸门 + 够不够钱升级"选。
 
         2026-10-10 实测：上海→广州同一批方案里有一条 873 元的高铁，比 883 元那条便宜 10 元，
         车次名写的是"上海虹桥-湛江北"——乘客在湛江北之前下车（arrival_stop 是广州白云）才合理。
         只看价格会选到落地在别的城市的方案，所以先用自带坐标量一遍。
+
+        **第二道（2026-10-12）**：闸门从"淘汰线"升格成"买得起"——过闸门的档里
+        从**最快**往慢试，取第一个"整趟算下来不超支"的。
+        原来只挑最便宜，实测杭州→北京（预算 5000）落到 400 元的普速、单程 16 小时，
+        3 天行程实际只剩 1 天可玩，而高铁往返 1077 只占预算 21%。
+        **全被闸门淘汰时仍取最便宜的**：已经超支了，不再按耗时往上挑——
+        而"都超支"也意味着没得升，直接给最便宜的。
+        `spend_estimator` 没给就退回老行为（只挑最便宜）。
         """
         dropped: list[str] = []
         eligible: list[InterCityOption] = []
@@ -124,7 +152,15 @@ class IntercityService:
             return None, dropped
         gate = request.budget * _INTERCITY_BUDGET_RATIO
         passing = [option for option in eligible if option.round_trip_cost <= gate]
-        return min(passing or eligible, key=lambda option: option.round_trip_cost), dropped
+        if not passing:
+            return min(eligible, key=lambda option: option.round_trip_cost), dropped
+        cheapest = min(passing, key=lambda option: option.round_trip_cost)
+        if spend_estimator is None:
+            return cheapest, dropped
+        for option in sorted(passing, key=lambda option: option.one_way_minutes):
+            if spend_estimator(option.round_trip_cost) <= request.budget:
+                return option, dropped
+        return cheapest, dropped
 
     def _note_for(self, origin_city: str, city: str, chosen: InterCityOption,
                   options: list[InterCityOption], budget: int) -> str:
@@ -135,6 +171,10 @@ class IntercityService:
         if chosen.round_trip_cost > gate:
             return prefix + f"；已超出预算的 {int(_INTERCITY_BUDGET_RATIO * 100)}%（{gate} 元），" \
                             f"但最便宜的一档也要 {cheapest} 元，按超支继续排"
+        # 三种来历要分得清：超支硬排 / 预算够升上来的 / 只有它过闸门。
+        # 原来只写"闸门内最省的一档"——有了升级之后这句会自相矛盾。
+        if chosen.round_trip_cost > cheapest:
+            return prefix + f"（预算够，已从更便宜的 {cheapest} 元一档升上来，省下路上时间）"
         return prefix + f"（预算闸门 {gate} 元内最省的一档）"
 
 
@@ -156,6 +196,7 @@ def _straight_line_options(straight_km: float) -> list[InterCityOption]:
         InterCityOption(
             mode=mode,
             round_trip_cost=max(2, jround(straight_km * factor * 2)),
+            one_way_minutes=_estimated_minutes(mode, straight_km),
             estimated=True,
         )
         for mode, factor in _STRAIGHT_COST_PER_KM.items() if mode != MODE_FLIGHT
@@ -165,6 +206,15 @@ def _straight_line_options(straight_km: float) -> list[InterCityOption]:
             mode=MODE_FLIGHT,
             round_trip_cost=max(2, jround(
                 max(_FLIGHT_MIN_COST, straight_km * _STRAIGHT_COST_PER_KM[MODE_FLIGHT]) * 2)),
+            one_way_minutes=_estimated_minutes(MODE_FLIGHT, straight_km),
             estimated=True,
         ))
     return options
+
+
+def _estimated_minutes(mode: str, straight_km: float) -> int:
+    """估算档的耗时。飞机多算两小时接驳，见 `_FLIGHT_FIXED_MINUTES`。"""
+    minutes = straight_km / _STRAIGHT_SPEED_KMH[mode] * 60.0
+    if mode == MODE_FLIGHT:
+        minutes += _FLIGHT_FIXED_MINUTES
+    return max(1, jround(minutes))
