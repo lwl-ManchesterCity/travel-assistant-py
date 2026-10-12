@@ -1036,7 +1036,18 @@
         const routeProvider = (data.days || []).find(day => day.routePlan?.provider?.providerName)?.routePlan?.provider?.providerName;
         const routeMinutes = (data.days || []).reduce((sum, day) => sum + (day.routePlan?.totalDurationMinutes || 0), 0);
         const routeKm = (data.days || []).reduce((sum, day) => sum + (day.routePlan?.totalDistanceKm || 0), 0);
-        const primaryTransportation = (data.days || []).find(day => day.transportation)?.transportation || payload.transportation || '智能推荐';
+        // 每天的方式**可能不一样**：「智能推荐」那一档（表单默认项，值是空串）就是按天判的，
+        // 景点多或者要求慢节奏的那天会给「公共交通 + 短途打车」。
+        // 所以不能拿"第一个有方式的那天"冒充整趟——那个串里含"打车"两个字，钱是按里程算的，
+        // 卡片却写「公共交通」，会让人以为那天也只花 20（实测 3 天 20/221/20，卡片却显示公共交通）。
+        const dayTransportations = [...new Set((data.days || [])
+            .map(day => day.transportation)
+            .filter(Boolean))];
+        const primaryTransportation = dayTransportations.length === 0
+            ? (payload.transportation || '智能推荐')
+            : dayTransportations.length === 1
+                ? dayTransportations[0]
+                : `按天调整（${dayTransportations.join('、')}）`;
         const notePairs = [
             { label: '日期', value: `${payload.startDate} 至 ${payload.endDate}`, mono: true },
             { label: '交通方式', value: primaryTransportation },
