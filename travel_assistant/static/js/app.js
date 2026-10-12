@@ -52,15 +52,74 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     editTripBtn.addEventListener('click', adjustCurrentTrip);
+    // 滚动联动高亮。**原来只在点击时切**，所以往下滑的时候左边一直停在原地。
+    //
+    // 位置用"文档绝对坐标"（累加 offsetTop）而不是 `getBoundingClientRect().top`：
+    // 「景点地图」那张卡在 `.right-rail` 里是 `position: sticky`，rect.top 会被钉在视口上沿，
+    // 一滚进内容区它就永远满足"在激活线上方"。绝对坐标是它**没被钉住时**的位置，稳定。
+    let navClickLocked = false;
+    let navUnlockTimer = null;
+    const NAV_ACTIVE_LINE = 140;   // 视口上沿往下这么多像素，算"这一节已经开始了"
+
+    // 点击跳转是一次平滑滚动，中途会路过好几个节。不锁住的话高亮会被路过的抢走，
+    // 最后停在哪一节反而看不出来——所以锁到滚动停下来为止。
+    function holdNavDuringClick() {
+        navClickLocked = true;
+        clearTimeout(navUnlockTimer);
+        navUnlockTimer = setTimeout(() => { navClickLocked = false; }, 150);
+    }
+
+    function documentTop(element) {
+        let top = 0;
+        for (let node = element; node; node = node.offsetParent) {
+            top += node.offsetTop;
+        }
+        return top;
+    }
+
+    function syncNavToScroll() {
+        const spots = [];
+        navItems.forEach(item => {
+            const section = document.getElementById(item.dataset.target);
+            // 右边栏那张卡全程钉在视口里，"滚到哪一节"对它没有意义，所以不参与自动高亮。
+            // 点它照样能跳能亮——那条路走 setActiveNav。
+            if (!section || section.closest('.right-rail')) return;
+            spots.push({ id: item.dataset.target, top: documentTop(section) });
+        });
+        if (!spots.length) return;
+        // 按**文档顺序**排，不是导航里的顺序——这两个不一样（「景点地图」在导航里排第三，
+        // 但它在右边栏，文档里排在天气之后）。照导航顺序取"最后一个过线的"会指错节。
+        spots.sort((first, second) => first.top - second.top);
+        // 滚到底就直接认最后一节：否则「方案追问」够不到激活线，高亮会退回上一节
+        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+            setActiveNav(spots[spots.length - 1].id);
+            return;
+        }
+        const line = window.scrollY + NAV_ACTIVE_LINE;
+        let current = spots[0].id;
+        spots.forEach(spot => {
+            if (spot.top <= line) current = spot.id;
+        });
+        setActiveNav(current);
+    }
+
     navItems.forEach(item => {
         item.addEventListener('click', () => {
             setActiveNav(item.dataset.target);
+            holdNavDuringClick();
             if (item.dataset.target === 'agent-trace-section') {
                 toggleAgentTraceSection(true);
             }
             document.getElementById(item.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     });
+    window.addEventListener('scroll', () => {
+        if (navClickLocked) {
+            holdNavDuringClick();   // 还在滚，接着续期
+            return;
+        }
+        syncNavToScroll();
+    }, { passive: true });
     agentTraceToggle.addEventListener('click', () => toggleAgentTraceSection());
     document.getElementById('ask-submit').addEventListener('click', askAboutCurrentTrip);
     document.getElementById('ask-confirm-yes').addEventListener('click', confirmAskChange);
@@ -118,6 +177,9 @@
                 landingPage.classList.add('hidden');
                 resultPage.classList.remove('hidden');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
+                // 上一单看到一半留下的高亮不该跨单留着。刻意滚回顶部时不会触发 scroll 事件，
+                // 所以这里得主动对齐一次。
+                syncNavToScroll();
             }, 300);
         } catch (error) {
             stopProgress();
