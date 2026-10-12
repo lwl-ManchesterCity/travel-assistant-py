@@ -1,0 +1,841 @@
+[
+  {
+    "id": "hz-23b06xvx",
+    "amap_poi_id": "B023B06XVX",
+    "name": "浙江省博物馆(孤山馆区)",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.143778,
+      "lat": 30.251243
+    },
+    "tags": [
+      "室内",
+      "博物馆",
+      "免费",
+      "亲子"
+    ],
+    "category": "人文历史",
+    "duration_min": 150,
+    "description": "位于西湖边孤山路，全程室内参观，不受天气影响，适合雨天或带孩子慢慢逛。",
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "source_url": "http://nb.ncha.gov.cn/museumdetail.html?msg=7894df8add9449c8bb201f4f94ef51e2&nianfen=2025",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b09jll",
+    "amap_poi_id": "B023B09JLL",
+    "name": "中国丝绸博物馆",
+    "aliases": [
+      "丝绸博物馆"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.151292,
+      "lat": 30.22287
+    },
+    "tags": [
+      "室内",
+      "博物馆",
+      "免费",
+      "亲子"
+    ],
+    "category": "人文历史",
+    "duration_min": 150,
+    "description": "玉皇山下的大型丝绸专题馆，室内恒温，展陈从养蚕缫丝到织造全流程，下雨天照样能逛。",
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "source_url": "https://www.chinasilkmuseum.com/cgjyy/info_6.aspx?itemid=8969&lcid=",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b0a45y",
+    "amap_poi_id": "B023B0A45Y",
+    "name": "良渚博物院",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.028083,
+      "lat": 30.377474
+    },
+    "tags": [
+      "室内",
+      "博物馆",
+      "免费",
+      "亲子"
+    ],
+    "category": "人文历史",
+    "duration_min": 150,
+    "description": "馆藏玉琮玉璧等良渚文物，室内展陈为主，适合雨天与人文亲子半日游。",
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "source_url": "https://www.lzmuseum.cn/ZuiXinGongGao/2024934396935.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b02842",
+    "amap_poi_id": "B023B02842",
+    "name": "灵隐寺",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.101406,
+      "lat": 30.240826
+    },
+    "tags": [
+      "需预约",
+      "拍照"
+    ],
+    "category": "人文历史",
+    "duration_min": 150,
+    "description": "飞来峰免门票但需提前实名预约，进灵隐寺另购香花券，寺院依山而建，上午光线与客流都更合适。",
+    "ticket_price": 30,
+    "hours": "07:30-17:30",
+    "closed_days": [],
+    "source_url": "https://hz.bendibao.com/tour/2023426/145270.shtm",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-fffdigwr",
+    "amap_poi_id": "B0FFFDIGWR",
+    "name": "杭州西湖风景名胜区-岳王庙",
+    "aliases": [
+      "岳王庙|褒忠衍福禅寺"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.13459,
+      "lat": 30.252443
+    },
+    "tags": [
+      "拍照"
+    ],
+    "category": "人文历史",
+    "duration_min": 150,
+    "description": "北山街上的岳飞墓祠，规模不大参观约一小时，清晨人少，适合与断桥、苏堤串成半日步行。",
+    "ticket_price": 25,
+    "hours": "07:30-17:30",
+    "closed_days": [],
+    "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b0284d",
+    "amap_poi_id": "B023B0284D",
+    "name": "胡雪岩旧居",
+    "aliases": [
+      "胡雪岩故居"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.172906,
+      "lat": 30.237273
+    },
+    "tags": [
+      "室内",
+      "博物馆",
+      "拍照"
+    ],
+    "category": "人文历史",
+    "duration_min": 150,
+    "description": "晚清首富宅邸，院落精巧含芝园假山，参观约两小时，出门即河坊街，室内为主适合雨天。",
+    "ticket_price": 20,
+    "hours": "08:00-17:30",
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/urumqi117/25535.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-m2n92c1g",
+    "amap_poi_id": "B0M2N92C1G",
+    "name": "六和塔",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.1343,
+      "lat": 30.197153
+    },
+    "tags": [
+      "拍照"
+    ],
+    "category": "人文历史",
+    "duration_min": 150,
+    "description": "钱塘江北岸的宋代古塔，登塔可眺钱江，落日与江景是主要看点，门票含登塔。",
+    "ticket_price": 30,
+    "hours": "07:00-17:30",
+    "closed_days": [],
+    "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b13l9m",
+    "amap_poi_id": "B023B13L9M",
+    "name": "杭州西湖风景名胜区",
+    "aliases": [
+      "西湖景区"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.121358,
+      "lat": 30.222692
+    },
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "世界文化遗产，主景区免费开放，环湖步道与十景适合安排大半天，晴天傍晚光线最好。",
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "source_url": "https://hz.bendibao.com/tour/2023426/145270.shtm",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b06p06",
+    "amap_poi_id": "B023B06P06",
+    "name": "西溪国家湿地公园",
+    "aliases": [
+      "西溪湿地公园"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.061159,
+      "lat": 30.255079
+    },
+    "tags": [
+      "拍照",
+      "避暑"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "城市里的芦苇湿地，乘摇橹船穿行最出片，园内福堤与绿堤部分区域免费，需留半天。",
+    "ticket_price": 80,
+    "hours": "08:00-17:30",
+    "closed_days": [],
+    "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-fffyf0gp",
+    "amap_poi_id": "B0FFFYF0GP",
+    "name": "千岛湖风景区",
+    "aliases": [
+      "新安江水库|淳安县千岛湖国家森林公园|千岛湖国家森林公园"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 119.055172,
+      "lat": 29.545082
+    },
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "5A 湖岛景区，需坐船上岛，中心湖区与东南湖区间船票不通用，暑期避暑首选且需留一整天。",
+    "ticket_price": 130,
+    "hours": "08:00-15:50",
+    "closed_days": [],
+    "source_url": "https://you.ctrip.com/sight/chunan2249/135831.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b02349",
+    "amap_poi_id": "B023B02349",
+    "name": "杭州动物园",
+    "aliases": [
+      "动物园"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.133159,
+      "lat": 30.212281
+    },
+    "tags": [
+      "公园",
+      "亲子"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "虎跑路上的动物园，园区大适合带孩子，春秋两季动物活动多，雨天部分场馆仍可参观。",
+    "ticket_price": 20,
+    "hours": "07:00-17:30",
+    "closed_days": [],
+    "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b09ltb",
+    "amap_poi_id": "B023B09LTB",
+    "name": "杭州植物园",
+    "aliases": [
+      "杭州西湖风景名胜区-杭州植物园"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.117009,
+      "lat": 30.25291
+    },
+    "tags": [
+      "公园",
+      "避暑",
+      "拍照"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "桃源岭上的城市植物园，春季玉兰花与秋季桂花是亮点，十六点半后免费开放可看夜景。",
+    "ticket_price": 10,
+    "hours": "08:30-16:30",
+    "closed_days": [],
+    "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b0bi52",
+    "amap_poi_id": "B023B0BI52",
+    "name": "杭州灵山景区",
+    "aliases": [
+      "西山国家森林公园灵山风景区|灵山风情小镇"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.040625,
+      "lat": 30.116607
+    },
+    "tags": [
+      "避暑",
+      "亲子"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "双浦镇的喀斯特溶洞，洞内常年十八度适合避暑，景区较大建议配景交车，雨天也可游览。",
+    "ticket_price": 57,
+    "hours": "08:30-17:00",
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/Guangzhou152/135753.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b07snt",
+    "amap_poi_id": "B023B07SNT",
+    "name": "湘湖国家旅游度假区",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.217125,
+      "lat": 30.13226
+    },
+    "tags": [
+      "免费",
+      "亲子",
+      "避暑"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "西湖姊妹湖，全域免费开放，游船与游乐设施另收费，人比西湖少，适合骑行环湖与带孩子。",
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/8/1477898.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-lr1zrrqe",
+    "amap_poi_id": "B0LR1ZRRQE",
+    "name": "九溪十八涧",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.113356,
+      "lat": 30.202349
+    },
+    "tags": [
+      "免费",
+      "避暑"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "西湖景区内的溪谷步道，全程免费，夏日林荫浓密是避暑首选，蚊虫较多需备驱蚊。",
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/17/16658.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b02796",
+    "amap_poi_id": "B023B02796",
+    "name": "云栖竹径",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.091816,
+      "lat": 30.191297
+    },
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "梅灵南路的竹林小径，《卧虎藏龙》取景地，票价便宜，夏季竹荫清凉适合早场。",
+    "ticket_price": 8,
+    "hours": "07:00-17:00",
+    "closed_days": [],
+    "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-ffg97h9p",
+    "amap_poi_id": "B0FFG97H9P",
+    "name": "京杭大运河杭州景区",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.141908,
+      "lat": 30.302955
+    },
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "世界遗产运河的杭州段，街区与拱宸桥免费，夜游游船另收费，傍晚灯光与货船同框很出片。",
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/Hangzhou14/135709.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b02841",
+    "amap_poi_id": "B023B02841",
+    "name": "武林广场",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.163325,
+      "lat": 30.271001
+    },
+    "tags": [
+      "公园",
+      "免费",
+      "夜游"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "市中心的老牌广场与商圈，夜间有裸眼3D灯光秀，周边商场餐饮密集适合作为行程补给点。",
+    "ticket_price": 0,
+    "hours": "10:00-21:00",
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/hangzhou14/1478671.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-ffhkq7f5",
+    "amap_poi_id": "B0FFHKQ7F5",
+    "name": "钱江新城灯光秀",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.215428,
+      "lat": 30.244481
+    },
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "category": "城市漫游",
+    "duration_min": 120,
+    "description": "钱江新城的灯光秀观赏点，本身免费，定时演出，建议提前占位看两岸楼宇亮灯。",
+    "ticket_price": 0,
+    "hours": "19:00-21:00",
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/8/1477898.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-mg95pp15",
+    "amap_poi_id": "B0MG95PP15",
+    "name": "龙井村牌坊",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.109967,
+      "lat": 30.219939
+    },
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "category": "城市漫游",
+    "duration_min": 120,
+    "description": "龙井村口的牌坊与茶园步道起点，免门票，清晨可沿十里琅珰走茶园，夏季遮荫良好。",
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/17/16658.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b1dnzh",
+    "amap_poi_id": "B023B1DNZH",
+    "name": "西溪国家湿地公园洪园",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.050588,
+      "lat": 30.261234
+    },
+    "tags": [
+      "拍照",
+      "避暑"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "西溪东区的洪园，以洪氏家族园林与百年柿树闻名，遊船可达，适合亲子慢游半天。",
+    "ticket_price": 80,
+    "hours": "07:30-18:30",
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/huangshan120061/145175693.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b025fb",
+    "amap_poi_id": "B023B025FB",
+    "name": "杭州宋城",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.098741,
+      "lat": 30.169795
+    },
+    "tags": [
+      "夜游",
+      "亲子",
+      "拍照"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "以《宋城千古情》为核心的大型演出景区，门票含主秀，仿宋街市与夜游灯光是加分项。",
+    "ticket_price": 253,
+    "hours": "09:30-21:00",
+    "closed_days": [],
+    "source_url": "https://www.songcn.com/",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b09lkr",
+    "amap_poi_id": "B023B09LKR",
+    "name": "雷峰塔景区",
+    "aliases": [
+      "杭州西湖雷峰塔|西关砖塔|西湖雷峰塔|雷峰塔"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.148849,
+      "lat": 30.230934
+    },
+    "tags": [
+      "拍照"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "南山路上的雷峰塔，票价按季节浮动，登塔可俯瞰西湖全景，日落前一小时最值得上塔。",
+    "ticket_price": 40,
+    "hours": "08:00-19:00",
+    "closed_days": [],
+    "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b08yx1",
+    "amap_poi_id": "B023B08YX1",
+    "name": "杭州西湖风景名胜区-杭州白塔公园",
+    "aliases": [
+      "杭州白塔公园"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.141759,
+      "lat": 30.199481
+    },
+    "tags": [
+      "公园",
+      "免费",
+      "拍照",
+      "亲子"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "老复兴路上的白塔公园，含南宋白塔与铁路遗存，园内大草坪适合亲子，江边可看日落。",
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/hangzhou14/5140832.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-fff3dpr8",
+    "amap_poi_id": "B0FFF3DPR8",
+    "name": "河坊街景区",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.169895,
+      "lat": 30.240584
+    },
+    "tags": [
+      "古镇",
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "category": "美食购物",
+    "duration_min": 90,
+    "description": "吴山脚下的清河坊古街，全程免费，灯笼夜景在傍晚十八点半后最美，商铺营业到二十二点。",
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "source_url": "https://m.ctrip.com/html5/you/sight/linxiang2840/132386.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b14pp8",
+    "amap_poi_id": "B023B14PP8",
+    "name": "南宋御街中山路步行街",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.169526,
+      "lat": 30.240249
+    },
+    "tags": [
+      "古镇",
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "category": "美食购物",
+    "duration_min": 90,
+    "description": "南宋都城中轴线的步行街，全天开放且免费，中山中路一侧老字号集中，适合边逛边吃。",
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "source_url": "https://travelnews.qunar.com/qa_strategy/hangzhou-first-time-travel-guide",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-fffwq8ds",
+    "amap_poi_id": "B0FFFWQ8DS",
+    "name": "小河历史文化街区",
+    "aliases": [
+      "小河直街"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.135337,
+      "lat": 30.308302
+    },
+    "tags": [
+      "古镇",
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "category": "美食购物",
+    "duration_min": 90,
+    "description": "运河边的清末民初老街，街区免费开放且商业化低，傍晚河岸灯光亮起后氛围最好。",
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/xuedoutemplechiangshometownxikouscenicspot2032148/144033.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-ffffzrbd",
+    "amap_poi_id": "B0FFFFZRBD",
+    "name": "拱宸桥西历史文化街区",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.137752,
+      "lat": 30.316781
+    },
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "category": "美食购物",
+    "duration_min": 90,
+    "description": "拱宸桥西的运河历史街区，四大国有博物馆聚集且街区免费，傍晚看货船穿行拱宸桥很出片。",
+    "ticket_price": 0,
+    "hours": "05:00-22:00",
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/Hangzhou14/135709.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b015d7",
+    "amap_poi_id": "B023B015D7",
+    "name": "八卦田遗址公园",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.151779,
+      "lat": 30.211211
+    },
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "南宋官窑遗址上的八卦形公园，园区免费且面积不大，登高可俯瞰遗址，逛一两个小时足够。",
+    "ticket_price": 0,
+    "hours": "08:00-17:30",
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/Hangzhou14/135709.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b0068b",
+    "amap_poi_id": "B023B0068B",
+    "name": "浙江图书馆",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.137047,
+      "lat": 30.26325
+    },
+    "tags": [
+      "室内",
+      "免费",
+      "避暑"
+    ],
+    "category": "人文历史",
+    "duration_min": 150,
+    "description": "曙光路上的省级公共图书馆，免费入馆自习，五楼古籍区安静，适合雨天与酷暑时段避着。",
+    "ticket_price": 0,
+    "hours": "09:00-21:00",
+    "closed_days": [],
+    "source_url": "https://www.zjlib.cn/",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b0bmj6",
+    "amap_poi_id": "B023B0BMJ6",
+    "name": "浙江美术馆",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.156894,
+      "lat": 30.231049
+    },
+    "tags": [
+      "室内",
+      "博物馆",
+      "免费",
+      "拍照"
+    ],
+    "category": "人文历史",
+    "duration_min": 150,
+    "description": "西子湖畔的国立美术馆，常设免费而特展另收费，建筑本身与湖景是另一重看点，室内适合雨天。",
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "source_url": "https://www.zjam.org.cn/Site/news/intro/notice.shtml",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b18xex",
+    "amap_poi_id": "B023B18XEX",
+    "name": "杭州西湖风景名胜区-黄龙洞",
+    "aliases": [
+      "黄龙洞"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.138594,
+      "lat": 30.264511
+    },
+    "tags": [
+      "避暑"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "曙光路上的传统溶洞景区，洞内常年凉爽适合避暑，游览约两小时，夏季体验最佳。",
+    "ticket_price": 15,
+    "hours": "07:30-17:30",
+    "closed_days": [],
+    "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-23b0a6i2",
+    "amap_poi_id": "B023B0A6I2",
+    "name": "杭州西湖风景名胜区-茅家埠",
+    "aliases": [
+      "茅家埠"
+    ],
+    "city": "杭州",
+    "location": {
+      "lng": 120.125404,
+      "lat": 30.238325
+    },
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "category": "自然风景",
+    "duration_min": 180,
+    "description": "杨公堤旁的水上森林与木栈道秘境，门票免费且人少，晨雾与白鹭是主要看点。",
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/hangzhou14/5140832.html",
+    "updated_at": "2026-10-10"
+  },
+  {
+    "id": "hz-hatzzaxs",
+    "amap_poi_id": "B0HATZZAXS",
+    "name": "杭州钱塘江夜游(滨江码头)",
+    "aliases": [],
+    "city": "杭州",
+    "location": {
+      "lng": 120.200852,
+      "lat": 30.211689
+    },
+    "tags": [
+      "夜游",
+      "拍照"
+    ],
+    "category": "城市漫游",
+    "duration_min": 120,
+    "description": "滨江码头的钱塘江夜游，两艘游船多班次发船，沿途经过钱江新城灯光秀核心区，需提前订票。",
+    "ticket_price": 128,
+    "hours": "19:00-21:50",
+    "closed_days": [],
+    "source_url": "https://gs.ctrip.com/html5/you/sight/zhangzhou334/135838.html",
+    "updated_at": "2026-10-10"
+  }
+]

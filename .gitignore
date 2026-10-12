@@ -20,3 +20,6 @@ scripts/evidence/
 
 # 本地开发服务器日志（重启时重定向出来的那份），不入库
 uvicorn-dev.log
+
+# 检索索引：构建时生成的产物，不入库（见 docs/ATTRACTION_RETRIEVAL_DESIGN.md 第十节第 3 条）
+data/chroma/

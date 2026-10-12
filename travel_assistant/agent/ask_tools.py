@@ -1,18 +1,30 @@
-"""方案 A 的六个追问工具。
+"""方案 A 的七个追问工具。
 
-分成两类，边界不一样：
+分成三类，边界不一样：
 
 - 读方案的三个（`get_plan_overview` / `get_day_plan` / `get_attraction_detail`）可以带定位参数，
   但参数只用来在**已生成的方案内部**找东西，找不到就返回"方案里没有"，绝不外发请求；
 - 联网的三个（`search_attractions` / `query_weather` / `recommend_hotels`）零参数，
   城市、日期、预算、住宿偏好一律从上下文里的原始请求取——这几个值让模型自己填就会被编造，
-  与 agent/data_tools.py 里那三个取数工具是同一条约定。
+  与 agent/data_tools.py 里那三个取数工具是同一条约定；
+- 查本地库的一个（`search_attractions_by_tag`）**有意破例让模型填参数**：它只填 `tags`，
+  因为"筛哪个词"正是要模型做的判断，从上下文取不出来。护栏不是参数来源，是**词表**——
+  只能从 data/tags.json 那 10 个词里挑，挑不出来就别筛。城市仍从上下文取，不让模型填。
+  词表会变，所以写进工具说明时是现读的，不是抄一份常量。
 
 每次调用都往 AskContext 记一条 AgentTrace，成功失败都记。
 """
 
 from langchain_core.tools import BaseTool, tool
 
+from ..kb import (
+    KB_CITIES,
+    IndexNotBuilt,
+    describe_vocabulary,
+    indexed_cities,
+    search_attractions as search_kb_attractions,
+    vocabulary_words,
+)
 from ..models.trip_plan import TripPlan
 from .ask_context import current_ask_context
 from .attraction_agent import AttractionAgent
@@ -86,6 +98,47 @@ def _attractions_text(result) -> str:
         for attraction in (result.attractions or [])[:_LIST_LIMIT]
     )
     return f"{result.summary}\n候选：{names or '无'}"
+
+
+def _kb_list_text(value, empty: str = "未收录") -> str:
+    """本地库里的数组字段过了一遍 Chroma：非空存数组，空的存空串。
+
+    所以取出来可能是 list、也可能是 ""，两种都要接得住。
+    """
+    if isinstance(value, list):
+        return "、".join(str(item) for item in value) or empty
+    return str(value) if value else empty
+
+
+def _kb_price_text(price) -> str:
+    """本地库的门票口径**与方案里那套不一样**，不能混着说。
+
+    这里是 KB 自己查证的：`0` = 确定免费，`null` = 未知（KB 设计 4.1）。
+    方案里的「按类别估算」是另一回事，所以这里**不写「估算」**，写了反而是错的。
+    """
+    if price is None:
+        return "门票未知"
+    if price == 0:
+        return "免费"
+    return f"门票 {price} 元"
+
+
+def _kb_attractions_text(rows: list[dict], city: str, tags: list[str]) -> str:
+    condition = f"筛「{'、'.join(tags)}」" if tags else "没加筛选条件"
+    if not rows:
+        return f"{city}本地景点库（{condition}）没有命中的景点"
+    lines = [f"{city}本地景点库（{condition}）命中 {len(rows)} 条："]
+    for row in rows:
+        lines.append(
+            f"{row.get('name')}"
+            f"｜标签 {_kb_list_text(row.get('tags'), '无')}"
+            f"｜{row.get('category') or '未分类'}"
+            f"｜{_kb_price_text(row.get('ticket_price'))}"
+            f"｜开放 {_kb_list_text(row.get('hours'))}"
+            f"｜闭馆 {_kb_list_text(row.get('closed_days'))}"
+            f"｜{(row.get('description') or '无简介').strip()}"
+        )
+    return "\n".join(lines)
 
 
 def _hotels_text(result) -> str:
@@ -188,6 +241,58 @@ def build_ask_tools(attraction_agent: AttractionAgent,
         context.record("search_attractions", "检索候选景点", summary, text)
         return text
 
+    # 说明是现拼的：f-string 当不了 docstring（CPython 只把常量字符串存进 __doc__，
+    # JoinedStr 不行，__doc__ 会是 None），所以走 @tool(description=...)。
+    # 词表现读不抄常量——抄一份就会在改词表时变成一句过期的话。
+    @tool(description=(
+        "查**本地景点资料库**，按标签筛出一批候选景点。"
+        "回答「下雨天去哪」「有什么免费的」「哪里适合带孩子」这类**带条件**的景点问题用它。"
+        "本地库与联网检索是两套数据，别混着说。\n"
+        f"本地库目前只收录{'、'.join(KB_CITIES)}的景点，问别的城市这里答不了。\n"
+        f"tags 只能从这几个词里挑，一个都不许自创：{describe_vocabulary()}。"
+        "挑不出来就别传 tags，那样会走纯向量。\n"
+        "**不许硬凑**：命中的景点里如果没有一条真的对得上用户问的类别"
+        "（比如用户问爬山，返回的却全是溶洞、博物馆），就照实说库里没有，"
+        "不要把沾边的说成是。"
+    ))
+    def search_attractions_by_tag(tags: list[str] | None = None) -> str:
+        """查本地景点资料库。"""
+        context = current_ask_context()
+        city = context.request.city or ""
+        picked = [str(tag).strip() for tag in (tags or []) if tag and str(tag).strip()]
+        summary = f"城市={city}，标签={'、'.join(picked) or '无（纯向量）'}"
+
+        def missed(text: str, status: str = "not_found") -> str:
+            context.record("search_attractions_by_tag", "查本地景点库", summary, text, status=status)
+            return text
+
+        # 以索引里**实际**有什么城市为准，不以常量 KB_CITIES 为准——常量只是写在说明里给模型看的。
+        try:
+            cities = indexed_cities()
+        except IndexNotBuilt as exception:
+            return missed(f"本地景点资料库还没建好（{exception}），这次查不了，"
+                          "请只用方案内已有的信息作答", "failed")
+
+        if city and city not in cities:
+            return missed(f"本地景点资料库目前只有{'、'.join(cities)}，没有{city}的景点，"
+                          "这个城市的景点问题本地库答不了")
+
+        unknown = [tag for tag in picked if tag not in vocabulary_words()]
+        if unknown:
+            return missed(f"「{'、'.join(unknown)}」不在可选词表里，不能拿它筛。"
+                          f"可选的是：{describe_vocabulary()}", "failed")
+
+        try:
+            rows = search_kb_attractions(
+                city=city or None, tags=picked or None, query=context.question
+            )
+        except Exception as exception:  # noqa: BLE001 - 检索失败要留在轨迹里，让模型改用方案内数据作答
+            return missed(f"本地景点资料库检索失败：{exception}", "failed")
+
+        text = _kb_attractions_text(rows, city, picked)
+        context.record("search_attractions_by_tag", "查本地景点库", summary, text)
+        return text
+
     @tool
     def query_weather() -> str:
         """按原始请求的城市与日期区间重新查询出行天气（逐日：白天/夜间天气、气温、风）。
@@ -225,6 +330,7 @@ def build_ask_tools(attraction_agent: AttractionAgent,
         get_day_plan,
         get_attraction_detail,
         search_attractions,
+        search_attractions_by_tag,
         query_weather,
         recommend_hotels,
     ]

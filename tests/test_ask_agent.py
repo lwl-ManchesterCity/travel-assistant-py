@@ -76,9 +76,9 @@ def _trip_plan() -> TripPlan:
     )
 
 
-def _request() -> TripPlanRequest:
+def _request(city: str = "杭州") -> TripPlanRequest:
     return TripPlanRequest(
-        city="杭州",
+        city=city,
         start_date="2026-09-30",
         end_date="2026-10-01",
         budget=3000,
@@ -171,8 +171,8 @@ def _agent(script, answer=None, weather_error=None):
     return agent
 
 
-def _ask_request(question="第二天为什么这么赶"):
-    return AskRequest(question=question, trip_plan=_trip_plan(), request=_request())
+def _ask_request(question="第二天为什么这么赶", city="杭州"):
+    return AskRequest(question=question, trip_plan=_trip_plan(), request=_request(city))
 
 
 def _names(traces):
@@ -290,7 +290,8 @@ def test_shouldNotTouchAnyPlanningCodeWhenProposingAChange():
         "answer", "intent", "adjustmentPrompt", "anchorHint", "anchorDay",
         "pinHints", "pinDay", "traces"}
     assert all(tool.name in {"get_plan_overview", "get_day_plan", "get_attraction_detail",
-                             "search_attractions", "query_weather", "recommend_hotels"}
+                             "search_attractions", "search_attractions_by_tag",
+                             "query_weather", "recommend_hotels"}
                for tool in agent._tools)
 
 
@@ -373,3 +374,123 @@ def test_shouldRejectEmptyBodyWithValidationErrors():
     assert "question: must not be blank" in body["details"]
     assert "tripPlan: must not be null" in body["details"]
     assert "request: must not be null" in body["details"]
+
+
+# ---------- 本地景点库工具 search_attractions_by_tag ----------
+#
+# 这组守的是"接上本地检索之后，模型不会拿到一个自信的错误答案"。
+# 真检索不打桩会去读 data/chroma（gitignore 的产物，CI 上没有），
+# 所以这里把 indexed_cities / search_kb_attractions 换掉：
+# 跑的是真工具、真上下文、真留痕，只有数据源是假的。
+
+_KB_ROW = {
+    "id": "hz-001",
+    "name": "浙江省博物馆(孤山馆区)",
+    "tags": ["室内", "博物馆", "免费", "亲子"],
+    "category": "人文历史",
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": ["周一"],
+    "description": "全程室内参观，不受天气影响，适合雨天。",
+    "score": 0.6169,
+}
+
+
+def _kb_agent(monkeypatch, script, cities=("杭州",), rows=None, boom=None):
+    from travel_assistant.agent import ask_tools
+
+    def fake_cities(index_dir=None):
+        if boom is not None:
+            raise boom
+        return list(cities)
+
+    monkeypatch.setattr(ask_tools, "indexed_cities", fake_cities)
+    monkeypatch.setattr(ask_tools, "search_kb_attractions", lambda **kwargs: list(rows if rows is not None else [_KB_ROW]))
+    return _agent(script)
+
+
+def _kb_trace(response):
+    traces = [t for t in response.traces if t.agent_name == "search_attractions_by_tag"]
+    assert traces, f"没有记到本地库那一笔留痕：{_names(response.traces)}"
+    return traces[0]
+
+
+def test_shouldSayLocalKbHasNoSuchCityInsteadOfReturningHangzhouRows(monkeypatch):
+    """非杭州：要照实说库里没有，**不许**把杭州的景点当广州的答出去。"""
+    agent = _kb_agent(monkeypatch, [("search_attractions_by_tag", {"tags": ["室内"]})])
+
+    response = agent.ask(_ask_request("广州下雨天去哪", city="广州"))
+
+    trace = _kb_trace(response)
+    assert trace.status == "not_found"
+    assert "杭州" in trace.output_summary and "广州" in trace.output_summary
+    assert "浙江省博物馆" not in trace.output_summary
+
+
+def test_shouldRejectTagThatIsNotInTheVocabulary(monkeypatch):
+    """「山」是上一轮删掉的空词。模型挑到它时要被当面拒绝，而不是筛出 0 条让模型以为"库里没有"。"""
+    agent = _kb_agent(monkeypatch, [("search_attractions_by_tag", {"tags": ["山"]})])
+
+    response = agent.ask(_ask_request("杭州哪里能爬山"))
+
+    trace = _kb_trace(response)
+    assert trace.status == "failed"
+    assert "不在可选词表" in trace.output_summary
+    assert "山" in trace.output_summary
+
+
+def test_shouldSurviveWhenLocalIndexIsNotBuilt(monkeypatch):
+    """索引是 gitignore 的产物：没建时要把话说清楚，不能让栈冒到模型面前。"""
+    from travel_assistant.kb import IndexNotBuilt
+
+    agent = _kb_agent(monkeypatch, [("search_attractions_by_tag", {"tags": ["室内"]})],
+                      boom=IndexNotBuilt("索引还没建：/nowhere/chroma"))
+
+    response = agent.ask(_ask_request("杭州下雨天去哪"))
+
+    trace = _kb_trace(response)
+    assert trace.status == "failed"
+    assert "还没建好" in trace.output_summary
+
+
+def test_shouldRenderKbPriceWithoutCallingItAnEstimate(monkeypatch):
+    """本地库的门票是 KB 自己查证的（0=确定免费），与方案里那套「按类别估算」不是一个来源。"""
+    agent = _kb_agent(monkeypatch, [("search_attractions_by_tag", {"tags": ["室内"]})])
+
+    response = agent.ask(_ask_request("杭州下雨天去哪"))
+
+    output = _kb_trace(response).output_summary
+    assert "浙江省博物馆" in output
+    assert "免费" in output
+    assert "估算" not in output, "本地库的票价不许说成估算"
+
+
+def test_shouldSayNothingMatchedInsteadOfReturningAnEmptyBlob(monkeypatch):
+    agent = _kb_agent(monkeypatch, [("search_attractions_by_tag", {"tags": ["需预约"]})], rows=[])
+
+    response = agent.ask(_ask_request("杭州有什么要预约的"))
+
+    assert "没有命中的景点" in _kb_trace(response).output_summary
+
+
+def test_shouldPutVocabularyAndScopeIntoTheToolDescription():
+    """词表是现读的，不是抄的常量；范围写死在说明里，好让模型别去调明显答不了的城市。"""
+    from travel_assistant.kb import KB_CITIES, vocabulary_words
+
+    description = {tool.name: tool.description for tool in _agent([])._tools}[
+        "search_attractions_by_tag"
+    ]
+    for word in vocabulary_words():
+        assert word in description, f"工具说明里漏了词表里的「{word}」"
+    for city in KB_CITIES:
+        assert city in description
+    assert "不许自创" in description
+
+
+def test_shouldKeepTheLocalToolApartFromTheOnlineOne():
+    """本地库那个不能和联网那个撞名，否则模型没法选。"""
+    names = [tool.name for tool in _agent([])._tools]
+
+    assert "search_attractions" in names
+    assert "search_attractions_by_tag" in names
+    assert len(names) == len(set(names))
