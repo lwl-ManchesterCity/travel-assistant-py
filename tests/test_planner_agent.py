@@ -329,6 +329,28 @@ def test_hotel_lands_on_the_days_last_stop_not_the_average():
     assert chosen.name == "贴末站"
 
 
+def test_a_roomy_budget_targets_the_cap_instead_of_the_cheapest_room():
+    """预算宽时"贵"不该永远是减分——否则系统永远挑最便宜的那家，钱花不掉。
+
+    5000 预算那单实测：日预算 1533、住宿上限 690，却只选到 400 出头的房，三天剩 1899。
+    上限在那条路上只是"资格线"，没有一处照预算办事。
+
+    三家同位置、同评分，只有价钱不同。理想价 ＝ 上限 × 0.78。
+    """
+    agent = build_planner_agent()
+    last = _attraction("末站", 120.30, 30.30, "自然风景", 4.0)
+    hotels = [
+        _hotel("最便宜", 120.30, 30.30, 400),
+        _hotel("贴着理想价", 120.30, 30.30, 540),
+        _hotel("顶到上限", 120.30, 30.30, 680),
+    ]
+    cap = 690                                    # 理想价 ≈ 538
+
+    assert agent._select_hotel(hotels, [last], cap).name == "贴着理想价"
+    # 不给上限（必去景点那条路）时保持老行为：贵是减分，挑最便宜的
+    assert agent._select_hotel(hotels, [last]).name == "最便宜"
+
+
 def test_apply_day_pins_puts_pin_last_and_anchors_hotel_near_it():
     from travel_assistant.agent.planner_agent import _DailyPlanDecision
     agent = build_planner_agent()

@@ -83,6 +83,11 @@ _MEALS_RESERVE = 135
 _LOCAL_TRANSPORT_RESERVE = 20
 # 酒店每晚便宜 60 元 ≈ 愿意多走 1 公里，把价格折进与"离景点多少公里"同一个量纲。
 _HOTEL_COST_KM_DIVISOR = 60.0
+
+# 住宿上限里有几成该真的花掉。上限本身是"别超"的资格线（日预算×0.45），
+# 这一项把它变成"目标"：理想价＝上限×0.78 ≈ 日预算的 0.35。
+# 不定成 1.0 是留出余量——正好顶到上限的酒店离超支只差一点，且评分高的通常更贵。
+_HOTEL_IDEAL_SHARE_OF_CAP = 0.78
 # 公共交通档一天 20 元封顶（两三趟地铁的量）；打车和自驾的钱跟里程强相关，不能写死。
 _LOCAL_TRANSPORT_FLAT_COST = 20
 _TAXI_COST_PER_KM = 9.0
@@ -181,11 +186,11 @@ class PlannerAgent:
                 day_pool = planner_input.hotel_candidates_for_day(day_index, hotels)
                 candidate_hotels = self._narrow_hotel_candidates(
                     day_pool, planner_input.hotel_anchor_for_day(day_index), anchor_label, anchor_notes)
-                candidate_hotels = self._cap_hotel_candidates(
-                    candidate_hotels, self._hotel_budget_cap(daily_budget_limit, target_count), anchor_notes)
+                hotel_cap = self._hotel_budget_cap(daily_budget_limit, target_count)
+                candidate_hotels = self._cap_hotel_candidates(candidate_hotels, hotel_cap, anchor_notes)
                 # ② 酒店贴**当天动线的末站**，不是所有景点的算术平均——动线是有方向的，
                 #    平均值落在中间，等于两头都要跑；晚上你人在末站。
-                selected_hotel = self._select_hotel(candidate_hotels, day_attractions)
+                selected_hotel = self._select_hotel(candidate_hotels, day_attractions, hotel_cap)
                 if strict_continuity:
                     locked_hotel = selected_hotel
             if day_kind == _DEPARTURE_DAY:
@@ -1306,7 +1311,10 @@ class PlannerAgent:
         return (f"已锁定整趟住同一家「{label}」，第 {day_index + 1} 天它离当天景点中心 "
                 f"{locked_km:.1f} 公里，比最近的一家远 {locked_km - nearest_km:.1f} 公里")
 
-    def _select_hotel(self, hotels: list[Hotel] | None, attractions: list[Attraction]) -> Hotel | None:
+    def _select_hotel(self,
+                      hotels: list[Hotel] | None,
+                      attractions: list[Attraction],
+                      budget_cap: int | None = None) -> Hotel | None:
         """在已经过了住宿上限过滤的候选里，比"远近、贵贱、好坏"。
 
         "远近"量的是离**当天动线的末站**多远——不是所有景点的算术平均：
@@ -1316,10 +1324,17 @@ class PlannerAgent:
         价格折成公里当量（每 60 元＝1 公里）才能跟距离直接相加：Java 那套"一晚超日预算 55% 才罚 12 分"
         的阶梯，在 6~110 公里的距离跨度面前几乎不起作用，于是近的贵的稳赢——2000 预算那单
         每晚 380、每天只剩一个景点就是这么来的。评分同理给得很小（0.1 分＝0.5 公里当量）。
+
+        **`budget_cap` 给了就换成"离理想价位越远越差"**（理想价＝上限×0.78，也就是日预算的 0.35）。
+        原来那一项是 `房价÷60`，**贵永远是减分**，于是永远挑最便宜的：5000 预算那单日预算 1533、
+        住宿上限 690，实际只选到 400~500，三天剩 1899 花不掉——上限只是"资格"，没有一处照预算办事。
+        改成两头扣分之后，预算宽就往理想价靠，预算紧则理想价低于最便宜的酒店，退化成原行为。
+        `budget_cap=None`（必去景点那条路）时保持老算法。
         """
         if not hotels:
             return None
         route_end = self._route_end_location(attractions)
+        ideal_cost = None if budget_cap is None else budget_cap * _HOTEL_IDEAL_SHARE_OF_CAP
         best_hotel = hotels[0]
         best_score = float("inf")
 
@@ -1329,8 +1344,12 @@ class PlannerAgent:
                 if route_end is None or hotel.location is None
                 else self._calculate_distance_km(hotel.location, route_end)
             )
+            if ideal_cost is None:
+                cost_penalty = hotel.estimated_cost / _HOTEL_COST_KM_DIVISOR
+            else:
+                cost_penalty = abs(hotel.estimated_cost - ideal_cost) / _HOTEL_COST_KM_DIVISOR
             score = (distance_penalty
-                     + hotel.estimated_cost / _HOTEL_COST_KM_DIVISOR
+                     + cost_penalty
                      - self._parse_hotel_rating_score(hotel) * 5.0)
             if score < best_score:
                 best_score = score
