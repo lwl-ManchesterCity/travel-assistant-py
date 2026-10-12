@@ -99,14 +99,17 @@ class IntercityService:
             if flight is not None:
                 options = [*options, flight]
 
-        chosen, dropped = self._pick_option(options, request, destination_location, spend_estimator)
+        chosen, dropped, considered = self._pick_option(
+            options, request, destination_location, spend_estimator)
         if chosen is None:
             return InterCityPlan(notes=[f"{request.city}市内没有可落地的跨城方案" + (
                 f"（排除了 {len(dropped)} 条到达站不在本市的方案）" if dropped else "")])
         arrival = self._station_point(request.city, chosen)
         notes = [n for n in (
             fallback_note,
-            self._note_for(origin_city, request.city, chosen, options, request.budget),
+            # 传 `considered`（过了「下车站」那道的）而不是 `options`：备注里那句「最便宜」
+            # 引用的必须是真候选，不能是一条刚落地点不对、已被排除的方案（缺陷单 B1）。
+            self._note_for(origin_city, request.city, chosen, considered, request.budget),
             (f"排除了 {len(dropped)} 条到达站不在{request.city}市内的方案（如『{dropped[0]}』），"
              "它们更便宜但落地点不对" if dropped else None),
         ) if n]
@@ -125,7 +128,8 @@ class IntercityService:
 
     def _pick_option(self, options: list[InterCityOption], request: TripPlanRequest,
                      destination: Location,
-                     spend_estimator=None) -> tuple[Optional[InterCityOption], list[str]]:
+                     spend_estimator=None,
+                     ) -> tuple[Optional[InterCityOption], list[str], list[InterCityOption]]:
         """两道：先按"下车站在不在目的城市里"筛，再按"过闸门 + 够不够钱升级"选。
 
         2026-10-10 实测：上海→广州同一批方案里有一条 873 元的高铁，比 883 元那条便宜 10 元，
@@ -149,21 +153,26 @@ class IntercityService:
                 continue
             eligible.append(option)
         if not eligible:
-            return None, dropped
+            return None, dropped, eligible
         gate = request.budget * _INTERCITY_BUDGET_RATIO
         passing = [option for option in eligible if option.round_trip_cost <= gate]
         if not passing:
-            return min(eligible, key=lambda option: option.round_trip_cost), dropped
+            return min(eligible, key=lambda option: option.round_trip_cost), dropped, eligible
         cheapest = min(passing, key=lambda option: option.round_trip_cost)
         if spend_estimator is None:
-            return cheapest, dropped
+            return cheapest, dropped, eligible
         for option in sorted(passing, key=lambda option: option.one_way_minutes):
             if spend_estimator(option.round_trip_cost) <= request.budget:
-                return option, dropped
-        return cheapest, dropped
+                return option, dropped, eligible
+        return cheapest, dropped, eligible
 
     def _note_for(self, origin_city: str, city: str, chosen: InterCityOption,
                   options: list[InterCityOption], budget: int) -> str:
+        """`options` 必须是**过了「下车站」那道的候选**（`_pick_option` 的第三个返回值）。
+
+        传全量的话，那句「最便宜的一档是 X 元」里的 X 可能来自一条落地点不在目的城市、
+        刚被排除掉的方案——等于报一个不该出现在候选里的价（缺陷单 B1）。
+        """
         gate = jround(budget * _INTERCITY_BUDGET_RATIO)
         cheapest = min(option.round_trip_cost for option in options)
         prefix = (f"城际按{origin_city}→{city}的{chosen.mode}估：往返约 {chosen.round_trip_cost} 元"

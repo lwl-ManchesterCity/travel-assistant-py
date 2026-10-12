@@ -239,7 +239,14 @@ class AmapAttractionClient(AttractionClient):
     def _build_description(self, name: str, type_: str, address: str) -> str:
         return f"{name}，适合安排在{address}周边游览，POI 类型为 {type_}。"
 
-    def _parse_rating(self, poi: dict) -> float:
+    def _parse_rating(self, poi: dict) -> float | None:
+        """高德没给评分就返回 None，**不编一个默认分**。
+
+        与酒店那次（`amap_hotel._extract_rating`）同理：这个值会进"选哪个景点"的打分
+        （`planner_agent._score_attraction` 里 `if attraction.rating is not None` 才加分），
+        编出来的数会跟真评分混在一起、页面上也分不出来。
+        以前这里填的是写死的 4.5，于是"没有评分"的景点反而跟真有 4.5 的平起平坐。
+        """
         biz_ext = poi.get("biz_ext")
         if isinstance(biz_ext, dict):
             rating = biz_ext.get("rating")
@@ -247,8 +254,8 @@ class AmapAttractionClient(AttractionClient):
                 try:
                     return float(str(rating))
                 except ValueError:
-                    return 4.5
-        return 4.5
+                    return None
+        return None
 
     def _safe_string(self, value: object, default: str | None) -> str | None:
         if value is None:

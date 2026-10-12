@@ -390,3 +390,28 @@ def test_short_hop_with_a_real_rail_plan_does_not_break(monkeypatch):
 
     assert plan.option.mode == MODE_HIGH_SPEED_RAIL and plan.cost == 140
     assert plan.arrival_point.name == "杭州东"
+
+
+def test_a_dropped_option_never_becomes_the_quoted_cheapest_price(any_city_geocoding):
+    """缺陷单 B1：备注里那句「最便宜的一档是 X 元」，X 不能来自刚落地点不对、已被排除的方案。
+
+    构造一条更便宜但下车站不在广州的普速，加一条贵的高铁：
+    高铁被选中，那句「最便宜」必须引 490（入围里最便宜的），**不是 380**。
+    """
+    client = _StubRouteClient([
+        InterCityOption(mode=MODE_ORDINARY_RAIL, round_trip_cost=380, one_way_minutes=900,
+                        arrival_station="湛江北",
+                        arrival_location=Location(longitude=110.36, latitude=21.27)),   # 离广州 400 公里
+        InterCityOption(mode=MODE_HIGH_SPEED_RAIL, round_trip_cost=1077, one_way_minutes=269),
+        InterCityOption(mode=MODE_ORDINARY_RAIL, round_trip_cost=490, one_way_minutes=896),
+    ])
+    service = IntercityService(AmapSettings(api_key="k"), client)
+
+    # 预算 5000（闸门 1750）：飞机估 2180 超闸门被淘汰，剩下高铁与普速，
+    # "升级"选中最快的高铁。预算再高飞机就会过闸门并夺冠，这里要避开它。
+    plan = service.plan(_request(origin_city="上海", budget=5000),
+                        spend_estimator=lambda cost: cost + 1000)
+
+    assert plan.option.mode == MODE_HIGH_SPEED_RAIL
+    assert "490" in plan.notes[0]          # 入围里最便宜的那条
+    assert "380" not in plan.notes[0]      # 被排除的那条，一个字都不许出现

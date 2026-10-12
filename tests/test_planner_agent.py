@@ -741,3 +741,103 @@ def test_the_intercity_estimate_never_underestimates_a_real_plan():
         intercity_cost=0)
 
     assert estimated >= trip_plan.budget.total, (estimated, trip_plan.budget.total)
+
+
+# ---------- 2026-10-12 景点挑选修订（docs/ATTRACTION_SELECTION_REVISION_20261012.md）----------
+
+def _at(lng, lat, name, rating=4.5):
+    return _attraction(name, lng, lat, "人文历史", rating)
+
+
+def test_middle_day_greedy_only_shops_in_the_top_five_by_score():
+    """判据 1：评分最低但最近的那个，不该因为"近"就赢。
+
+    贪心的判据是"谁近谁赢"，所以池子要先按分数切一刀——不切的话，
+    偏好（+40 分）和景点评分在中间天就白设了。
+    """
+    agent = build_planner_agent()
+    start = Location(longitude=120.0, latitude=30.0)
+    far_but_good = [_at(120.2 + index * 0.001, 30.0, f"高分{index}") for index in range(5)]
+    near_but_bad = _at(120.01, 30.0, "低分但就在旁边", rating=3.0)   # 不到 1 公里，排第 6
+
+    route = agent._compose_day_route(start, far_but_good + [near_but_bad], 1, set(), 1000)
+
+    assert [a.name for a in route] == ["高分0"]
+
+
+def test_the_pool_filters_used_ones_before_taking_the_top_five():
+    """判据 2：**先滤掉用过的、再取前 5**。
+
+    顺序反了就出事：玩到第 3 天，前 5 可能全被用过，池子空掉、一个都排不出来。
+    """
+    agent = build_planner_agent()
+    start = Location(longitude=120.0, latitude=30.0)
+    candidates = [_at(120.1 + index * 0.001, 30.0, f"景点{index}") for index in range(6)]
+    used = {agent._attraction_key(a) for a in candidates[:5]}
+
+    route = agent._compose_day_route(start, candidates, 1, used, 1000)
+
+    assert [a.name for a in route] == ["景点5"]
+
+
+def test_a_pool_smaller_than_five_is_taken_whole():
+    """判据 3：不足 5 个就全取，不补。"""
+    agent = build_planner_agent()
+    start = Location(longitude=120.0, latitude=30.0)
+    candidates = [_at(120.1 + index * 0.001, 30.0, f"景点{index}") for index in range(3)]
+
+    route = agent._compose_day_route(start, candidates, 3, set(), 100000)
+
+    assert len(route) == 3
+
+
+def test_head_and_tail_days_still_pick_by_score_not_by_distance():
+    """判据 4：头尾天不受"前 5"影响——它们本来就只看分数。"""
+    agent = build_planner_agent()
+    start = MapPoint(name="到达口岸", address="杭州", point_type="station",
+                     location=Location(longitude=120.0, latitude=30.0))
+    high_score_far = _at(120.08, 30.0, "高分但远")      # 7.7 公里，半径圈内
+    low_score_near = _at(120.01, 30.0, "低分但近", rating=3.0)   # 1 公里
+
+    picked = agent._pick_day_attractions(
+        [high_score_far, low_score_near], _ARRIVAL_DAY, start, None,
+        1000, 1, set(), ["人文历史"], None, None)
+
+    assert [a.name for a in picked] == ["高分但远"]
+
+
+def test_a_high_budget_no_longer_asks_for_four_attractions():
+    """判据 6：删掉"≥1800 给 4 个"那一档——它从来没生效过，还被写成"低预算"。"""
+    agent = build_planner_agent()
+
+    assert agent._determine_target_count(1, 3, 3000, None, None) == 3
+
+
+def test_a_high_budget_plan_never_says_low_budget():
+    """判据 6 附：高预算单子的备注里不许出现"低预算"三个字。"""
+    planner_input = build_planner_input()
+    planner_input.request.budget = 9000
+
+    trip_plan = build_planner_agent().build_plan(planner_input)
+
+    assert max(len(day.attractions) for day in trip_plan.days) <= 3
+    notes = list(trip_plan.planning_notes)
+    for day in trip_plan.days:
+        notes.extend(day.optimization_notes or [])
+    assert not any("低预算" in note for note in notes), notes
+
+
+def test_the_cut_note_names_the_real_reason():
+    """判据 7：只有日预算真的低，才准说"低预算"。"""
+    agent = build_planner_agent()
+    attractions = [_at(120.1, 30.0, f"景点{index}") for index in range(4)]
+
+    roomy, roomy_notes = list(attractions), []
+    agent._enforce_hard_budget_cuts(roomy, None, 3000, roomy_notes)
+    assert len(roomy) == 3
+    assert roomy_notes and all("低预算" not in note for note in roomy_notes)
+
+    tight, tight_notes = list(attractions), []
+    agent._enforce_hard_budget_cuts(tight, None, 300, tight_notes)
+    assert len(tight) == 1
+    assert any("低预算" in note for note in tight_notes)

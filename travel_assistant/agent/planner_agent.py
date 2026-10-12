@@ -66,6 +66,13 @@ _DAY_ROUTE_CAP_KM = 25.0
 # 放到 50 就停：再宽下去贪心会一路填满，排出两站相隔 70 公里的天，跟"宁可少排也不要赶"打架。
 _DAY_ROUTE_CAP_LADDER_KM: tuple[float, ...] = (_DAY_ROUTE_CAP_KM, 50.0)
 
+# 中间天的贪心只在这几个候选里挑（按分数排序后取前 N，且**先滤掉用过的**）。
+# 贪心的判据是"谁近谁赢"（`_fill_route_within` 里那个 key），不切池子的话，
+# 候选里评分 3.2 但近的会赢过 4.7 但远 2 公里的——偏好和评分在中间天就白设了。
+# 代价是用"顺路"换"质量"：前 N 若都离得远，动线会变长。见
+# docs/ATTRACTION_SELECTION_REVISION_20261012.md 2.1。
+_GREEDY_POOL_SIZE = 5
+
 # 当天游玩先后的判据（2026-10-10）：里程优先，时段常识只在"并列"时才有否决权。
 # 容差取 3 公里——再大就是用"适合傍晚"当借口绕远路了。
 _PIN_ORDER_TOLERANCE_KM = 3.0
@@ -135,8 +142,6 @@ def _target_count_for_day(day_index: int, days: int, daily_budget_limit: int) ->
         return 1
     if daily_budget_limit < 450:
         return 1
-    if daily_budget_limit >= 1800:
-        return 4
     if daily_budget_limit >= 1000:
         return 3
     return 2
@@ -455,9 +460,13 @@ class PlannerAgent:
         **放宽而不是"硬给一个最近的"**——放一级之后还能多接一站，见常量那段注释。
         梯子走完还是空（候选全被用过、或根本没有候选），才退回"只给最近的一个"。
         """
+        # 只在前 N 个"还没用过的"里贪心。顺序不能反：**先滤掉用过的、再取前 N**——
+        # 反过来的话玩到第 3 天，前 N 可能全被用过了，池子空掉、一个都排不出来。
+        pool = [attraction for attraction in candidates
+                if self._attraction_key(attraction) not in used_attraction_keys][:_GREEDY_POOL_SIZE]
         for cap_km in _DAY_ROUTE_CAP_LADDER_KM:
             route = self._fill_route_within(
-                start, candidates, target_count, used_attraction_keys, ticket_budget, cap_km)
+                start, pool, target_count, used_attraction_keys, ticket_budget, cap_km)
             if route:
                 return route
         # 连放宽到 50 都排不出来：还是得给一个——`_build_meals` 和 `_build_description`
@@ -542,10 +551,11 @@ class PlannerAgent:
         if daily_budget_limit < 450:
             return 1
         target_count = 2
-        if daily_budget_limit >= 1800:
-            target_count = 4
-        elif daily_budget_limit >= 1000:
+        if daily_budget_limit >= 1000:
             target_count = 3
+        # 2026-10-12：删掉"≥1800 给 4 个"那一档。它从来没生效过——
+        # `_determine_hard_budget_attraction_limit` 无条件返回 3，4 个转头就被砍回 3 个，
+        # 备注还写"低预算模式"。见 docs/ATTRACTION_SELECTION_REVISION_20261012.md 2.3。
         if constraints is not None and constraints.relaxed_pace:
             target_count = min(target_count, 2)
         if self._prefers_indoor_day(constraints, current_weather):
@@ -998,9 +1008,18 @@ class PlannerAgent:
                                   daily_budget_limit: int,
                                   notes: list[str]) -> None:
         max_attractions = self._determine_hard_budget_attraction_limit(daily_budget_limit)
+        # 2026-10-12：删掉"日预算 ≥1800 给 4 个"那一档之后（见
+        # docs/ATTRACTION_SELECTION_REVISION_20261012.md 2.3），`_determine_target_count`
+        # 的上限也是 3，与这里的 3 合成一套——所以这段**预期变成空转**，留着当安全网。
+        # 备注按**真实原因**分岔：以前不管为什么砍都写"低预算模式"，于是日预算 3000 的单子
+        # 被这道理都不在预算上的闸裁掉时，也写着"低预算"，把用户往错的方向带。
+        budget_tight = daily_budget_limit < 450
         while len(working_attractions) > max_attractions:
             removed = working_attractions.pop(len(working_attractions) - 1)
-            notes.append(f"低预算模式已减少景点 {removed.name}")
+            if budget_tight:
+                notes.append(f"低预算模式已减少景点 {removed.name}")
+            else:
+                notes.append(f"当日景点数已达上限 {max_attractions} 个，未排入 {removed.name}")
 
     def _determine_hard_budget_attraction_limit(self, daily_budget_limit: int) -> int:
         """低预算才砍景点；酒店贵不再是砍景点的理由。
