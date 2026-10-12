@@ -1,6 +1,6 @@
 # travel-assistant-py（Java 智能旅游助手的 Python + LangChain 等价移植）
 
-源项目：`/Users/lwl/Documents/智能旅游助手-1`（Spring Boot 3 / Java 17，只读，未做任何修改）。
+源项目：智能旅行助手（Java 版，仓库 `travel-ai-assistant`，本地只读副本，未做任何修改；Spring Boot 3 / Java 17）。
 本项目只做语言与框架替换：FastAPI 顶掉 Spring Web，pydantic 顶掉 POJO + Jakarta Validation，
 httpx 顶掉 RestTemplate，LangChain `create_agent` + `@tool` 顶掉 `PlannerInputBuilder` 里的固定顺序取数。
 业务规则、阈值、文案、字段名一律照搬 Java 源码。
