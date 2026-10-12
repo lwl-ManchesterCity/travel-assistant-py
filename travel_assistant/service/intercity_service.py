@@ -93,11 +93,16 @@ class IntercityService:
         estimated_options = _straight_line_options(straight_km)
         if not options:
             options = estimated_options
-        elif not any(option.mode == MODE_FLIGHT for option in options):
-            # 接口不含航班，飞机只能估出来；不进这一格就永远比不出"长途飞机更便宜"
-            flight = next((option for option in estimated_options if option.mode == MODE_FLIGHT), None)
-            if flight is not None:
-                options = [*options, flight]
+        else:
+            # **接口缺哪一档就补哪一档。** 原来只补飞机（"航班接口本来就没有"），
+            # 隐含假设"铁路档接口一定给" —— 2026-10-12 实测上海→北京，同一个路由两次调用
+            # 返回的档都不一样：一次只有普速 T110（于是 5000 预算的闸门 1750 只筛得出
+            # 367 元普速，用户看着"预算充足却坐 16 小时硬座"），另一次只有高铁 1308
+            # （于是 2000 预算没有便宜档可选）。**上游按档给谁是随机的**，
+            # 所以按档补齐，两个方向的缺口一起堵。飞机同理（换乘方案里结构上就没有航班）。
+            present = {option.mode for option in options}
+            options = [*options, *(option for option in estimated_options
+                                   if option.mode not in present)]
 
         chosen, dropped, considered = self._pick_option(
             options, request, destination_location, spend_estimator)
@@ -158,7 +163,7 @@ class IntercityService:
         passing = [option for option in eligible if option.round_trip_cost <= gate]
         if not passing:
             return min(eligible, key=lambda option: option.round_trip_cost), dropped, eligible
-        cheapest = min(passing, key=lambda option: option.round_trip_cost)
+        cheapest = _cheapest_priced(passing)
         if spend_estimator is None:
             return cheapest, dropped, eligible
         for option in sorted(passing, key=lambda option: option.one_way_minutes):
@@ -174,7 +179,7 @@ class IntercityService:
         刚被排除掉的方案——等于报一个不该出现在候选里的价（缺陷单 B1）。
         """
         gate = jround(budget * _INTERCITY_BUDGET_RATIO)
-        cheapest = min(option.round_trip_cost for option in options)
+        cheapest = _cheapest_priced(options).round_trip_cost
         prefix = (f"城际按{origin_city}→{city}的{chosen.mode}估：往返约 {chosen.round_trip_cost} 元"
                   f"{'（按直线距离估算，非票价）' if chosen.estimated else '（高德换乘方案参考价，含两端接驳）'}")
         if chosen.round_trip_cost > gate:
@@ -185,6 +190,25 @@ class IntercityService:
         if chosen.round_trip_cost > cheapest:
             return prefix + f"（预算够，已从更便宜的 {cheapest} 元一档升上来，省下路上时间）"
         return prefix + f"（预算闸门 {gate} 元内最省的一档）"
+
+
+def _cheapest_priced(options: list[InterCityOption]) -> InterCityOption:
+    """入围里最便宜的那一档。
+
+    **铁路的估算档不当价格锚**，飞机可以 —— 因为两者的估算性质不同：
+
+    - 飞机：换乘接口**结构上永远不给**，估算价是它唯一的数据来源，不认它就等于这一档
+      永远选不出来（`test_long_distance_flight_can_win_the_price_comparison` 钉的就是这条）。
+    - 铁路：接口**会给**真实票价，只是某一次没返回（见 `plan` 里那段：上海→北京两次调用
+      一次只给普速、一次只给高铁）。这时补出来的估算只是**顶替**，有真实报价就该以真实为准。
+      实测上海→杭州接口给了真实高铁 140，按 165 公里补出的估算普速只要 69 ——
+      不挡的话，那句「最便宜的一档是 X 元」会引用一个编出来的数，还把真实价压掉。
+
+    铁路估算档**照常参与选档**（升级那一轮按耗时排序，它跟真实档一起挑），只是不当价格锚。
+    """
+    priced = [option for option in options
+              if not option.estimated or option.mode == MODE_FLIGHT]
+    return min(priced or options, key=lambda option: option.round_trip_cost)
 
 
 def _straight_km(first: Location, second: Location) -> float:

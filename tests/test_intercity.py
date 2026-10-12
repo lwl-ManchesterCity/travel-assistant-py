@@ -415,3 +415,69 @@ def test_a_dropped_option_never_becomes_the_quoted_cheapest_price(any_city_geoco
     assert plan.option.mode == MODE_HIGH_SPEED_RAIL
     assert "490" in plan.notes[0]          # 入围里最便宜的那条
     assert "380" not in plan.notes[0]      # 被排除的那条，一个字都不许出现
+
+
+def test_a_missing_high_speed_tier_is_filled_from_the_straight_line_estimate(any_city_geocoding):
+    """接口只回普速、没回高铁时，补一档估算高铁——否则"预算够就按耗时升级"没有档可升。
+
+    2026-10-12 实测：上海→北京**同一个路由两次调用返回的档不一样**，一次只给普速 T110、
+    一次只给高铁 1308。只给普速那次，5000 预算的闸门 1750 就只能筛出 367 元普速
+    （单程 16 小时），用户看到的是"预算充足却坐硬座"。
+    """
+    client = _StubRouteClient([InterCityOption(
+        mode=MODE_ORDINARY_RAIL, round_trip_cost=367, one_way_minutes=960,
+        arrival_station="广州", arrival_location=GUANGZHOU)])
+    service = IntercityService(AmapSettings(api_key="k"), client)
+
+    plan = service.plan(_request(origin_city="上海", budget=5000),
+                        spend_estimator=lambda cost: cost + 1000)
+
+    # 直线上补出来的高铁（约 1211 元）比真实普速贵，但它快得多（291 分 vs 960 分），
+    # 预算够就该升上去——这正是"35% 闸门 + 按耗时升级"要的效果。
+    assert plan.option.mode == MODE_HIGH_SPEED_RAIL
+    assert plan.option.estimated is True
+
+
+def test_a_missing_ordinary_tier_is_filled_too(any_city_geocoding):
+    """反过来也一样：接口只回高铁时补一档估算普速，否则低预算没有便宜档可选。
+
+    这是上一条的镜像，是实测撞出来的——上游按档给谁是随机的，两个方向都得堵。
+    """
+    client = _StubRouteClient([InterCityOption(
+        mode=MODE_HIGH_SPEED_RAIL, round_trip_cost=1308, one_way_minutes=270,
+        arrival_station="广州南", arrival_location=GUANGZHOU)])
+    service = IntercityService(AmapSettings(api_key="k"), client)
+
+    # 预算 2000（闸门 700）：真实高铁 1308 过不去，只剩补出来的估算普速（约 509）。
+    plan = service.plan(_request(origin_city="上海", budget=2000),
+                        spend_estimator=lambda cost: cost + 500)
+
+    assert plan.option.mode == MODE_ORDINARY_RAIL
+    assert plan.option.estimated is True
+
+
+def test_a_rail_estimate_never_becomes_the_quoted_cheapest(monkeypatch):
+    """"最便宜的一档"那把尺子**只认真实铁路报价**——补出来的估算铁路档不当价格锚。
+
+    上海→杭州这类近程：接口给了真实高铁 140，而按直线补的估算普速只要 69。
+    不挡的话，备注里那句「最便宜的一档是 X 元」会引用一个编出来的数，还把真实价压掉。
+    （飞机不在此列：换乘接口结构上就没有航班，估算价是它唯一的数据来源。）
+
+    **这是一条护栏，不是回归测试**：它在"按档补齐"之前的代码上也能过
+    （那时候根本不补铁路档，估算普速不会出现）。它守的是补齐和高低档规则**合在一起**
+    之后不能再退回去——上面两条只验"补得进去"，这一条验"补进来的不当价格锚"。
+    """
+    HANGZHOU = Location(longitude=120.155, latitude=30.274)
+
+    def fake(amap, city, keyword):
+        return SHANGHAI if keyword == "上海" else HANGZHOU
+
+    monkeypatch.setattr(mod, "resolve_anchor_location", fake)
+    client = _StubRouteClient([InterCityOption(
+        mode=MODE_HIGH_SPEED_RAIL, round_trip_cost=140, one_way_minutes=60,
+        arrival_station="杭州东", arrival_location=HANGZHOU)])
+    service = IntercityService(AmapSettings(api_key="k"), client)
+
+    plan = service.plan(_request(city="杭州", origin_city="上海", budget=2000))
+
+    assert plan.option.mode == MODE_HIGH_SPEED_RAIL and plan.cost == 140

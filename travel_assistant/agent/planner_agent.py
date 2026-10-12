@@ -456,19 +456,33 @@ class PlannerAgent:
         - 不设"近邻"——增量小自然接得顺，不必再跟每一站比一遍 30 公里；
         - 不锁死已选——每步都重看全部候选，所以没有"谁先进谁锁死"。
 
-        总长上限是**逐级放宽**的（`_DAY_ROUTE_CAP_LADDER_KM`）：25 排不出就往 50 放。
+        总长上限是**逐级放宽**的（`_DAY_ROUTE_CAP_LADDER_KM`）：25 排不满就往 50 放。
         **放宽而不是"硬给一个最近的"**——放一级之后还能多接一站，见常量那段注释。
-        梯子走完还是空（候选全被用过、或根本没有候选），才退回"只给最近的一个"。
+
+        **放宽的触发条件是"没排满"，不是"排不出"**（2026-10-12 修）：
+        `_fill_route_within` 排不满 target_count 时返回的是**半成品**而不是空列表，
+        原来写 `if route:` 于是把"2 个 / 目标是 3 个"也当成排好了、直接收工，
+        50 那一档永远轮不到 —— 实测第 2 天卡在 24.5 公里（贴着 25 上限）只出 2 个，
+        而放宽到 50 是塞得下第 3 个的。现在只有**排满**才提前返回。
+        梯子走完仍没排满时取**站数最多**的那一次（并列保留先试的那档，也就是更短的那条）。
+        一次都没排出来（候选全被用过、或根本没有候选），才退回"只给最近的一个"。
         """
         # 只在前 N 个"还没用过的"里贪心。顺序不能反：**先滤掉用过的、再取前 N**——
         # 反过来的话玩到第 3 天，前 N 可能全被用过了，池子空掉、一个都排不出来。
         pool = [attraction for attraction in candidates
                 if self._attraction_key(attraction) not in used_attraction_keys][:_GREEDY_POOL_SIZE]
+        want = max(1, target_count)
+        best_partial: list[Attraction] = []
         for cap_km in _DAY_ROUTE_CAP_LADDER_KM:
             route = self._fill_route_within(
                 start, pool, target_count, used_attraction_keys, ticket_budget, cap_km)
-            if route:
+            if len(route) >= want:
                 return route
+            # 严格更长才换：同站数时保留先试的那一档（上限更紧、动线更短，符合"宁可少排也不要赶"）
+            if len(route) > len(best_partial):
+                best_partial = route
+        if best_partial:
+            return best_partial
         # 连放宽到 50 都排不出来：还是得给一个——`_build_meals` 和 `_build_description`
         # 都拿 attractions[0]／[-1] 当锚，空列表会直接炸。既然非给不可，就挑**离起点最近**的：
         # 这天反正已经超上限了，再挑个"分数最高但更远"的只会更赶。起点未知时全部并列，

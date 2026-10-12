@@ -243,6 +243,30 @@ def test_widening_the_cap_picks_up_a_second_stop():
     assert [x.name for x in route] == ["A", "B"]
 
 
+def test_widening_the_cap_also_fires_when_the_cap_only_gets_a_partial_route():
+    """25 那一级排了 1 个、目标是 2 个，也要放宽到 50 把第 2 个接上。
+
+    复现 `if route:` 那个 bug：`_fill_route_within` 排不满 target_count 时返回的是
+    **半成品**而不是空列表，所以"非空即收工"会让 50 那一级永远轮不到——
+    放宽只在"一个都排不出"时才生效。实测来源：2026-10-12 第 2 天卡在 24.5 公里
+    （贴着 25 上限）只出 2 个景点、目标是 3 个，而 50 那一级是塞得下第 3 个的。
+
+    坐标：起点 120.0 → A 120.15（约 14.4 公里）→ B 120.4（A 到 B 约 24 公里）。
+    A 单独 14.4 进得来；A+B 一共 38.4，25 进不来、50 进得来。
+
+    上一条 `test_widening_the_cap_picks_up_a_second_stop` 管的是"25 一个都排不出"那一半，
+    两条合起来才是放宽梯子的完整契约。
+    """
+    agent = build_planner_agent()
+    start = Location(longitude=120.0, latitude=30.0)
+    a = _attraction("A", 120.15, 30.0, "自然风景", 4.5)
+    b = _attraction("B", 120.4, 30.0, "自然风景", 4.0)
+
+    route = agent._compose_day_route(start, [a, b], 2, set(), 9999)
+
+    assert [x.name for x in route] == ["A", "B"]
+
+
 def test_ordinary_day_would_rather_plan_fewer_than_a_rushed_route():
     """放到 50 还是排不满：不硬凑到 target_count——但也不能一个都不排（防选空）。"""
     agent = build_planner_agent()
