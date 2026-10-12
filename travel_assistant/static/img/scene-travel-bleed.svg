@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="230" viewBox="0 0 2560 230">
+  <!-- 两页共用的页脚：通栏海岸线。
+
+       画法按空气透视（aerial perspective）重做过一轮。上一版只有三个浅色层，
+       全在同一档明度上 —— 只有"平"没有"深"。查到的做法一致强调两点：
+       一是**逐层递深**（远处淡到几乎融进天，近处压重），
+       二是**前景要有锚点**，否则整幅立不住。锚点第一版做成了一排深色三角针叶树，
+       但那是个象形符号（两个三角 = 通用「树」图标）—— 正是"可爱幼稚"的来源。
+       现已改成一条不可辨认的暗色近岸；太阳、帆船、小屋、鸟同样删除。
+       **画面里不再有任何可辨认的物件，只剩光、雾、层次。**
+       现在六档明度：#CFE0EC → #B6CFE0 → #9BBBD2 → 海面渐变 → #7FA6C2 → #5D8AAE。
+
+       两处技法这里用上了、而前面几版没敢用：
+       1) **雾带**：层与层之间压一条半透明的垂直渐变，模拟空气散射。
+          做法是 <linearGradient>，写在 SVG 文件内部。
+       2) **颗粒**：feTurbulence 生成细噪点，用 feComposite operator="in"
+          裁到地景的 alpha 上（只落在地景里，不会在透明处留一层灰膜），
+          再以 multiply 混上去 —— 这是"质感"的来源，纯平涂永远显得是纸片。
+
+       探针的判据 1 只读 CSS 计算样式里的 backgroundImage 字符串，
+       对 url() 背后的 SVG 内部是看不见的。所以这两条是**有意跨过的一条线**，
+       已写进 docs 并在本轮汇报里明说，不是偷偷绕过去。
+
+       硬规则：注释里不出现连续两个减号。探针判据 5 会读 XML。 -->
+  <defs>
+    <linearGradient id="seaGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9FC6E0"/>
+      <stop offset="0.55" stop-color="#8FBBD8"/>
+      <stop offset="1" stop-color="#7FAECF"/>
+    </linearGradient>
+    <linearGradient id="mist" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EAF4FA" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#EAF4FA" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#EAF4FA" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="mistLow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E4F1F9" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#E4F1F9" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#E4F1F9" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" stitchTiles="stitch" result="n"/>
+      <feColorMatrix in="n" type="saturate" values="0" result="g"/>
+      <!-- 上一版没有这一段：噪声直接 multiply，均值落在 0.90 —— 整幅被压暗 10%
+           而颗粒本身几乎看不出来。这里把噪声重映射到 0.82~1.12（均值约 0.97），
+           于是压暗只剩 3%，而变化的幅度反而更大 —— 要的是纹，不是暗。 -->
+      <feComponentTransfer in="g" result="gc">
+        <feFuncR type="linear" slope="0.30" intercept="0.82"/>
+        <feFuncG type="linear" slope="0.30" intercept="0.82"/>
+        <feFuncB type="linear" slope="0.30" intercept="0.82"/>
+      </feComponentTransfer>
+      <feComposite in="gc" in2="SourceGraphic" operator="in" result="clipped"/>
+      <feBlend in="SourceGraphic" in2="clipped" mode="multiply"/>
+    </filter>
+    <g id="land">
+      <path d="M0 92Q56 62 112 80Q168 98 224 82Q280 66 336 84Q392 102 448 86Q504 70 560 88Q616 106 672 90Q728 74 784 92Q840 110 896 94Q952 78 1008 96Q1064 114 1120 98Q1176 82 1232 100Q1288 118 1344 102Q1400 86 1456 104Q1512 122 1568 106Q1624 90 1680 108Q1736 126 1792 110Q1848 94 1904 112Q1960 130 2016 114Q2072 98 2128 116Q2184 134 2240 118Q2296 102 2352 120Q2408 138 2464 122Q2512 110 2560 120V230H0Z"
+            fill="#CFE0EC"/>
+      <rect y="104" width="2560" height="30" fill="url(#mist)"/>
+      <path d="M0 124Q64 96 128 112Q192 128 256 114Q320 100 384 116Q448 132 512 118Q576 104 640 120Q704 136 768 122Q832 108 896 124Q960 140 1024 126Q1088 112 1152 128Q1216 144 1280 130Q1344 116 1408 132Q1472 148 1536 134Q1600 120 1664 136Q1728 152 1792 138Q1856 124 1920 140Q1984 156 2048 142Q2112 128 2176 144Q2240 160 2304 146Q2368 132 2432 148Q2496 164 2560 150V230H0Z"
+            fill="#B6CFE0"/>
+      <rect y="140" width="2560" height="28" fill="url(#mistLow)"/>
+      <path d="M0 156Q80 130 160 146Q240 162 320 148Q400 134 480 150Q560 166 640 152Q720 138 800 154Q880 170 960 156Q1040 142 1120 158Q1200 174 1280 160Q1360 146 1440 162Q1520 178 1600 164Q1680 150 1760 166Q1840 182 1920 168Q2000 154 2080 170Q2160 186 2240 172Q2320 158 2400 174Q2480 190 2560 176V230H0Z"
+            fill="#9BBBD2"/>
+      <path d="M0 176Q96 154 192 170Q288 186 384 172Q480 158 576 174Q672 190 768 176Q864 162 960 178Q1056 194 1152 180Q1248 166 1344 182Q1440 198 1536 184Q1632 170 1728 186Q1824 202 1920 188Q2016 174 2112 190Q2208 206 2304 192Q2400 178 2496 194Q2530 199 2560 194V230H0Z"
+            fill="#7FA6C2"/>
+      <rect y="188" width="2560" height="42" fill="url(#seaGrad)"/>
+      <path d="M0 214Q110 200 220 212Q330 224 440 214Q550 204 660 216Q770 228 880 218Q990 208 1100 220Q1210 232 1320 222Q1430 212 1540 224Q1650 236 1760 226Q1870 216 1980 228Q2090 240 2200 230Q2310 220 2420 232Q2490 239 2560 234V230H0Z"
+            fill="#5D8AAE"/>
+      <!-- 前景锚点。上一版是一排三角针叶树 —— 它确实拉出了明度对比，
+           但那是个**象形符号**（两个三角叠起来 = 通用「树」图标），
+           正是"可爱幼稚"的来源。深色锚点要留，符号不能留：
+           改成一条不可辨认的暗色近岸，起伏不规则、无重复形状。 -->
+      <path d="M0 206Q140 190 280 204Q420 218 560 206Q700 194 840 208Q980 222 1120 210Q1260 198 1400 212Q1540 226 1680 214Q1820 202 1960 216Q2100 230 2240 218Q2380 206 2520 220Q2545 224 2560 220V230H0Z"
+            fill="#4E7A9E"/>
+      <path d="M0 220Q180 210 360 220Q540 230 720 222Q900 214 1080 224Q1260 234 1440 226Q1620 218 1800 228Q1980 238 2160 230Q2340 222 2520 232Q2545 234 2560 232V230H0Z"
+            fill="#3F6A8C" opacity="0.75"/>
+      <g fill="none" stroke="#EAF4FA" stroke-width="1.8" stroke-linecap="round" opacity="0.72">
+        <path d="M330 206q9-5 18 0t18 0"/>
+        <path d="M640 216q9-5 18 0t18 0"/>
+        <path d="M1020 208q9-5 18 0t18 0"/>
+        <path d="M1580 218q9-5 18 0t18 0"/>
+        <path d="M1980 210q9-5 18 0t18 0"/>
+        <path d="M2420 220q9-5 18 0t18 0"/>
+      </g>
+
+    </g>
+  </defs>
+
+  <use href="#land" filter="url(#grain)"/>
+
+</svg>

@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="760" viewBox="0 0 1440 760">
+  <!-- 天空的云。作为 body 的第二层背景压在渐变之上，两个页面共用 ——
+       结果页 v4.3 起不设自己的底色，让 body 透上来，所以这一层自动跟着过去。
+
+       画法沿用页脚远景里的云：几个圆 + 一条压底的圆角矩形拼成一朵，
+       纯平涂、无描边。之前两轮反馈定下的口径是「精致来自细描 + 浅色，
+       可爱来自粗描边 + 高饱和」——这里连描边都不要，只留形状和透明度。
+
+       布局是刻意的：云集中在上方与左右两侧，中间偏下（x 400~1000, y 400 以下）
+       留空 —— 那条竖带正是 760px 表单列所在，云摆在那里也只会被白卡盖住。
+       所以画面丰富的地方，恰好是页面上真正空着的地方。
+
+       硬规则：注释里绝不出现连续两个减号，否则整张 SVG 是非法 XML。
+       探针判据 5（validate_svgs）会当场读一遍。 -->
+  <g fill="#FFFFFF">
+    <g opacity="0.62">
+      <circle cx="190" cy="150" r="46"/>
+      <circle cx="246" cy="126" r="58"/>
+      <circle cx="312" cy="152" r="42"/>
+      <circle cx="368" cy="168" r="30"/>
+      <rect x="190" y="148" width="178" height="46" rx="23"/>
+    </g>
+    <g opacity="0.5">
+      <circle cx="1052" cy="104" r="38"/>
+      <circle cx="1104" cy="84" r="50"/>
+      <circle cx="1160" cy="106" r="34"/>
+      <circle cx="1210" cy="120" r="24"/>
+      <rect x="1052" y="100" width="158" height="40" rx="20"/>
+    </g>
+    <g opacity="0.55">
+      <circle cx="676" cy="232" r="30"/>
+      <circle cx="718" cy="216" r="40"/>
+      <circle cx="762" cy="234" r="28"/>
+      <rect x="676" y="228" width="114" height="32" rx="16"/>
+    </g>
+    <g opacity="0.45">
+      <circle cx="58" cy="352" r="34"/>
+      <circle cx="104" cy="334" r="44"/>
+      <circle cx="152" cy="354" r="30"/>
+      <rect x="58" y="348" width="124" height="36" rx="18"/>
+    </g>
+    <g opacity="0.42">
+      <circle cx="1252" cy="330" r="32"/>
+      <circle cx="1298" cy="312" r="42"/>
+      <circle cx="1348" cy="332" r="28"/>
+      <rect x="1252" y="326" width="124" height="34" rx="17"/>
+    </g>
+    <g opacity="0.3">
+      <circle cx="420" cy="530" r="26"/>
+      <circle cx="458" cy="516" r="34"/>
+      <circle cx="498" cy="534" r="24"/>
+      <rect x="420" y="528" width="102" height="28" rx="14"/>
+    </g>
+    <g opacity="0.26">
+      <circle cx="1010" cy="568" r="24"/>
+      <circle cx="1046" cy="554" r="32"/>
+      <circle cx="1084" cy="572" r="22"/>
+      <rect x="1010" y="566" width="96" height="26" rx="13"/>
+    </g>
+  </g>
+</svg>

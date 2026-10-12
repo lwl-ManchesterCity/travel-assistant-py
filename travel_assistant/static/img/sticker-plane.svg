@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- 小飞机（v4.1 细描线版）：描边 1.6px 淡描，机身纯白。
+       用在等待区那圈虚线航道里。无渐变（探针判据 1）。
+       注释里不出现连续两个减号。 -->
+  <g fill="#FFFFFF" stroke="#12303F" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M6 34q0-12 15-12h26q15 0 17 12q-2 12-17 12H21q-15 0-15-12z"/>
+    <path d="M26 44L11 58h13l15-14z"/>
+    <path d="M10 24L1 11h13z"/>
+  </g>
+  <g fill="#12303F" opacity="0.55">
+    <circle cx="34" cy="34" r="2.8"/>
+    <circle cx="45" cy="34" r="2.8"/>
+  </g>
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="136" viewBox="0 0 120 136">
+  <!-- 热气球（v4.1 细描线版）：描边由 3.4px 纯墨降到 1.6px 淡描，色彩换成同族浅色。
+       与页脚风景同一套风格。无渐变（探针判据 1）。
+       注释里不出现连续两个减号。 -->
+  <defs>
+    <clipPath id="envelope">
+      <path d="M60 6C29 6 8 31 8 56c0 27 31 46 52 58 21-12 52-31 52-58C112 31 91 6 60 6Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#envelope)" stroke="none">
+    <rect x="0" y="0" width="120" height="136" fill="#FFB4A2"/>
+    <path d="M40 0C28 40 30 88 52 122" fill="none" stroke="#FFE0A3" stroke-width="15"/>
+    <path d="M80 0C92 40 90 88 68 122" fill="none" stroke="#FFE0A3" stroke-width="15"/>
+    <path d="M60 0V124" fill="none" stroke="#FFF3EC" stroke-width="9"/>
+  </g>
+  <g fill="none" stroke="#12303F" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" opacity="0.26">
+    <path d="M60 6C29 6 8 31 8 56c0 27 31 46 52 58 21-12 52-31 52-58C112 31 91 6 60 6Z"/>
+    <path d="M44 116l6 10M76 116l-6 10"/>
+    <rect x="46" y="116" width="28" height="16" rx="6" fill="#E8D2B4"/>
+  </g>
+</svg>

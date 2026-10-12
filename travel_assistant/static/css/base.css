@@ -1,4 +1,4 @@
-/* 基础层：重置、排版基线、通用工具类（深色主题） */
+/* 基础层：重置、排版基线、通用工具类（v4 明亮度假风） */
 
 * {
     box-sizing: border-box;
@@ -10,13 +10,27 @@ body {
     font-family: var(--font-body);
     font-size: var(--fs-sm);
     line-height: 1.6;
-    background-color: var(--paper);
-    /* 调度台台面纹理：48px 方格网 + 320px 等高线，均为 SVG data-URI（非渐变，不占白名单）。
-     * 固定附着，滚动时台面不动、单据在其上走。 */
+    /* v4 天空底：顶部一段天蓝，往下**平滑淡出**到近白。
+     *
+     * v4.4 修：原来渐变停在 --sky-mid (#E4F2FB)、而底色是 --sky-low (#FBFBF8)，
+     * 两者不是同一个值 —— 渐变在 560px 处戛然而止，紧接着换成近白，
+     * 于是页面上出现一条横贯整页的硬分界线，恰好从 NO.1 卡片中间穿过去。
+     * 现在渐变自己收到 --sky-low：最后一站与底色同值，台阶在构造上就不存在了。
+     * 同时把带子从 560 拉到 760px，淡出发生在更长的距离上，
+     * 不再读成"上面一条蓝带 + 下面一片白"。
+     *
+     * 不用 v3 的牛皮纸方格网 + 等高线纹理 —— 那套传递的是"档案袋"。
+     * 这一条是页面唯一的装饰性渐变，探针 GRADIENT_WHITELIST 里也只剩它一项
+     * （v4.3 起白名单从 4 项收到 1 项）。 */
+    background-color: var(--sky-low);
     background-image:
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cg fill='none' stroke='%232B2118' stroke-opacity='0.07'%3E%3Cpath d='M0 90 C60 70 110 110 170 92 C230 74 270 96 320 80'/%3E%3Cpath d='M0 150 C70 128 120 168 190 148 C250 132 285 152 320 140'/%3E%3Cpath d='M0 220 C55 200 115 236 180 216 C245 198 280 220 320 206'/%3E%3Cpath d='M0 285 C65 268 125 300 195 282 C255 268 290 286 320 274'/%3E%3C/g%3E%3C/svg%3E"),
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M48 0H0v48' fill='none' stroke='%232B2118' stroke-opacity='0.05'/%3E%3C/svg%3E");
-    background-attachment: fixed, fixed;
+        url("/img/sky-clouds.svg"),
+        linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 38%, var(--sky-low) 100%);
+    background-repeat: no-repeat, no-repeat;
+    background-position: top center, top center;
+    /* 云在列表里排第一 = 画在渐变之上。两层都按容器宽等比缩放：
+     * 云层到不了 760 高也没关系，它本来就是稀疏的一片，不靠铺满。 */
+    background-size: 100% auto, 100% 760px;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -42,8 +56,33 @@ ul {
     margin: 0;
 }
 
+/* ---------- 页面底景（v4.5）：中段两侧的远山 ----------
+ *
+ * 贴在页面底部、只占左右两翼，中间大片留空 —— 表单/看板列永远落在透明区里。
+ * 两个页面共用：它们底部都接着同一条通栏海岸线，所以远山也该是同一幅。
+ *
+ * 用 bottom 定位而不是 top：画幅要长在页面尾部，而页面高度两页差好几倍
+ * （着陆页约 1700，结果页五千多），按 top 定位就没法对准了。
+ * 100% auto 让画幅随视口宽度等比缩放，山因此永远落在内容列之外
+ * （画幅 1440 宽时透明区是 x 300~1140，见素材里的说明）。
+ *
+ * 它是极淡的一层（比页面底色深一两档），只负责把卡片外侧那片平白填掉。 */
+.landing-page,
+.result-page {
+    background-image: url("/img/scene-shoreline.svg");
+    background-repeat: no-repeat;
+    background-position: bottom center;
+    background-size: 100% auto;
+}
+
 .hidden {
     display: none !important;
+}
+
+/* 选中的文字用海蓝淡底 —— 默认的浏览器蓝在这套配色里太扎眼 */
+::selection {
+    background: var(--sea-tint);
+    color: var(--ink);
 }
 
 .mono,
@@ -52,21 +91,23 @@ ul {
     font-variant-numeric: tabular-nums;
 }
 
-/* 滚动条：深色主题下默认滚动条太亮，压暗 */
+/* 滚动条：浅底上默认滚动条偏重，压淡 */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--paper);
+    background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-    border-radius: 4px;
-    background: var(--line-strong);
+    border: 3px solid transparent;
+    border-radius: var(--radius-pill);
+    background-clip: content-box;
+    background-color: var(--line-strong);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--muted);
+    background-color: var(--muted);
 }

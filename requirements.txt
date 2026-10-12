@@ -12,3 +12,7 @@ langchain==1.4.2
 langchain-core==1.6.3
 langchain-openai==1.6.2
 pytest==9.1.1
+
+# 探针专用（scripts/visual_acceptance.py、scripts/motion_evidence.py），不参与运行时而未固定。
+# 装完还要 `playwright install chromium`（浏览器二进制默认落在 ~/Library/Caches/ms-playwright）。
+#   uv pip install -p .venv/bin/python --index-url https://mirrors.aliyun.com/pypi/simple/ playwright

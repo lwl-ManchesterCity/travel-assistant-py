@@ -1,222 +1,356 @@
-/* 着陆页：FRONTEND_REDESIGN_PLAN 2.5「旅行委托单」
+/* 着陆页 v4：明亮度假风
  *
- * 整页就是一张委托单：删掉渐变 hero 与两个浮动装饰圆，标题左对齐。
- * section 标题改为「编号 + 名称」—— 编号真实表达"这是一个有顺序的流程"，不是装饰。
- * 栅格全部等宽，消除原 grid-four 的 1.25fr/1fr/1fr/0.6fr 造成的长短不一。
+ * v3 是"旅行委托单"：牛皮纸外壳 + 打孔列 + 撕缝线 + 锯齿边 + 机打流水号。
+ * 那套语言做得完整，但它讲的是"手续"—— 整页没有一件东西在讲"你要去的地方"。
+ * v4 全部拆掉，换成三件事：大字的目的地、天空与海的色、会笑的插画。
+ *
+ * 三版收敛：
+ *   v4     立风格 —— 天空底、白卡、56px 目的地大字
+ *   v4.1   降噪 —— 插画 6 张收到 2 张、描边由 3.4px 粗墨降到 1.4px 淡描、间距手感收拾
+ *   v4.2   分级 —— 票头搬出卡片成为开放主视觉、全页收进一条 --col-narrow 窄列
+ *
+ * 保留下来的 class 钩子（app.js 与探针都靠它们）：
+ *   .planner-shell / .form-card / .section-title / .grid-* / .field /
+ *   .preview-band* / .days-headline / .readonly-value / .sticker-* / .shell-scene /
+ *   .stamp-accept / .landing-page.is-loading
+ * 动效名与时长不能动：探针 motion_evidence.py 逐条核对
+ *   stamp-land-accept 250ms/+0、paper-feed 600ms —— 后者 v3 叫 feed-into-printer，
+ *   改过名没同步探针，探针因此一直在报"有动画没找到"。这一版改回 paper-feed 修好它。
  */
 
+/* ---------- 页面与容器 ---------- */
+
+/* v4.5：底部内边距归零 —— 页脚风景带就是页面的最后一块，
+ * 留着 32px 的话，海面之下会再露出一条页面底色，像图没铺满。 */
 .landing-page {
     min-height: 100vh;
-    padding: var(--sp-8) 0 var(--sp-8);
+    padding: var(--sp-8) 0 0;
 }
 
+/* v4 的外壳不再是"一张纸"，只是个定宽容器 —— 背景交给 body 的天空渐变 */
 .planner-shell {
+    position: relative;
     width: min(var(--shell-max), calc(100% - var(--shell-gutter) * 2));
     margin: 0 auto;
-    padding: var(--sp-6);
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card);
 }
 
-/* ---------- 单据抬头 ---------- */
+/* ---------- 单一内容列（v4.2 方案 B）----------
+ *
+ * 诊断：三张卡片原本各拉满 1180px，字段被撑到内容宽度的 4–10 倍
+ * （「总预算」里 35px 的数字放在 364px 的框里），而票头的大字和「NO.3 备注」
+ * 的文本框一样宽 —— 宽均匀糊在每一块上，没有一处是"该宽的"。
+ *
+ * 现在整页只有一条中轴：抬头、票头、表单都是 --col-narrow 居中。
+ * 宽度不再承担层级，层级交给字号、留白和"有没有卡片"。
+ *
+ * 两条边界：
+ *   - 页脚的 .shell-scene 不进窄列 —— 那是地平线不是内容，仍按 --shell-max 全宽，
+ *     顺带把整页横向"托住"；
+ *   - 窄屏下 min(…, 100%) 自然吃满，不需要额外断点。 */
+.doc-head,
+.preview-block,
+#trip-form {
+    width: min(var(--col-narrow), 100%);
+    margin-inline: auto;
+}
 
-/* 标题区左右两栏：左标题、右机打单据号。底部不再用 1px 实线——分隔交给下面的打孔线，
- * 两条线相距 20px 会像画重了。 */
+/* ---------- 顶栏 ---------- */
+
 .doc-head {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: var(--sp-5);
+    margin-bottom: var(--sp-6);
+    padding: 0 var(--sp-1);
 }
 
 .doc-head-main {
     min-width: 0;
 }
 
-.form-serial {
-    flex: none;
-    text-align: right;
-    font-family: var(--font-mono);
-    font-size: var(--fs-xs);
-    line-height: 1.8;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-}
-
-/* 打孔分隔线：与结果页票根同一画法（2px dashed + 两端半圆缺口），两页物料才呼应。
- * 缺口用 radial-gradient 画 —— 属渐变白名单，类名含 "perforation"，
- * 已同步登记在 scripts/visual_acceptance.py 的 GRADIENT_WHITELIST，否则探针会误报。
- * 负外边距把线顶到外壳边缘；缺口外半侧是纸色，落在同为纸色的页面背景上自然"缺失"，
- * 看上去就是从单据上切出来的缺口，因此这里不需要 overflow: hidden。 */
-.perforation {
-    position: relative;
-    border-top: 2px dashed var(--line-strong);
-    /* 外壳改为非对称内边距（左侧留出打孔存根区）后，负外边距也得跟着不对称，
-     * 否则打孔线会从左侧 24px 处起步，够不到单据边缘。 */
-    margin: var(--sp-5) calc(var(--sp-6) * -1) var(--sp-5) -40px;
-}
-
-.perforation-notch {
-    position: absolute;
-    top: -10px;
-    width: 20px;
-    height: 20px;
-    border-radius: var(--radius-pill);
-    background-image: radial-gradient(circle, var(--paper) 0 10px, transparent 10px);
-}
-
-.perforation-notch-left {
-    left: -10px;
-}
-
-.perforation-notch-right {
-    right: -10px;
-}
-
 .doc-title {
     font-family: var(--font-title);
-    font-size: var(--fs-xl);
+    font-size: var(--fs-2xl);
     font-weight: var(--fw-bold);
     letter-spacing: -0.02em;
     color: var(--ink);
 }
 
 .doc-subtitle {
-    margin-top: var(--sp-2);
+    margin-top: var(--sp-1);
     color: var(--muted);
     font-size: var(--fs-sm);
 }
 
-/* ---------- 分区：编号 + 名称 + 细线 ---------- */
+/* ---------- 卡片 ---------- */
 
+/* v4 靠阴影分层，不靠底色差 —— 卡片纯白浮在天空底上 */
 .form-card {
-    padding: var(--sp-5);
-    border: 1px solid var(--line);
+    position: relative;
+    padding: var(--sp-6);
     border-radius: var(--radius-lg);
     background: var(--card);
+    box-shadow: var(--shadow-card);
 }
 
+/* v4.1：卡间距 20 → 24px，压过字段间距 20px —— 组间呼吸必须大于组内，
+ * 否则三张卡片会糊成一坨（同一个毛病在 v3 的牛皮纸版上已经犯过一次）。 */
 .form-card + .form-card {
-    margin-top: var(--sp-4);
+    margin-top: var(--sp-6);
 }
+
+/* ---------- 分区标题 ---------- */
 
 .section-title {
     display: flex;
     align-items: center;
     gap: var(--sp-3);
-    margin-bottom: var(--sp-4);
-    font-size: var(--fs-md);
+    margin-bottom: var(--sp-5);
+    font-size: var(--fs-lg);
     font-weight: var(--fw-bold);
     color: var(--ink);
 }
 
-/* 编号改红底白字小印章：白字压 --stamp-red = 4.57，过 AA（方案 2.7 定死的用法）。
- * 角度 -2deg 与结果页「已出票」的 -4deg 错开，像随手盖的两枚章，而不是同一枚复用。 */
+/* 从"红印章"换成"海蓝药丸"：顺序仍然真实表达，但不再有公文味 */
 .section-no {
-    padding: 3px 8px;
-    border-radius: var(--radius-sm);
-    background: var(--stamp-red);
-    color: #fff;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    background: var(--sea-tint);
+    color: var(--sea);
     font-family: var(--font-mono);
     font-size: var(--fs-xs);
     font-weight: var(--fw-bold);
-    letter-spacing: 0.08em;
-    transform: rotate(-2deg);
+    letter-spacing: 0.06em;
 }
 
-/* 原为 2px 半透明紫蓝粗条；改为 1px 纸色细线 */
 .section-title::after {
     content: "";
     flex: 1;
     height: 1px;
     background: var(--line);
+    order: 1;
 }
 
-/* ---------- 栅格：全部等宽 ---------- */
+/* 三张卡的编号各走一支色：海蓝 → 松绿 → 深珊瑚。
+ * 给纵向滚动提供一条颜色节奏 —— 三张等宽白卡本来长得一模一样，
+ * 滚到一半会分不清自己在第几张，编号是最省地方的那个定位点。
+ * 三支都是「淡底 + 深字」的同一档，对比度分别 5.3 / 4.75 / 5.80，都过 AA，
+ * 不是随手挑的三支亮色。 */
+.form-card:nth-child(1) .section-no {
+    background: var(--sea-tint);
+    color: var(--sea);
+}
 
+.form-card:nth-child(2) .section-no {
+    background: var(--ok-tint);
+    color: var(--ok);
+}
+
+.form-card:nth-child(3) .section-no {
+    background: var(--coral-tint);
+    color: var(--coral-ink);
+}
+
+/* ---------- 票头：全页唯一的"大声说话" ----------
+ *
+ * v4.2 它从卡片 1 内部搬到这里，直接坐在天空渐变上（HTML 里位于 </header> 之后、
+ * <form> 之前）。原先它和三张卡片一样宽，「NO.3 备注」的文本框跟它等宽 ——
+ * 主角配角同宽的页面上，56px 的大字反而被埋掉了。
+ *
+ * 现在是"打开的一页"而不是"一张卡"：没有背景、没有阴影、没有圆角、没有分隔线。
+ * 层级靠两件事撑：
+ *   1. 字号 —— 56px 目的地 vs 14px 字段标签，全页唯一的 4 倍级差；
+ *   2. 留白 —— 下方 32px，压过卡片间距 24px（组间呼吸必须大于组内）。 */
+
+.preview-block {
+    /* 天空底上的次级文字：--muted #5B7686 在票头所在的天空段（≈#CEE9F8）上
+     * 只有 3.8:1，14px 够不到 AA 的 4.5:1。这里换深一档的墨蓝，5.8:1。
+     * 白卡上的次级文字仍用 --muted，不受影响。 */
+    --preview-muted: #3E5A6B;
+    margin-bottom: var(--sp-8);
+}
+
+.preview-label {
+    margin-bottom: var(--sp-2);
+    color: var(--preview-muted);
+    font-size: var(--fs-sm);
+}
+
+.preview-band {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-4);
+}
+
+.preview-band-route {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-3);
+    font-family: var(--font-title);
+    font-size: var(--fs-hero);
+    font-weight: var(--fw-bold);
+    line-height: 1.06;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+}
+
+.preview-band-city {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* 未填时是浅灰占位，不再是下划线。
+ * 原来是 --line-strong #B5CFDE —— 压在白卡上 1.7:1 已经够淡，搬到天空底上
+ * 更是直接糊进背景（1.4:1，等于看不见）。改成墨色 35% 透明，天空上合成 ≈#A0B6C2，
+ * 与原先白卡上的观感基本一致。这一态只在首帧 JS 跑起来之前露一下，随后就被真值替掉。 */
+.preview-band-city.is-placeholder {
+    color: rgba(18, 48, 63, 0.35);
+    letter-spacing: 0;
+}
+
+.preview-band-arrow {
+    flex: none;
+    font-family: var(--font-body);
+    font-weight: var(--fw-regular);
+    font-size: 32px;
+    color: var(--sea);
+}
+
+.preview-band-facts {
+    flex: none;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-md);
+    font-weight: var(--fw-bold);
+    color: var(--sea);
+    white-space: nowrap;
+}
+
+/* 行程摘要句：把已填内容念成一句可以想象的话 */
+.preview-sentence {
+    margin-top: var(--sp-3);
+    color: var(--preview-muted);
+    font-size: var(--fs-sm);
+    overflow-wrap: anywhere;
+}
+
+/* ---------- 栅格 ---------- */
+
+/* v4.1：字段间距 16 → 20px。16px 时同一行相邻两个输入框挤得发闷，
+ * 20px 与卡片内边距 24px 形成 20/24 的呼吸配比。 */
 .grid-four,
 .grid-three,
 .grid-two {
     display: grid;
-    gap: var(--sp-4);
+    gap: var(--sp-5);
 }
 
+/* 760px 窄列下 4 列每格只剩 163px，装不下日期控件（2026/10/11 周日 + 图标 ≈ 156px），
+ * 故 4 列→2 列、3 列→2 列。1100px 那条断点因此成了冗余（值相同），保留无害。 */
 .grid-four {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .grid-three {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .grid-two {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* 兴趣 chip 独占整行：原布局里它挤在 grid-three 的一格里，chip 会被压得很难看 */
+/* 兴趣 chip 独占整行 */
 .field-wide {
     grid-column: 1 / -1;
 }
 
-/* ---------- 辅助创意 A：委托单左缘打孔列（反馈单第二节） ---------- */
+/* ---------- 旅行天数：读作读数，不读作第 4 个输入框 ---------- */
 
-/* 外壳左侧留出存根区：打孔列 + 撕缝线。右侧内边距不变，故是「非对称」内边距，
- * 上方 .perforation 的负外边距已同步改为不对称。 */
-.planner-shell {
-    position: relative;
-    padding-left: 40px;
+.days-headline {
+    order: 2;
+    display: flex;
+    align-items: center;
+    perspective: 240px; /* 天数翻牌的 3D 透视 */
 }
 
-/* 打孔列的孔：纸色圆压在白卡上，看上去像打穿的孔洞。
- * radial-gradient 属渐变白名单，类名 .punch-holes 已登记在探针 GRADIENT_WHITELIST。
- * 上下各让开 12px —— 外壳圆角半径就是 12px，孔列不参与圆角区域。 */
-.punch-holes {
-    position: absolute;
-    top: 12px;
-    bottom: 12px;
-    left: 0;
-    width: 10px;
-    background-image: radial-gradient(circle at 0 50%, var(--paper) 0 5px, transparent 5px);
-    background-size: 10px 28px;
-    background-repeat: repeat-y;
-    pointer-events: none;
+/* 分隔线排到读数之前（::after 生成在末位，用 order 提前） */
+.section-title::after {
+    order: 1;
 }
 
-/* 孔列右侧 12px 的撕缝线：与顶部打孔线一起，把它左边那条读成「存根联」 */
-.punch-tear {
-    position: absolute;
-    top: 12px;
-    bottom: 12px;
-    left: 22px;
-    border-left: 1px dashed var(--line);
-    pointer-events: none;
-}
-
-/* ---------- 第 1 幕 · 受理章（提交瞬间盖下） ---------- */
-
-/* 章压在提交按钮右端，不挡点击。角度 -6deg 与结果页「已出票」的 -4deg、
- * 以及 section 编号印章的 -2deg 三者错开，像三枚不同的章。 */
-.stamp-accept {
-    position: absolute;
-    top: 10px;
-    right: 24px;
-    padding: 4px 12px;
-    border-radius: var(--radius-sm);
-    background: var(--stamp-red);
-    color: #fff;
-    font-family: var(--font-mono);
-    font-size: var(--fs-xs);
+.days-headline .readonly-value {
+    width: auto;
+    height: var(--control-h); /* 探针判据 2：按 .readonly-value 类名收控件高度，必须 44 */
+    padding: 0;
+    border: 0;
+    background: transparent;
+    justify-content: flex-end;
+    color: var(--sea);
+    font-size: var(--fs-xl);
     font-weight: var(--fw-bold);
-    letter-spacing: 0.16em;
-    transform: rotate(-6deg);
-    opacity: 0;
-    pointer-events: none;
+}
+
+/* ---------- 日期的星期读数（app.js 的 syncDateFieldDisplay 写） ---------- */
+
+.date-weekday {
+    margin-left: var(--sp-2);
+    color: var(--muted);
+    font-size: var(--fs-xs);
+}
+
+/* ---------- 两城输入框的地理前缀 ---------- */
+
+/* 出发/到达各一枚定位针。图标走 SVG data-URI，不用 emoji、不用字符 —— 探针判据 4 扫全目录。 */
+.input-place {
+    padding-left: 40px;
+    background-repeat: no-repeat;
+    background-position: left 14px center;
+    background-size: 16px 16px;
+}
+
+/* 出发：海蓝 */
+.input-place-origin {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.6c-2.5 0-4.5 2-4.5 4.5 0 3.4 4.5 8.3 4.5 8.3s4.5-4.9 4.5-8.3c0-2.5-2-4.5-4.5-4.5z' fill='none' stroke='%230B6BA8' stroke-width='1.4'/%3E%3Ccircle cx='8' cy='6.1' r='1.6' fill='%230B6BA8'/%3E%3C/svg%3E");
+}
+
+/* 到达：日落珊瑚 */
+.input-place-dest {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.6c-2.5 0-4.5 2-4.5 4.5 0 3.4 4.5 8.3 4.5 8.3s4.5-4.9 4.5-8.3c0-2.5-2-4.5-4.5-4.5z' fill='none' stroke='%23D9482B' stroke-width='1.4'/%3E%3Ccircle cx='8' cy='6.1' r='1.6' fill='%23D9482B'/%3E%3C/svg%3E");
+}
+
+/* ---------- 提交区 ---------- */
+
+.form-ticket-note {
+    margin-top: var(--sp-5);
+    text-align: center;
+    color: var(--muted);
+    font-size: var(--fs-xs);
 }
 
 .action-wrap {
     position: relative;
+}
+
+/* 受理章：v3 的红橡皮章 → v4 一枚海蓝药丸徽章，骑在按钮右上角。
+ * 动效名与时长不能动（motion_evidence.py 逐条核对 stamp-land-accept 250ms/+0）。 */
+.stamp-accept {
+    position: absolute;
+    top: -12px;
+    right: var(--sp-5);
+    padding: 5px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--sea);
+    color: #fff;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.1em;
+    box-shadow: var(--glow-blue);
+    transform: rotate(-4deg);
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* 默认（含 reduced-motion）：直接是终态，不播动画 */
@@ -224,79 +358,94 @@
     opacity: 1;
 }
 
-/* ---------- 委托单被吸入打印机（提交 → 等待期过渡） ----------
- *
- * 整张委托单缩小 + 上移 + 淡出，模拟被顶部打印口吸进去的感觉。
- * 动画结束后保持终态（forwards），等后端返回后 JS 切到结果页，
- * 着陆页 hidden 掉时这个状态自然消失。 */
-@media (prefers-reduced-motion: no-preference) {
-    .landing-page.is-loading .planner-shell {
-        animation: feed-into-printer 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-
-    @keyframes feed-into-printer {
-        0% {
-            transform: scale(1) translateY(0);
-            opacity: 1;
-        }
-        100% {
-            transform: scale(0.92) translateY(-24px);
-            opacity: 0.4;
-        }
-    }
-}
+/* ---------- 第一幕 · 受理章落下 ---------- */
 
 @media (prefers-reduced-motion: no-preference) {
-    /* 从又大又斜、半透明处砸下来并回弹，模拟落章手感 */
     .landing-page.is-loading .stamp-accept {
         animation: stamp-land-accept var(--dur-stamp) var(--ease-stamp) both;
     }
 
     @keyframes stamp-land-accept {
         from {
-            transform: scale(1.6) rotate(-12deg);
+            transform: scale(1.5) rotate(-10deg);
             opacity: 0;
         }
         to {
-            transform: scale(1) rotate(-6deg);
+            transform: scale(1) rotate(-4deg);
             opacity: 1;
         }
     }
 }
 
-/* ---------- 等宽：把「数据一眼可辨」落到着陆页（方案 2.3） ---------- */
+/* ---------- 第二幕 · 委托单被吸进去 ----------
+ *
+ * v3 叫 feed-into-printer，而探针 motion_evidence.py 找的是 paper-feed ——
+ * 改名时没同步探针，探针因此一直在报"有动画没找到，无法截帧"。
+ * 这一版改回 paper-feed，动效时长与缓动保持原样（0.6s / cubic-bezier(0.4, 0, 0.2, 1)）。 */
+@media (prefers-reduced-motion: no-preference) {
+    .landing-page.is-loading .planner-shell {
+        animation: paper-feed 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
 
-/* 「旅行天数」的数字加粗。基础样式在 controls.css，这里只补字重，
- * 不改那边的共用规则（反馈单红线） */
-.readonly-value {
-    font-weight: var(--fw-bold);
+    @keyframes paper-feed {
+        0% {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+        100% {
+            transform: scale(0.94) translateY(-20px);
+            opacity: 0.35;
+        }
+    }
 }
 
-/* 「总预算」用户输入数字时即等宽显示 */
-.input-mono {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
+/* ================================================================
+ * 插画（v4.1）：从"六张贴纸散落"收到"两个控制点"
+ *
+ * 上一版在页面上撒了六张手帐贴纸（抬头气球、卡边行李箱与相机、票头飞机、
+ * NO.2 三格纸条、页脚风景）。问题不是画得不好，是**太多、太抢**：
+ * 两张骑在卡边上压住了输入框的日历图标和主按钮，飞机挤在城市名中间，
+ * 整页读起来粗糙。同时厚描边卡通本身也偏幼。
+ *
+ * v4.1 的处理：
+ *   1. 数量 6 → 2 —— 只留抬头一枚小气球、页脚一幅远景；
+ *   2. 画风从"3.4px 纯墨粗描 + 饱和填充"降到"1.4px 淡描 + 同族浅色"，
+ *      对比压低，读起来像远处的一层景，不跟表单抢注意力。
+ *
+ * 素材在 static/img/ 下，独立 SVG、无渐变 —— 探针判据 1 读计算样式里
+ * backgroundImage 的字符串，出现 gradient 字样即判装饰性渐变。
+ * 全部 pointer-events: none + aria-hidden：纯装饰，不截点击、不进读屏。
+ * ================================================================ */
+
+/* 抬头：一枚小气球。64px —— 上一版 86px 会把整条抬头撑高，喧宾夺主 */
+.sticker-balloon {
+    flex: none;
+    width: 64px;
+    height: 73px;
+    transform: rotate(-5deg);
+    pointer-events: none;
+    filter: drop-shadow(0 6px 12px rgba(17, 90, 140, 0.12));
 }
 
-/* 日期格式提示：原生 date input 的字体由浏览器渲染，不强改，
- * 于是把等宽的存在感放到 label 这一行的右端。
- * 用 float 而不是 flex，避免动 controls.css 里 .field label 的共用规则。 */
-.label-hint {
-    float: right;
-    font-family: var(--font-mono);
-    font-size: var(--fs-xs);
-    font-weight: var(--fw-regular);
-    letter-spacing: 0.04em;
-}
+/* ---------- 页脚远景 ---------- */
 
-/* 提交按钮上方的机打小字。星号是票据机打体的特征字符，不是装饰。 */
-.form-ticket-note {
-    margin-top: var(--sp-5);
-    text-align: center;
-    font-family: var(--font-mono);
-    font-size: var(--fs-xs);
-    letter-spacing: 0.06em;
-    color: var(--muted);
+/* v4.5：通栏。它现在是 .landing-page 的直接子元素（HTML 里在 .planner-shell 之外），
+ * 宽度吃满整个视口 —— 原来关在 1180 的外壳里，1440 视口下左右各剩 130px 的平白，
+ * 底边读起来是"飘着一条带子"而不是"一片地"。
+ *
+ * 铺法仍是 auto 100% + repeat-x，所以画幅必须比任何常见视口都宽：
+ * 换成 2560×130 的 scene-travel-bleed.svg。用 1180 那版会直接在 x=1180 露接缝。
+ * 画幅高 130，其中顶部约 35 是透明的（不画天空，让页面底色透上来），
+ * 所以真正的地景约 95px —— 比原来的 44px 厚了一倍多，底边有了重量。
+ * 容器高与画幅高等值，auto 100% 才是 1:1 不缩放；改高度就要连画幅一起重算。 */
+.shell-scene {
+    height: 230px;
+    margin-top: var(--sp-6);
+    background-image: url("/img/scene-travel-bleed.svg");
+    background-repeat: repeat-x;
+    background-position: left bottom;
+    background-size: auto 100%;
+    pointer-events: none;
 }
 
 /* ---------- 响应式 ---------- */
@@ -310,12 +459,7 @@
 
 @media (max-width: 720px) {
     .landing-page {
-        padding: var(--sp-4) 0 var(--sp-4);
-    }
-
-    .planner-shell {
-        width: calc(100% - var(--sp-3) * 2);
-        padding: var(--sp-4);
+        padding: var(--sp-5) 0 var(--sp-5);
     }
 
     .form-card {
@@ -328,266 +472,38 @@
         grid-template-columns: minmax(0, 1fr);
     }
 
-    /* 外壳内边距在此断点缩到 --sp-4；左侧存根区宽度保持 40px，
-     * 打孔列的负外边距也跟着改，孔列在窄屏照常可见（反馈单验收 4） */
-    .planner-shell {
-        padding-left: 40px;
-    }
-
-    .perforation {
-        margin: var(--sp-4) calc(var(--sp-4) * -1) var(--sp-4) -40px;
-    }
-
+    /* 抬头折成单列，气球让位 */
     .doc-head {
         flex-direction: column;
-        gap: var(--sp-2);
-    }
-
-    .form-serial {
-        text-align: left;
-    }
-}
-
-/* ---------- FRONTEND_FEEDBACK_LANDING_BOLD ----------
- *
- * 输入阶段与结果阶段此前质感断裂：结果页已是票据宇宙，着陆页还是白表单。
- * 这一节把着陆页拉到同一水准，同时把色彩配额 v2.1 放开的那一项用掉
- * （线路色可用于「旅行偏好」chips，仍禁用于按钮/正文/边框）。 */
-
-/* ---------- 修复 1：票头实时预览 ---------- */
-
-.preview-band {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--sp-4);
-    min-height: 72px;
-    margin-bottom: var(--sp-5);
-    padding: var(--sp-3) var(--sp-5);
-    border-radius: var(--radius);
-    background: var(--rail-blue);
-    color: #fff;
-}
-
-.preview-band-route {
-    min-width: 0;
-    display: flex;
-    align-items: baseline;
-    gap: var(--sp-2);
-    font-family: var(--font-title);
-    font-size: 32px;
-    font-weight: var(--fw-bold);
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-}
-
-.preview-band-city {
-    min-width: 0;
-    overflow-wrap: anywhere;
-}
-
-/* 未填时是下划线占位，白色 50%（占位符不承载信息，不按正文对比度要求） */
-.preview-band-city.is-placeholder {
-    opacity: 0.5;
-    letter-spacing: 0.06em;
-}
-
-.preview-band-arrow {
-    flex: none;
-    font-family: var(--font-mono);
-    font-weight: var(--fw-regular);
-    font-size: 24px;
-    opacity: 0.85;
-}
-
-.preview-band-facts {
-    flex: none;
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: var(--fs-md);
-    font-weight: var(--fw-bold);
-    white-space: nowrap;
-}
-
-/* 「待出票」骑跨色带下缘，和结果页的「已出票」构成"委托 → 出票"的状态叙事。
- * 两枚章不混用：这枚只在着陆页出现，且只在预览色带上。 */
-.preview-stamp {
-    position: absolute;
-    left: 50%;
-    bottom: -13px;
-    display: inline-flex;
-    align-items: center;
-    height: 26px;
-    padding: 0 12px;
-    border-radius: var(--radius-sm);
-    background: var(--stamp-red);
-    color: #fff;
-    font-size: var(--fs-xs);
-    font-weight: var(--fw-bold);
-    letter-spacing: 0.16em;
-    white-space: nowrap;
-    transform: translateX(-50%) rotate(-3deg);
-}
-
-/* ---------- 修复 2.2：外壳顶部锯齿撕裂边 ----------
- * 齿色取页面底色 --paper，齿纹探出外壳、咬进页面，像从整卷票纸上撕下来的一张。
- * 白名单 #6 .form-zigzag。 */
-.form-zigzag {
-    position: absolute;
-    top: -8px;
-    left: 0;
-    right: 0;
-    height: 8px;
-    background-repeat: repeat-x;
-    background-size: 16px 8px;
-    background-position: 0 0, 8px 0;
-    background-image:
-        linear-gradient(135deg, var(--card) 50%, transparent 50%),
-        linear-gradient(225deg, var(--card) 50%, transparent 50%);
-    pointer-events: none;
-}
-
-/* ---------- 修复 3：兴趣 chips 站点化 ----------
- * 五个 chip 按线路色循环，未选中=色边色字、选中=色底白字。
- * 选择器比 controls.css 的 .choice-item:has(input:checked) 高一级（多一个 .choice-group），
- * 否则那三条规则会把这里的线路色盖回蓝色。 */
-.choice-group .choice-item:nth-child(4n+1) { --line-color: var(--rail-blue); }
-.choice-group .choice-item:nth-child(4n+2) { --line-color: var(--line-emerald); }
-.choice-group .choice-item:nth-child(4n+3) { --line-color: var(--line-amber); }
-.choice-group .choice-item:nth-child(4n+4) { --line-color: var(--line-cyan); }
-
-.choice-group .choice-item {
-    border-color: var(--line-color);
-    color: var(--line-color);
-}
-
-.choice-group .choice-item:hover {
-    border-color: var(--line-color);
-    color: var(--line-color);
-}
-
-.choice-group .choice-item:has(input:checked) {
-    border-color: var(--line-color);
-    background: var(--line-color);
-    color: #fff;
-}
-
-/* ---------- 修复 4：提交按钮出票化 ---------- */
-
-/* 迷你条码复用 .ticket-barcode 这个类名：白名单按类名子串认，改名就得多占一个名额，
-   而红线把白名单封顶在六个。这里只压扁尺寸、改成白色 60%。 */
-.primary-button .ticket-barcode {
-    width: 20px;
-    min-height: 0;
-    align-self: center;
-    height: 16px;
-    margin-right: var(--sp-2);
-    background-image: repeating-linear-gradient(
-        90deg, rgba(255, 255, 255, 0.6) 0 2px, transparent 2px 5px
-    );
-}
-
-/* 按钮内要横排「条码 + 文案」，故用 flex（原来只有文字，块级也够） */
-.primary-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* 375 档：色带压到 64px，城市对降到 24px，右侧数据折到第二行（FRONTEND_FEEDBACK_LANDING_BOLD 修复 1） */
-@media (max-width: 720px) {
-    .preview-band {
-        min-height: 64px;
-        flex-direction: column;
         align-items: flex-start;
-        gap: var(--sp-1);
+        gap: var(--sp-3);
     }
 
-    .preview-band-route {
-        font-size: 24px;
-    }
-
-    .preview-band-arrow {
-        font-size: 18px;
-    }
-}
-
-/* ---------- 结构层：让委托单「看得出是另一版」，不只是换色 ---------- */
-
-/* 1. 分区幽灵编号：右上角 96px 等宽淡数字，表达流程顺序的第二重线索。
- * 计数器挂在 shell 上，form-card 自增；纯 CSS，不动 HTML。 */
-.planner-shell {
-    counter-reset: form-sec;
-}
-
-.form-card {
-    position: relative;
-    counter-increment: form-sec;
-}
-
-.form-card::after {
-    content: "0" counter(form-sec);
-    position: absolute;
-    top: var(--sp-2);
-    right: var(--sp-4);
-    font-family: var(--font-mono);
-    font-size: 96px;
-    font-weight: var(--fw-bold);
-    line-height: 1;
-    color: var(--ink);
-    opacity: 0.05;
-    pointer-events: none;
-}
-
-/* 2. 票头放大成出发屏：城市对 48px、色带加高，右端压一条竖条码（SVG，非渐变） */
-.preview-band {
-    min-height: 108px;
-    padding-right: 72px;
-}
-
-.preview-band-route {
-    font-size: 48px;
-}
-
-.preview-band::after {
-    content: "";
-    position: absolute;
-    top: 14px;
-    bottom: 14px;
-    right: 20px;
-    width: 30px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='80'%3E%3Cg fill='%23FFFFFF' fill-opacity='0.55'%3E%3Crect x='0' width='2' height='80'/%3E%3Crect x='4' width='1' height='80'/%3E%3Crect x='7' width='3' height='80'/%3E%3Crect x='12' width='1' height='80'/%3E%3Crect x='15' width='2' height='80'/%3E%3Crect x='19' width='1' height='80'/%3E%3Crect x='22' width='3' height='80'/%3E%3Crect x='27' width='1' height='80'/%3E%3C/g%3E%3C/svg%3E");
-    background-repeat: repeat-y;
-    pointer-events: none;
-}
-
-/* 3. 提交区撕缝：按钮上方横一条打孔线，把「填写区」和「出票动作」撕开 */
-.action-wrap::before {
-    content: "";
-    position: absolute;
-    top: -18px;
-    left: calc(var(--sp-5) * -1);
-    right: calc(var(--sp-5) * -1);
-    border-top: 2px dashed var(--line-strong);
-    pointer-events: none;
-}
-
-@media (max-width: 720px) {
-    .preview-band {
-        min-height: 64px;
-        padding-right: var(--sp-5);
-    }
-
-    .preview-band::after {
+    .sticker-balloon {
         display: none;
     }
 
-    .preview-band-route {
-        font-size: 24px;
+    /* 城市对降到 32px，右侧数据折到第二行 */
+    .preview-band {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--sp-2);
     }
 
-    .form-card::after {
-        font-size: 64px;
+    .preview-band-route {
+        font-size: var(--fs-2xl);
+    }
+
+    .preview-band-arrow {
+        font-size: 22px;
+    }
+
+    .days-headline .readonly-value {
+        font-size: var(--fs-lg);
+    }
+
+    .shell-scene {
+        height: 150px;
+        margin-top: var(--sp-6);
     }
 }

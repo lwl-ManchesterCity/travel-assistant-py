@@ -14,17 +14,19 @@
     min-width: 0; /* 栅格子项默认不肯缩到内容宽度以下，hint 长文案会顶破卡片 */
 }
 
+/* v4：标签统一到 --fs-sm/--ink/500。浅底上 12px 的灰标签太弱，
+ * 而且 v3 那套「必填升一级、可选压一档」的层级差在明亮配色下不再需要。 */
 .field label {
     display: block;
     margin-bottom: var(--sp-2);
-    font-size: var(--fs-xs);
-    font-weight: var(--fw-bold);
-    color: var(--muted);
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    color: var(--ink);
 }
 
 .field label .required {
     margin-right: var(--sp-1);
-    color: var(--stamp-red); /* 原 #f16053 对白仅 3.21，不达 AA；此处 4.57 */
+    color: var(--coral);
 }
 
 .field-hint {
@@ -37,8 +39,10 @@
     overflow-wrap: anywhere; /* 长地名不再顶破卡片 */
 }
 
-/* ---------- 文本类控件：白底 + 1px 描边 + 8px 圆角 + 44px 高 ---------- */
+/* ---------- 文本类控件：白底 + 1px 描边 + 14px 圆角 + 44px 高 ---------- */
 
+/* v4.1 加了过场与悬停：上一版输入框是"死"的，鼠标划过去毫无反馈，
+ * 这是"粗糙"感的一大来源。过场压在 0.16s —— 快到不觉得在等，慢到看得出变化。 */
 .input,
 .textarea,
 .readonly-value {
@@ -49,6 +53,13 @@
     background: var(--card);
     color: var(--ink);
     font-size: var(--fs-sm);
+    transition: border-color 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out),
+                background-color 0.16s var(--ease-out);
+}
+
+.input:hover:not(:disabled):not(:focus),
+.textarea:hover:not(:disabled):not(:focus) {
+    border-color: var(--line-strong);
 }
 
 /* 单行控件固定 44px。不能只给 min-height 让内容撑：
@@ -67,7 +78,7 @@
 .input:focus,
 .textarea:focus {
     outline: none;
-    border-color: var(--rail-blue);
+    border-color: var(--sea);
     box-shadow: var(--focus-ring);
 }
 
@@ -117,7 +128,7 @@
 select.input {
     appearance: none;
     -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23665843' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%2312303F' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 14px center;
     padding-right: 38px;
@@ -146,7 +157,7 @@ input[type="date"] {
     cursor: pointer;
     /* Chrome 默认强调蓝换成票据蓝。这个值同时作用于输入框内被选中的日期片段
      * 和日历弹层里选中的那一天 —— 弹层尺寸改不了，但至少颜色不再和设计系统打架。 */
-    accent-color: var(--rail-blue);
+    accent-color: var(--sea);
     /* 日期是数据，用等宽：与 label 右侧的 YYYY/MM/DD 提示同一套字 */
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
@@ -214,14 +225,14 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     flex: none;
     width: 18px;
     height: 18px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Crect x='2.25' y='3.75' width='13.5' height='12' rx='2.25' fill='none' stroke='%23665843' stroke-width='1.5'/%3E%3Cline x1='2.25' y1='7.5' x2='15.75' y2='7.5' stroke='%23665843' stroke-width='1.5'/%3E%3Cline x1='6' y1='1.7' x2='6' y2='4.6' stroke='%23665843' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='12' y1='1.7' x2='12' y2='4.6' stroke='%23665843' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Crect x='2.25' y='3.75' width='13.5' height='12' rx='2.25' fill='none' stroke='%2312303F' stroke-width='1.5'/%3E%3Cline x1='2.25' y1='7.5' x2='15.75' y2='7.5' stroke='%2312303F' stroke-width='1.5'/%3E%3Cline x1='6' y1='1.7' x2='6' y2='4.6' stroke='%2312303F' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='12' y1='1.7' x2='12' y2='4.6' stroke='%2312303F' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: center;
     background-size: 18px 18px;
 }
 
 .date-trigger[aria-expanded="true"] {
-    border-color: var(--rail-blue);
+    border-color: var(--sea);
     box-shadow: var(--focus-ring);
 }
 
@@ -270,7 +281,7 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 .date-nav:hover:not(:disabled) {
-    border-color: var(--rail-blue);
+    border-color: var(--sea);
 }
 
 .date-nav:disabled {
@@ -326,8 +337,8 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 .date-cell:hover:not(:disabled) {
-    border-color: var(--rail-blue);
-    color: var(--rail-blue);
+    border-color: var(--sea);
+    color: var(--sea);
 }
 
 .date-cell.is-outside {
@@ -341,8 +352,8 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 .date-cell.is-selected {
-    border-color: var(--rail-blue);
-    background: var(--rail-blue);
+    border-color: var(--sea);
+    background: var(--sea);
     color: #fff;
     font-weight: var(--fw-bold);
 }
@@ -362,23 +373,28 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     padding-top: 2px;
 }
 
+/* v4.1：字号 12 → 14px（浅底上点选目标不该那么小），描边降一档，
+ * 悬停给一层极淡的海蓝底 —— 点得动的东西要看得出来点得动。 */
 .choice-item {
     display: inline-flex;
     align-items: center;
-    padding: 8px 14px;
-    border: 1px solid var(--line-strong);
+    padding: 9px 16px;
+    border: 1px solid var(--line);
     border-radius: var(--radius-pill);
     background: var(--card);
-    color: var(--muted);
-    font-size: var(--fs-xs);
+    color: var(--ink);
+    font-size: var(--fs-sm);
     font-weight: var(--fw-medium);
     cursor: pointer;
     user-select: none;
+    transition: background-color 0.16s var(--ease-out), border-color 0.16s var(--ease-out),
+                color 0.16s var(--ease-out);
 }
 
 .choice-item:hover {
-    border-color: var(--rail-blue);
-    color: var(--rail-blue);
+    border-color: var(--sea);
+    background: var(--sea-tint);
+    color: var(--sea);
 }
 
 /* 选中态：蓝底白字。复选框本体保留在 DOM 里（可聚焦、可键盘操作），只是不显示原生方框 */
@@ -391,8 +407,8 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 .choice-item:has(input:checked) {
-    border-color: var(--rail-blue);
-    background: var(--rail-blue);
+    border-color: var(--sea);
+    background: var(--sea);
     color: #fff;
 }
 
@@ -407,22 +423,23 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     margin-top: var(--sp-6);
 }
 
+/* v4：药丸 + 加高 + 蓝调投影 —— 主行动是整页唯一"发亮"的东西 */
 .primary-button {
     width: 100%;
-    min-height: 48px;
-    padding: 0 var(--sp-5);
-    border: 1px solid var(--rail-blue);
-    border-radius: var(--radius);
-    background: var(--rail-blue);
+    min-height: 52px;
+    padding: 0 var(--sp-6);
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--sea);
     color: #fff;
     font-size: var(--fs-md);
     font-weight: var(--fw-bold);
+    box-shadow: var(--glow-blue);
     cursor: pointer;
 }
 
 .primary-button:hover:not(:disabled) {
-    background: var(--rail-blue-dark);
-    border-color: var(--rail-blue-dark);
+    background: var(--sea-dark);
 }
 
 .primary-button:disabled {
@@ -443,8 +460,8 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 .ghost-button:hover {
-    border-color: var(--rail-blue);
-    color: var(--rail-blue);
+    border-color: var(--sea);
+    color: var(--sea);
 }
 
 .collapse-button {
@@ -459,8 +476,8 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 .collapse-button:hover {
-    border-color: var(--rail-blue);
-    color: var(--rail-blue);
+    border-color: var(--sea);
+    color: var(--sea);
 }
 
 /* ---------- 进度与状态 ---------- */
@@ -481,67 +498,64 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     border: 1px solid var(--line);
     border-radius: var(--radius-lg);
     background: var(--card);
-    box-shadow: 0 10px 26px rgba(43, 33, 24, 0.10);
+    /* v4：原来是 v3 的暖褐投影 rgba(43, 33, 24, .10)，落在天空底上发脏。
+     * 换成 --shadow-pop —— v4 的投影一律带蓝调，页面里不该再出现暖褐。 */
+    box-shadow: var(--shadow-pop);
 }
 
-/* 打印机本体：出票口、从口里持续往下走的票带、来回扫的打印头 */
+/* 等待区（v4）：v3 是一台"出票机"—— 票带用 repeating-linear-gradient 画齿孔、
+ * 打印头用 linear-gradient 画光带。这两条正是探针判据 1 报的 4 处违规里的 2 处
+ * （白名单封顶六项、不得再增，所以只能改画法不能加进白名单）。
+ * v4 换成一只绕着虚线航道盘旋的小飞机：保住"正在为你跑"的动感，
+ * 航道用 border: dashed 画，不是渐变，两条违规一并清掉。 */
 .printer {
     position: relative;
+    display: grid;
+    place-items: center;
     height: 96px;
     overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    background: var(--paper);
+    border-radius: var(--radius-lg);
+    background: var(--sea-tint);
 }
 
 .printer-slot {
     position: absolute;
-    top: 10px;
-    left: 14px;
-    right: 14px;
-    height: 6px;
-    border-radius: var(--radius-pill);
-    background: rgba(43, 33, 24, 0.16);
+    inset: 12px;
+    border: 2px dashed var(--sea);
+    border-radius: 50%;
+    opacity: 0.35;
 }
 
-/* 票带上的齿孔每 22 px 一组，位移一个周期正好接回原点，看不出接缝 */
-.printer-tape {
-    position: absolute;
-    top: 22px;
-    left: 18px;
-    right: 18px;
-    bottom: -28px;
-    border: 1px dashed var(--line-strong);
-    border-top: none;
-    border-radius: 0 0 var(--radius) var(--radius);
-    background:
-        repeating-linear-gradient(180deg,
-            rgba(43, 33, 24, 0.00) 0 10px,
-            rgba(43, 33, 24, 0.14) 10px 12px,
-            rgba(43, 33, 24, 0.00) 12px 22px),
-        var(--card-elevated);
-    animation: ticket-crawl 1.6s linear infinite;
-}
-
-@keyframes ticket-crawl {
-    from { background-position: 0 0, 0 0; }
-    to { background-position: 0 22px, 0 0; }
-}
-
+.printer-tape,
 .printer-head {
-    position: absolute;
-    top: 26px;
-    left: 18px;
-    right: 18px;
-    height: 3px;
-    border-radius: var(--radius-pill);
-    background: linear-gradient(90deg, transparent, var(--rail-blue), transparent);
-    animation: head-sweep 1.15s ease-in-out infinite alternate;
+    /* v3 的两条装饰渐变在这里退场，元素保留以免 HTML 结构变动 */
+    display: none;
 }
 
-@keyframes head-sweep {
-    from { transform: translateY(0) scaleX(0.84); opacity: 0.5; }
-    to { transform: translateY(50px) scaleX(1); opacity: 1; }
+.printer-plane {
+    position: relative;
+    width: 46px;
+    height: 46px;
+    transform: rotate(-8deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .printer-slot {
+        animation: ring-spin 18s linear infinite;
+    }
+
+    .printer-plane {
+        animation: plane-bob 2.4s ease-in-out infinite;
+    }
+
+    @keyframes ring-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    @keyframes plane-bob {
+        0%, 100% { transform: rotate(-8deg) translateY(0); }
+        50% { transform: rotate(-8deg) translateY(-6px); }
+    }
 }
 
 .printer-readout {
@@ -565,7 +579,8 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     height: 6px;
     overflow: hidden;
     border-radius: var(--radius-pill);
-    background: rgba(43, 33, 24, 0.10);
+    /* v3 的暖褐底（rgba(43,33,24,.10)）→ v4 的浅蓝分隔色 */
+    background: var(--line);
 }
 
 .progress-fill {
@@ -600,16 +615,16 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 .status-text.error {
-    color: var(--stamp-red-ink);
+    color: var(--coral-ink);
 }
 
 .error-box {
     margin-top: var(--sp-4);
     padding: var(--sp-3) var(--sp-4);
-    border: 1px solid var(--stamp-red);
+    border: 1px solid var(--coral);
     border-radius: var(--radius);
-    background: var(--stamp-red-tint);
-    color: var(--stamp-red-ink);
+    background: var(--coral-tint);
+    color: var(--coral-ink);
     font-size: var(--fs-sm);
     line-height: 1.7;
 }
@@ -621,10 +636,10 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     z-index: 10001;
     max-width: 420px;
     padding: var(--sp-3) var(--sp-4);
-    border: 1px solid var(--stamp-red);
+    border: 1px solid var(--coral);
     border-radius: var(--radius);
-    background: var(--stamp-red-tint);
-    color: var(--stamp-red-ink);
+    background: var(--coral-tint);
+    color: var(--coral-ink);
     font-size: var(--fs-sm);
     line-height: 1.7;
     box-shadow: var(--shadow-pop);
@@ -654,8 +669,8 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     height: 18px;
     flex: none;
     border-radius: var(--radius-pill);
-    border: 3px solid var(--rail-blue-tint);
-    border-top-color: var(--rail-blue);
+    border: 3px solid var(--sea-tint);
+    border-top-color: var(--sea);
     animation: trip-spin 0.9s linear infinite;
 }
 
@@ -666,9 +681,9 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     gap: var(--sp-3);
     margin-top: var(--sp-3);
     padding: var(--sp-3);
-    border: 1px solid var(--rail-blue);
+    border: 1px solid var(--sea);
     border-radius: var(--radius);
-    background: var(--rail-blue-tint);
+    background: var(--sea-tint);
 }
 
 /* 确认文案独占一行，按钮换到下一行右对齐——
@@ -706,7 +721,8 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(43, 33, 24, 0.45);
+    /* 遮罩由暖褐换成 v4 的墨蓝 —— 暖褐遮罩会把底下整片蓝色压成灰绿 */
+    background: rgba(18, 48, 63, 0.45);
 }
 
 .trip-adjust-panel {
@@ -723,8 +739,8 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     height: 44px;
     margin: 0 auto var(--sp-4);
     border-radius: var(--radius-pill);
-    border: 4px solid var(--rail-blue-tint);
-    border-top-color: var(--rail-blue);
+    border: 4px solid var(--sea-tint);
+    border-top-color: var(--sea);
     animation: trip-spin 0.9s linear infinite;
 }
 

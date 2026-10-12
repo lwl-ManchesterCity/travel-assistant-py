@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="620" viewBox="0 0 1440 620">
+  <!-- 中段两侧的远山。贴在页面底部、只占左右两翼，中间大片留空 ——
+       表单列（760 居中）落在透明区里。
+
+       它和页脚那条海岸线是同一套空气透视里的**最远两三档**：
+       页脚由浅到深铺了六档（#CFE0EC → #5D8AAE），这里只取最淡的那一端，
+       所以它读起来是"更远的一层"，而不是另画了一幅。
+
+       前两版都画坏了，教训记在这里：
+       1) 用单个大 Q 弧画山脊 —— 出来是个**圆顶**，不是山。改成十几个小起伏串联；
+       2) 颜色取到 #C9DCE8，比底色深 50，大面积铺开就是一块实心淡蓝，非常抢眼。
+          现在三层的差值收到 9 / 20 / 30，最远那层几乎只是"底色偏了一点点"；
+       3) 手写镜像容易两边对不齐。右半用 transform 把左半翻过去。
+
+       颗粒（feTurbulence）与页脚同一条做法，用 feComposite operator="in"
+       裁到地景 alpha 上，不会在透明处留灰膜。这是"质感"的来源。
+
+       硬规则：注释里不出现连续两个减号。探针判据 5 会读 XML。 -->
+  <defs>
+    <filter id="grainS">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch" result="n"/>
+      <feColorMatrix in="n" type="saturate" values="0" result="g"/>
+      <feComposite in="g" in2="SourceGraphic" operator="in" result="clipped"/>
+      <feBlend in="SourceGraphic" in2="clipped" mode="multiply"/>
+    </filter>
+    <g id="west">
+      <path d="M0 186Q26 172 52 182Q78 192 104 180Q130 168 156 180Q182 192 204 186Q226 180 244 208Q264 240 278 292Q290 340 296 400Q300 490 302 620L0 620Z"
+            fill="#F3F8FB"/>
+      <path d="M0 318Q30 304 60 314Q90 324 120 314Q150 304 178 318Q204 332 224 366Q244 402 256 462Q264 530 268 620L0 620Z"
+            fill="#E7F0F6"/>
+      <path d="M0 452Q34 438 68 448Q102 458 134 450Q164 442 190 462Q214 482 230 528Q242 566 248 620L0 620Z"
+            fill="#D6E5F1"/>
+      <!-- 这里原来有一排三角针叶树。已删 —— 与页脚同一条判断：
+           两个三角叠起来是通用「树」图标，是象形符号，也就是"可爱幼稚"的来源。
+           脊线本身就是足够的细节，不需要往上摆物件。 -->
+
+    </g>
+  </defs>
+  <use href="#west" filter="url(#grainS)"/>
+  <use href="#west" transform="translate(1440,0) scale(-1,1)" filter="url(#grainS)"/>
+</svg>

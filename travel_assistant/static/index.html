@@ -4,54 +4,72 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>智能旅行助手</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='8' width='28' height='16' rx='3' fill='%231B4ED8'/%3E%3Cline x1='21' y1='8' x2='21' y2='24' stroke='%23FFFFFF' stroke-width='1.6' stroke-dasharray='2 2'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="/css/tokens.css?v=20261010g">
-    <link rel="stylesheet" href="/css/base.css?v=20261010g">
-    <link rel="stylesheet" href="/css/controls.css?v=20261010g">
-    <link rel="stylesheet" href="/css/landing.css?v=20261010g">
-    <link rel="stylesheet" href="/css/result.css?v=20261010g">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='8' width='28' height='16' rx='3' fill='%230B6BA8'/%3E%3Cline x1='21' y1='8' x2='21' y2='24' stroke='%23FFFFFF' stroke-width='1.6' stroke-dasharray='2 2'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/css/tokens.css?v=20261012h">
+    <link rel="stylesheet" href="/css/base.css?v=20261012h">
+    <link rel="stylesheet" href="/css/controls.css?v=20261012h">
+    <link rel="stylesheet" href="/css/landing.css?v=20261012h">
+    <link rel="stylesheet" href="/css/result.css?v=20261012h">
 </head>
 <body>
 <section id="landing-page" class="landing-page">
     <div class="planner-shell">
-        <div class="punch-holes" aria-hidden="true"></div>
-        <div class="form-zigzag" aria-hidden="true"></div>
-        <div class="punch-tear" aria-hidden="true"></div>
         <header class="doc-head">
             <div class="doc-head-main">
                 <h1 class="doc-title">智能旅行助手</h1>
                 <p class="doc-subtitle">填好这张委托单，剩下的交给规划引擎。</p>
             </div>
-            <div class="form-serial">TRIP REQUEST FORM<br>NO.20261008</div>
+            <!-- 热气球 -->
+            <img class="sticker-balloon" src="/img/sticker-balloon.svg" alt="" aria-hidden="true">
         </header>
 
-        <div class="perforation">
-            <span class="perforation-notch perforation-notch-left"></span>
-            <span class="perforation-notch perforation-notch-right"></span>
+        <!-- 票头实时预览：v4.2 从卡片 1 内部搬到这里，直接坐在天空渐变上。
+             原先它被关在卡片里，和三张卡片一样拉满 1180px —— 56px 的目的地大字
+             跟「NO.3 备注」的文本框一样宽，主角和配角同宽，层级就没了。
+             移出后它是这一页的开放主视觉：没有白底、没有阴影、没有圆角，
+             靠字号（56px vs 14px 字段标签）和留白撑起来。
+             preview-origin / preview-city / preview-facts / preview-sentence
+             四个 id 整块平移、一个没改，app.js 零改动；
+             文案仍全部由 app.js 的 updateLandingPreview() 写，不参与提交/校验。 -->
+        <div class="preview-block">
+            <p class="preview-label">去哪里？</p>
+            <div class="preview-band">
+                <span id="preview-route" class="preview-band-route">
+                    <span id="preview-origin" class="preview-band-city is-placeholder">____</span>
+                    <span class="preview-band-arrow" aria-hidden="true">→</span>
+                    <span id="preview-city" class="preview-band-city is-placeholder">____</span>
+                </span>
+                <span id="preview-facts" class="preview-band-facts">-- DAYS · ¥--</span>
+            </div>
+            <!-- 行程摘要句：把已填内容念成一句可以想象的话（FRONTEND_FEEDBACK_LANDING_SLIM 修复 3）。
+                 未填的项整段省略，不显示占位符 —— 没有数据就不编一个出来。
+                 全部未填时整行隐藏。文案由 app.js 的 updateLandingPreview() 写。 -->
+            <p id="preview-sentence" class="preview-sentence hidden"></p>
         </div>
 
         <form id="trip-form">
             <section class="form-card">
-                <!-- 票头实时预览（FRONTEND_FEEDBACK_LANDING_BOLD 修复 1）：卡内第一行，
-                     随输入实时反映"这张票会长什么样"。文案全部由 app.js 的
-                     updateLandingPreview() 写，不参与任何提交/校验。 -->
-                <div class="preview-band">
-                    <span id="preview-route" class="preview-band-route">
-                        <span id="preview-origin" class="preview-band-city is-placeholder">____</span>
-                        <span class="preview-band-arrow" aria-hidden="true">→</span>
-                        <span id="preview-city" class="preview-band-city is-placeholder">____</span>
-                    </span>
-                    <span id="preview-facts" class="preview-band-facts">-- DAYS · ¥--</span>
-                    <span class="preview-stamp">待出票</span>
-                </div>
-                <h2 class="section-title"><span class="section-no">NO.1</span>行程</h2>
+                <h2 class="section-title">
+                    <span class="section-no">NO.1</span>行程
+                    <!-- 旅行天数从栅格末格挪到分区标题行末（修复 2）：它是由旁边两个日期
+                         推导出来的读数，不是输入项，留在输入格里会被读成第 4 个输入框。
+                         仍保留 .readonly-value 类与 44px 高 —— 探针判据 2 按类名收控件高度。 -->
+                    <span class="days-headline"><span id="daysDisplay" class="readonly-value">3 天</span></span>
+                </h2>
                 <div class="grid-four">
+                    <!-- 出发城市从 NO.2 搬到这里（修复 2）：它和目的地是一对，票头色带早已
+                         并排显示两者，表单却把它们分在两张卡上要上下两处找。整块搬迁，
+                         id/name 一个没改，buildTripPayload 的取值路径不受影响。 -->
                     <div class="field">
-                        <label for="destination"><span class="required">*</span>目的地城市</label>
-                        <input id="destination" name="destination" class="input" value="北京" required>
+                        <label for="origin">出发城市</label>
+                        <input id="origin" name="origin" class="input input-place input-place-origin" value="上海" required>
                     </div>
                     <div class="field">
-                        <label for="departureDateTrigger"><span class="required">*</span>开始日期<span class="label-hint">YYYY/MM/DD</span></label>
+                        <label for="destination"><span class="required">*</span>目的地城市</label>
+                        <input id="destination" name="destination" class="input input-place input-place-dest" value="北京" required>
+                    </div>
+                    <div class="field">
+                        <label for="departureDateTrigger"><span class="required">*</span>开始日期</label>
                         <div class="date-field" data-date-field>
                             <!-- 原生 date input 留作取值 / min 约束的载体（现有 JS 仍读它的 .value、
                                  仍靠它派发 change），只是视觉上藏起来；required 交给 validateTripPayload，
@@ -66,7 +84,7 @@
                         </div>
                     </div>
                     <div class="field">
-                        <label for="endDateTrigger"><span class="required">*</span>结束日期<span class="label-hint">YYYY/MM/DD</span></label>
+                        <label for="endDateTrigger"><span class="required">*</span>结束日期</label>
                         <div class="date-field" data-date-field>
                             <input id="endDate" name="endDate" class="date-native" type="date"
                                    tabindex="-1" aria-hidden="true">
@@ -77,20 +95,12 @@
                             </button>
                         </div>
                     </div>
-                    <div class="field field-days">
-                        <label for="daysDisplay">旅行天数</label>
-                        <div id="daysDisplay" class="readonly-value">3 天</div>
-                    </div>
                 </div>
             </section>
 
             <section class="form-card">
                 <h2 class="section-title"><span class="section-no">NO.2</span>偏好</h2>
                 <div class="grid-three">
-                    <div class="field">
-                        <label for="origin">出发城市</label>
-                        <input id="origin" name="origin" class="input" value="上海" required>
-                    </div>
                     <div class="field">
                         <label for="budget">总预算</label>
                         <input id="budget" name="budget" class="input input-mono" type="number" min="1" value="3000" required>
@@ -150,20 +160,25 @@
                 <input id="preferences" name="preferences" type="hidden" value="自然风景,美食,轻松节奏">
                 <p class="form-ticket-note">** 填写完整后提交 · 规划引擎预计运行 30 秒 **</p>
                 <div class="action-wrap">
-                    <button id="submit-btn" class="primary-button" type="submit"><span class="ticket-barcode" aria-hidden="true"></span>打印我的行程票</button>
+                    <button id="submit-btn" class="primary-button" type="submit">生成我的行程</button>
                     <span class="stamp-accept" aria-hidden="true">受理</span>
                     <div id="status" class="status-text"></div>
                 </div>
             </section>
         </form>
     </div>
+
+    <!-- 页脚风景带：山 / 海 / 建筑 / 帆船 / 日 / 云。
+         v4.5 从 .planner-shell 里搬到这里 —— 外壳只有 1180 宽，风景被关在里面时
+         页面左右各剩一条 130px 的平白（1440 视口），整条底边读起来像"飘着一条带子"。
+         搬出来之后它是 .landing-page 的直接子元素，宽度就是整个视口，底边成了"一片地"。 -->
+    <div class="shell-scene" aria-hidden="true"></div>
     <!-- 等待面板必须在 .planner-shell 之外：委托单播"被吸进打印机"时整层压到 40% 透明，
          面板放在里面会跟着一起淡掉，等待期看着就像白屏 -->
     <div id="progress-panel" class="progress-panel hidden" role="status" aria-live="polite">
         <div class="printer" aria-hidden="true">
             <div class="printer-slot"></div>
-            <div class="printer-tape"></div>
-            <div class="printer-head"></div>
+            <img class="printer-plane" src="/img/sticker-plane.svg" alt="">
         </div>
         <div class="printer-readout">
             <div class="print-status">
@@ -223,13 +238,15 @@
                                 <span class="ticket-band-sep" aria-hidden="true">·</span>
                                 <span id="ticket-budget">--</span>
                             </span>
-                            <!-- 骑跨色带下缘：垂直中心压在色带底边上，一半蓝带一半纸面 -->
+                            <!-- 骑跨色带下缘：垂直中心压在色带底边上，一半蓝带一半卡面 -->
                             <span class="ticket-stamp">已出票</span>
                         </div>
+                        <!-- v4.3：这里原本有四件「票据」道具 —— 印章水印、票根条码、
+                             打孔虚线、两端的半圆缺口。它们讲的都是「这是一张票」，
+                             不是「你要去的地方」，与 v4 的方向直接冲突，整组删除。
+                             留下的是三样有实际信息的东西：色带（全页色彩锚点）、
+                             骑跨色带的小章（强调）、TRIP NO.（等宽数据）。 -->
                         <div class="ticket">
-                            <!-- 水印：与骑跨色带的小章一大一小、一虚一实（修复 4）。
-                                 aria-hidden —— 它只是纸上的印记，不该被读屏念第二遍。 -->
-                            <span class="ticket-watermark" aria-hidden="true">已出票</span>
                             <div class="ticket-fields">
                                 <div id="summary-title" class="ticket-title">旅行计划</div>
                                 <div class="ticket-no">
@@ -237,11 +254,6 @@
                                     <strong id="ticket-number" class="ticket-no-value">--</strong>
                                 </div>
                             </div>
-                            <div class="ticket-barcode" aria-hidden="true"></div>
-                        </div>
-                        <div class="ticket-perf">
-                            <span class="ticket-notch ticket-notch-left"></span>
-                            <span class="ticket-notch ticket-notch-right"></span>
                         </div>
                         <div class="hero-summary-body">
                             <div id="summary-badges" class="hero-summary-tags"></div>
@@ -373,7 +385,14 @@
                 </div>
             </main>
         </div>
+
     </div>
+
+    <!-- 页脚风景带（v4.3 加入，v4.5 改通栏）：与着陆页页脚同一幅景、同一条铺法 ——
+         两页首尾同景，进门是天空与地平线，出门还是同一片海。
+         同样放在外壳之外，宽度吃满视口：关在 1280 的外壳里时，
+         宽屏下左右会各剩一条平白，底边看着像飘着一条带子。 -->
+    <div class="result-scene" aria-hidden="true"></div>
     <!-- 测绘图纸右下角的坐标读数（修复 3）。固定于视口角落，随结果页一起显示/隐藏；
          文案由 app.js 用真实景点坐标填，没有坐标时整块隐藏。 -->
     <div id="geo-corner" class="geo-corner hidden" aria-hidden="true"></div>
@@ -389,6 +408,6 @@
 
 <div id="error-toast" class="error-toast hidden"></div>
 
-    <script src="/js/app.js?v=20261010g"></script>
+    <script src="/js/app.js?v=20261012h"></script>
 </body>
 </html>

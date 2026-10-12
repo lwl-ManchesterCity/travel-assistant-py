@@ -179,12 +179,18 @@ class AmapHotelClient(HotelClient):
         )
 
     def _extract_rating(self, poi: dict) -> str:
+        """高德没给评分就返回空串，**不编一个默认分**。
+
+        这个值会进"选哪家酒店"的打分（`planner_agent._parse_hotel_rating_score`
+        对空值另有处理）。以前这里填的是写死的 "4.3"，于是"没有评分"的酒店
+        反而赢过真评分 4.0 的那家——编出来的数字直接进了决策。
+        """
         biz_ext = poi.get("biz_ext")
         if isinstance(biz_ext, dict):
             rating = self._safe_string(biz_ext.get("rating"), "")
             if rating.strip():
                 return rating
-        return "4.3"
+        return ""
 
     def _extract_estimated_cost(self, poi: dict, query: HotelQuery) -> int:
         biz_ext = poi.get("biz_ext")

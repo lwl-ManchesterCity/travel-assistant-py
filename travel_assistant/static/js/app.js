@@ -38,7 +38,12 @@
     const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     let daysFlipTimer = null;
 
-    preferenceGroup.addEventListener('change', syncPreferenceValues);
+    // 偏好也进票头摘要句（SLIM 修复 3）：这是本单唯一新增的事件绑定，纯展示层。
+    // updateLandingPreview 是函数声明，此时已可调用；实际触发在用户点选之后。
+    preferenceGroup.addEventListener('change', () => {
+        syncPreferenceValues();
+        updateLandingPreview();
+    });
     departureDateInput.addEventListener('change', syncDateRange);
     endDateInput.addEventListener('change', syncDateRange);
     backHomeBtn.addEventListener('click', () => {
@@ -149,6 +154,48 @@
         cityEl.textContent = city || '____';
         cityEl.classList.toggle('is-placeholder', !city);
         factsEl.textContent = `${days > 0 ? days : '--'} DAYS · \u00a5${budget || '--'}`;
+        renderPreviewSentence({ origin, city, budget, days });
+    }
+
+    // 行程摘要句（SLIM 修复 3）：把已填内容念成一句可以想象的话 ——
+    // 「湛江 → 广州 · 10/10–10/12（3 天）· 预算 ¥2400 · 想看自然风光、美食」。
+    // 旅游感来自对旅程的想象，不是装饰：这句是整页唯一在讲"你要出门了"的东西。
+    // 只读已填值、只写文本；未填的项整段省略，不显示占位符、不编估算值
+    // （沿用 findMealCost 立下的规矩）。全部未填时整行隐藏。
+    function renderPreviewSentence({ origin, city, budget, days }) {
+        const sentenceEl = document.getElementById('preview-sentence');
+        if (!sentenceEl) {
+            return;
+        }
+        const parts = [];
+        if (origin && city) {
+            parts.push(`${origin} → ${city}`);
+        } else if (city) {
+            parts.push(`目的地 ${city}`);
+        } else if (origin) {
+            parts.push(`${origin} 出发`);
+        }
+        const start = departureDateInput.value;
+        const end = endDateInput.value;
+        if (start && end && days > 0) {
+            // stubDate 切的是 ISO 串（2026-10-11 → 10-11），自带连字符；
+            // 直接拿它去拼连接号会得到「10-11–10-13」四个数字糊成一片。
+            // 换成正斜杠，与页面其它地方的日期写法一致。
+            const shortDate = iso => stubDate(iso).replace('-', '/');
+            parts.push(`${shortDate(start)}–${shortDate(end)}（${days} 天）`);
+        }
+        if (budget) {
+            parts.push(`预算 ¥${budget}`);
+        }
+        // 偏好读 chip 上的可见文案（自然风光），不是 input 的 value（自然风景）
+        const wants = Array.from(preferenceGroup.querySelectorAll('input:checked'))
+            .map(input => input.closest('label')?.textContent.trim())
+            .filter(Boolean);
+        if (wants.length) {
+            parts.push(`想看${wants.join('、')}`);
+        }
+        sentenceEl.textContent = parts.join(' · ');
+        sentenceEl.classList.toggle('hidden', parts.length === 0);
     }
 
     function bindLandingPreview() {
@@ -372,9 +419,19 @@
         return field;
     });
 
+    // 日期显示带星期（SLIM 修复 4.1）：2026/10/10 → 2026/10/10 周六。
+    // 这里是日期文本的唯一写入点。取值源、min 约束、change 派发一律不动 ——
+    // 星期是就地算出来的展示文本，不进请求、不进任何分支。
     function syncDateFieldDisplay(field) {
-        const text = formatDateDisplay(field.input.value);
-        field.valueEl.textContent = text || '选择日期';
+        const iso = field.input.value;
+        const text = formatDateDisplay(iso);
+        if (text) {
+            const [year, month, day] = iso.split('-').map(Number);
+            const weekday = WEEKDAY_LABELS[new Date(year, month - 1, day).getDay()];
+            field.valueEl.innerHTML = `${text}<span class="date-weekday">周${weekday}</span>`;
+        } else {
+            field.valueEl.textContent = '选择日期';
+        }
         field.valueEl.classList.toggle('is-empty', !text);
     }
 
@@ -1200,7 +1257,19 @@
 
     // 线路色：与 tokens.css「线路色」小节一一对应。JS 读不到 CSS 自定义属性在
     // 高德 Polyline 这种非 DOM 参数上的值，只能在这里重复一次；改 token 时两处要一起改。
-    const LINE_COLORS = ['#1B4ED8', '#0F7B5F', '#B45309', '#0E7490'];
+    //
+    // v4.3 对账：前两支一直是 v3 的值，和 CSS 已经对不上了 ——
+    //   第 1 支 #1B4ED8（v3 票据蓝）  ≠ --sea #0B6BA8
+    //   第 2 支 #0F7B5F（v3 祖母绿）  ≠ --line-emerald #1E8C57
+    // 后果是同一天的地图折线和 DAY 徽章/详情区是两种颜色。这里改成与 tokens 一致。
+    const LINE_COLORS = ['#0B6BA8', '#14785A', '#B45309', '#0E7490'];
+
+    // 第 n 天的线路色。三处曾各存一份：tokens 的 --line-* 变量、result.css 里的
+    // :nth-child 取模、以及这里。CSS 那份 v4.3 之前一直是错的 —— #day-list 的第一个
+    // 子元素是 .day-strip，所以 .day-section:nth-child(4n+1) 永远匹配不到第一天，
+    // 详情区整体错开一天（第 1 天的券是海蓝、详情区却是祖母绿）。
+    // 现在改为 CSS 不再取模、由这里把 --line-color 内联写进券和详情区，单一来源。
+    const lineColor = (index) => LINE_COLORS[index % LINE_COLORS.length];
 
     // 券上只留 MM-DD：年份在票根的 TRIP NO. 和正下方那天的详情头上都有，
     // 而券宽在主列里只有 60~90px，带年份的 10 位日期从第 5 天起就会被截断
@@ -1247,6 +1316,50 @@
         `;
     }
 
+    // 酒店卡。返程那天没有住宿（当天直接去口岸），所以 day.hotel 为空时**不能再往下编**——
+    // 以前那三格会填上 inferHotelType/inferHotelPrice 和 `4.${index+1}` 的占位值，
+    // 看着像那天真有地方住，价格评分还像是查来的。
+    // 评分那格的兜底从"按第几天编一个 4.x"改成「暂无」：评分本该来自数据源，
+    // 拿不到就老实说没有——编出来的数字会跟真评分混在一起，分不出来。
+    function buildHotelBox(day, hotelName, hotelArea) {
+        if (!day.hotel) {
+            return `
+                <div class="hotel-box no-stay">
+                    <div class="hotel-name">${hotelName}</div>
+                    <div class="hotel-meta">
+                        <div>
+                            <span class="hotel-meta-label">安排</span>
+                            <span class="hotel-meta-value">当天直接前往口岸离城，这一晚不含住宿</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        return `
+            <div class="hotel-box">
+                <div class="hotel-name">${hotelName}</div>
+                <div class="hotel-meta">
+                    <div>
+                        <span class="hotel-meta-label">地址</span>
+                        <span class="hotel-meta-value">${hotelArea}</span>
+                    </div>
+                    <div>
+                        <span class="hotel-meta-label">类型</span>
+                        <span class="hotel-meta-value">${day.hotel.type || inferHotelType(hotelName)}</span>
+                    </div>
+                    <div>
+                        <span class="hotel-meta-label">价格范围（估算）</span>
+                        <span class="hotel-meta-value">${day.hotel.priceRange || inferHotelPrice(hotelName)}</span>
+                    </div>
+                    <div>
+                        <span class="hotel-meta-label">评分</span>
+                        <span class="hotel-meta-value">${day.hotel.rating || '暂无'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     function renderDays(data, payload) {
         const dayList = document.getElementById('day-list');
         const days = data.days || [];
@@ -1261,18 +1374,13 @@
                     const isActive = index === 0;
                     return `
                         <button type="button" class="day-stub${isActive ? ' active' : ''}"
-                                data-day-stub="${index}" role="tab" aria-selected="${isActive}">
-                            ${index === 0 ? '' : `
-                                <span class="ticket-notch ticket-notch-strip-top" aria-hidden="true"></span>
-                                <span class="ticket-notch ticket-notch-strip-bottom" aria-hidden="true"></span>
-                            `}
+                                data-day-stub="${index}" role="tab" aria-selected="${isActive}"
+                                style="--line-color:${lineColor(index)}">
                             <span class="day-stub-head">
                                 <span class="day-stub-day">DAY ${(day.dayIndex ?? index) + 1}</span>
                                 <span class="day-stub-date">${stubDate(day.date)}</span>
                             </span>
                             <span class="day-stub-body">${preview}</span>
-                            <span class="day-stub-stamp">检票</span>
-                            <span class="ticket-barcode" aria-hidden="true"></span>
                         </button>
                     `;
                 }).join('')}
@@ -1282,14 +1390,18 @@
         dayList.innerHTML = dayStrip + days.map((day, index) => {
             const dateText = day.date;
             const dayAttractions = day.attractions || [];
-            const hotelName = day.hotel?.name || day.accommodation || payload.accommodation;
-            const hotelArea = day.hotel?.address || `${payload.city}中心城区`;
+            // 返程那天没有住宿（那天直接去口岸）。不能退回 accommodation——
+            // 那是偏好词（"舒适型酒店"），显示成住宿会让人以为那天还有地方住。
+            const isReturnDay = index === days.length - 1 && !day.hotel;
+            const hotelName = day.hotel?.name
+                || (isReturnDay ? '返程日 · 无住宿' : (day.accommodation || payload.accommodation));
+            const hotelArea = day.hotel?.address || (isReturnDay ? '当天离城，不含住宿' : `${payload.city}中心城区`);
             const routePlan = day.routePlan;
             const routeSteps = routePlan?.steps || [];
             const dailyCost = day.estimatedCost || 0;
 
             return `
-                <div class="day-section">
+                <div class="day-section" style="--line-color:${lineColor(index)}">
                     <div class="day-header" data-day-toggle="${index}">
                         <strong><span class="caret${index === 0 ? ' open' : ''}"></span>第${(day.dayIndex ?? index) + 1}天</strong>
                         <span class="day-date">${dateText}</span>
@@ -1315,7 +1427,6 @@
                                     <div class="spot-stub">
                                         <span class="spot-stub-no">${spotIndex + 1}</span>
                                         <span class="spot-stub-cat">${(spot.category || '').split(';')[0] || 'SPOT'}</span>
-                                        <span class="ticket-barcode" aria-hidden="true"></span>
                                     </div>
                                     <div class="spot-main">
                                         <div class="spot-head">
@@ -1333,27 +1444,7 @@
                             `).join('')}
                         </div>
 
-                        <div class="hotel-box">
-                            <div class="hotel-name">${hotelName}</div>
-                            <div class="hotel-meta">
-                                <div>
-                                    <span class="hotel-meta-label">地址</span>
-                                    <span class="hotel-meta-value">${hotelArea}</span>
-                                </div>
-                                <div>
-                                    <span class="hotel-meta-label">类型</span>
-                                    <span class="hotel-meta-value">${day.hotel?.type || inferHotelType(hotelName)}</span>
-                                </div>
-                                <div>
-                                    <span class="hotel-meta-label">价格范围（估算）</span>
-                                    <span class="hotel-meta-value">${day.hotel?.priceRange || inferHotelPrice(hotelName)}</span>
-                                </div>
-                                <div>
-                                    <span class="hotel-meta-label">评分</span>
-                                    <span class="hotel-meta-value">${day.hotel?.rating || `4.${index + 1}`}</span>
-                                </div>
-                            </div>
-                        </div>
+                        ${buildHotelBox(day, hotelName, hotelArea)}
 
                         <div class="route-box">
                             <div class="route-head">
@@ -1431,16 +1522,16 @@
     function buildSpotPlaceholderImage(spot, city) {
         const text = `${spot.name || ''} ${spot.category || ''} ${spot.description || ''}`;
         let theme = {
-            sky: '#E7EEF4',
-            land: '#7FC69D',
-            accent: '#1B4ED8',
+            sky: '#E4F2FB',
+            land: '#7FD1A4',
+            accent: '#0B6BA8',
             icon: 'landmark',
             label: city || 'TRAVEL'
         };
         if (text.includes('博物馆') || text.includes('人文') || text.includes('历史')) {
-            theme = { sky: '#E8E4F4', land: '#B9A77A', accent: '#6F56D9', icon: 'museum', label: 'MUSEUM' };
+            theme = { sky: '#FFF1DC', land: '#F0C9A0', accent: '#B45309', icon: 'museum', label: 'MUSEUM' };
         } else if (text.includes('动物园')) {
-            theme = { sky: '#DFF2F0', land: '#79BF74', accent: '#0F7B5F', icon: 'zoo', label: 'NATURE' };
+            theme = { sky: '#DFF2F0', land: '#79BF74', accent: '#14785A', icon: 'zoo', label: 'NATURE' };
         } else if (text.includes('公园') || text.includes('风景') || text.includes('自然') || text.includes('山')) {
             theme = { sky: '#DFF2EA', land: '#6FBD84', accent: '#16794A', icon: 'park', label: 'PARK' };
         } else if (text.includes('美食') || text.includes('餐饮') || text.includes('小吃')) {
@@ -1452,7 +1543,7 @@
                 <defs>
                     <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
                         <stop offset="0" stop-color="${theme.sky}"/>
-                        <stop offset="1" stop-color="#F6EFDD"/>
+                        <stop offset="1" stop-color="#FFF7E8"/>
                     </linearGradient>
                     <linearGradient id="hill" x1="0" x2="1" y1="0" y2="0">
                         <stop offset="0" stop-color="${theme.land}"/>
@@ -1460,12 +1551,12 @@
                     </linearGradient>
                 </defs>
                 <rect width="900" height="520" fill="url(#sky)"/>
-                <circle cx="760" cy="95" r="54" fill="#F7D774" opacity="0.9"/>
+                <circle cx="760" cy="95" r="54" fill="#FFC24B" opacity="0.9"/>
                 <path d="M0 360 C130 285 230 310 360 250 C520 176 670 260 900 190 L900 520 L0 520 Z" fill="url(#hill)" opacity="0.6"/>
-                <path d="M0 420 C170 350 310 400 455 330 C620 248 735 330 900 270 L900 520 L0 520 Z" fill="#B99F72" opacity="0.25"/>
+                <path d="M0 420 C170 350 310 400 455 330 C620 248 735 330 900 270 L900 520 L0 520 Z" fill="#CFE4F2" opacity="0.55"/>
                 ${buildSpotIcon(theme.icon, theme.accent)}
-                <text x="56" y="82" fill="#2B2118" font-size="34" font-family="Arial, sans-serif" font-weight="700">${title}</text>
-                <text x="58" y="126" fill="#665843" font-size="20" font-family="Arial, sans-serif" font-weight="700">${theme.label}</text>
+                <text x="56" y="82" fill="#12303F" font-size="34" font-family="Arial, sans-serif" font-weight="700">${title}</text>
+                <text x="58" y="126" fill="#5B7686" font-size="20" font-family="Arial, sans-serif" font-weight="700">${theme.label}</text>
             </svg>
         `;
         return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
