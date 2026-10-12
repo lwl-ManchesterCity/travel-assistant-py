@@ -1,6 +1,11 @@
 """对应 src/test/java/com/lwl/travelassistant/agent/PlannerAgentTest.java。"""
 
-from travel_assistant.agent.planner_agent import PlannerAgent
+from travel_assistant.agent.planner_agent import (
+    _ARRIVAL_DAY,
+    _DAY_ROUTE_CAP_KM,
+    _DEPARTURE_DAY,
+    PlannerAgent,
+)
 from travel_assistant.agent.route_agent import RouteAgent
 from travel_assistant.clients.llm import LlmClient
 from travel_assistant.clients.rule_route import RuleBasedRouteClient
@@ -13,6 +18,7 @@ from travel_assistant.models.attraction_search_result import AttractionSearchRes
 from travel_assistant.models.hotel import Hotel
 from travel_assistant.models.hotel_search_result import HotelSearchResult
 from travel_assistant.models.location import Location
+from travel_assistant.models.map_point import MapPoint
 from travel_assistant.models.planner_input import PlannerInput
 from travel_assistant.models.planning_constraints import PlanningConstraints
 from travel_assistant.models.provider_metadata import ProviderMetadata
@@ -141,40 +147,186 @@ def _hotel_at(lng, lat):
                  price_range="500-800元", rating="4.5", distance="x", type="舒适型酒店", estimated_cost=500)
 
 
-def test_near_attraction_ranks_ahead_of_far_high_score():
-    agent = build_planner_agent()
-    hotel = _hotel_at(120.0, 30.0)
-    near = _attraction("近处", 120.0, 30.03, "自然风景", 3.0)   # ~3.3km，档 0，分数低
-    far = _attraction("远处", 120.0, 30.12, "人文历史", 4.9)     # ~13.3km，档 2，命中偏好+高分
-    ranked = agent._prioritize_candidate_attractions([far, near], hotel, ["人文历史"], None, None, 1000)
-    assert [a.name for a in ranked] == ["近处", "远处"]
+def test_prioritize_is_pure_score_ordering_again():
+    """离酒店分档那层撤了：这里回到 Java 原样，只按分数降序、票价升序。
 
-
-def test_no_hotel_falls_back_to_pure_score_ordering():
+    远近不在这步管，改由 `_compose_day_route` 的"插入增量"在选的时候管——
+    顺序若由酒店推出来，就没法再拿顺序去定酒店（docs/PLANNER_SELECTION_DESIGN.md 3.1）。
+    """
     agent = build_planner_agent()
-    near = _attraction("近处", 120.0, 30.03, "自然风景", 3.0)
-    far = _attraction("远处", 120.0, 30.12, "人文历史", 4.9)
-    ranked = agent._prioritize_candidate_attractions([near, far], None, ["人文历史"], None, None, 1000)
+    near = _attraction("近处", 120.0, 30.03, "自然风景", 3.0)   # 分低但在酒店旁边
+    far = _attraction("远处", 120.0, 30.12, "人文历史", 4.9)     # 分高但在 13 公里外
+    ranked = agent._prioritize_candidate_attractions([far, near], ["人文历史"], None, None, 1000)
     assert [a.name for a in ranked] == ["远处", "近处"]
 
 
-def test_filter_drops_attractions_beyond_hotel_radius():
+# ---------- 3.5：判重按 POI id，不按名字 ----------
+
+def test_two_attractions_sharing_a_name_are_not_collapsed():
+    """老毛病一：按名字判重，同名的第二个永远选不上。现在按 id，它是另一个景点。"""
     agent = build_planner_agent()
-    hotel = _hotel_at(120.0, 30.0)
-    a = _attraction("a", 120.0, 30.02, "自然风景", 4.0)   # ~2.2km
-    b = _attraction("b", 120.0, 30.05, "自然风景", 4.0)   # ~5.6km
-    c = _attraction("c", 120.0, 30.20, "自然风景", 4.0)   # ~22km，超 15km
-    kept = agent._filter_nearby_attractions([a, b, c], hotel)
-    assert {x.name for x in kept} == {"a", "b"}
+    first = _attraction("老字号", 120.15, 30.27, "美食购物", 4.9)
+    second = _attraction("老字号", 120.20, 30.27, "美食购物", 4.8)
+    first.id, second.id = "B001", "B002"
+
+    route = agent._compose_day_route(
+        Location(longitude=120.15, latitude=30.27), [first, second], 2, set(), 9999)
+
+    assert [a.id for a in route] == ["B001", "B002"]
 
 
-def test_filter_falls_back_to_all_when_under_two_within_radius():
+def test_the_same_attraction_under_a_slightly_different_name_is_still_one():
+    """老毛病二：名字差一个括号被当成两个，可能两天各去一遍。同 id 就是同一个。"""
     agent = build_planner_agent()
-    hotel = _hotel_at(120.0, 30.0)
-    a = _attraction("a", 120.0, 30.02, "自然风景", 4.0)   # 圈内仅 1 个
-    c = _attraction("c", 120.0, 30.20, "自然风景", 4.0)
-    kept = agent._filter_nearby_attractions([a, c], hotel)
-    assert {x.name for x in kept} == {"a", "c"}   # 防选空：回落全城
+    full = _attraction("西湖景区", 120.15, 30.27, "自然风景", 4.8)
+    gate = _attraction("西湖景区（南门）", 120.15, 30.27, "自然风景", 4.8)
+    full.id = gate.id = "B001"
+
+    assert agent._contains_attraction([full], agent._attraction_key(gate))
+
+
+def test_without_a_poi_id_identity_falls_back_to_the_name():
+    """本地知识库那个源造不出 id，退回比名字——与加这一格之前一致，不会因此漏判。"""
+    agent = build_planner_agent()
+    one = _attraction("西湖", 120.15, 30.27, "自然风景", 4.8)
+    other = _attraction("西湖", 120.16, 30.27, "自然风景", 4.6)
+
+    assert agent._attraction_key(one) == agent._attraction_key(other) == "西湖"
+    assert agent._contains_attraction([one], agent._attraction_key(other))
+
+
+# 经度每 0.1 度 ≈ 9.6 公里（北纬 30 度），下面几条按这个尺度摆坐标。
+
+def test_ordinary_day_inserts_the_stop_that_adds_the_least_detour():
+    """4.4 的推演：起点 119.9，候选 A 120.0／B 120.1／C 120.2，要 2 个。
+
+    分数是 C 最高，但第一步选 A——它离起点最近；第二步 B 只多绕 9.6 公里，C 要多 19.3
+    且插完 28.9 公里超上限。**顺序由插入位置定，不由分数或离酒店远近定。**
+    """
+    agent = build_planner_agent()
+    start = Location(longitude=119.9, latitude=30.0)
+    a = _attraction("A", 120.0, 30.0, "自然风景", 4.0)
+    b = _attraction("B", 120.1, 30.0, "自然风景", 4.0)
+    c = _attraction("C", 120.2, 30.0, "自然风景", 5.0)
+
+    route = agent._compose_day_route(start, [c, a, b], 2, set(), 9999)
+
+    assert [x.name for x in route] == ["A", "B"]
+
+
+def test_ordinary_day_never_exceeds_the_route_cap():
+    """判据 1：排出来的动线总长不超上限。"""
+    agent = build_planner_agent()
+    start = Location(longitude=119.9, latitude=30.0)
+    pool = [_attraction(f"景{i}", 119.9 + i * 0.05, 30.0, "自然风景", 4.5) for i in range(8)]
+
+    route = agent._compose_day_route(start, pool, 4, set(), 9999)
+
+    assert len(route) == 4
+    assert agent._route_length_km(route, start, None) <= _DAY_ROUTE_CAP_KM
+
+
+def test_widening_the_cap_picks_up_a_second_stop():
+    """25 排不出就放宽到 50。放宽的好处是**还能多接一站**，不是只把最近的那个硬塞进来。
+
+    起点 →33km→ A →3km→ B：25 这一级两个都进不来，50 这一级 A、B 一起进。
+    """
+    agent = build_planner_agent()
+    start = Location(longitude=120.0, latitude=30.0)
+    a = _attraction("A", 120.35, 30.0, "自然风景", 4.0)      # 离起点约 33.7 公里
+    b = _attraction("B", 120.383, 30.0, "自然风景", 4.0)     # 离 A 约 3.2 公里
+
+    route = agent._compose_day_route(start, [a, b], 2, set(), 9999)
+
+    assert [x.name for x in route] == ["A", "B"]
+
+
+def test_ordinary_day_would_rather_plan_fewer_than_a_rushed_route():
+    """放到 50 还是排不满：不硬凑到 target_count——但也不能一个都不排（防选空）。"""
+    agent = build_planner_agent()
+    start = Location(longitude=120.0, latitude=30.0)
+    far = [_attraction(f"远{i}", 120.5 + i * 0.1, 30.0, "自然风景", 4.0) for i in range(3)]
+
+    route = agent._compose_day_route(start, far, 2, set(), 9999)
+
+    # 第一个不受门票限制、也不受"已选"限制的那条兜底路径接手，只留一个。
+    assert len(route) == 1
+
+
+def test_best_insertion_picks_the_cheapest_slot_not_just_the_end():
+    """插的位置本身决定顺序：B 在起点和 A 之间，就该插到 A 前面。"""
+    agent = build_planner_agent()
+    start = Location(longitude=120.0, latitude=30.0)
+    a = _attraction("A", 120.3, 30.0, "自然风景", 4.0)
+    b = _attraction("B", 120.1, 30.0, "自然风景", 4.0)
+
+    index, inserted_km = agent._best_insertion(start, [a], b)
+
+    via_b = agent._route_length_km([b, a], start, None)   # 起点→B→A
+    via_a = agent._route_length_km([a, b], start, None)   # 起点→A→B
+
+    assert index == 0
+    assert abs(inserted_km - via_b) < 1e-6   # 挑中的确实是最省的那个位置
+    assert inserted_km < via_a               # 而且它真的更省，不是并列
+
+
+def test_arrival_day_picks_the_best_within_the_port_circle():
+    """判据 3：到达日在到达口岸的半径圈里取分数最高的那个，圈外的最高分也不许越圈。"""
+    agent = build_planner_agent()
+    port = MapPoint(name="杭州东站", address="杭州", point_type="station",
+                    location=Location(longitude=120.2, latitude=30.29))
+    low = _attraction("圈内低分", 120.21, 30.29, "自然风景", 3.0)
+    high = _attraction("圈内高分", 120.22, 30.29, "人文历史", 4.9)
+    outside = _attraction("圈外最高分", 120.9, 30.29, "人文历史", 5.0)
+
+    picked = agent._pick_day_attractions(
+        [low, high, outside], _ARRIVAL_DAY, port, None, 1000, 1, set(), None, None, None)
+
+    assert [a.name for a in picked] == ["圈内高分"]
+
+
+def test_arrival_day_widens_the_circle_until_something_is_there():
+    """机场都在远郊（萧山机场离西湖 25 公里+），10 公里圈里一个景点都没有是常态。
+
+    圈里不够挑就逐级放宽，最后一级"不限范围"纯按分数——没有这一级到达日会选空。
+    """
+    agent = build_planner_agent()
+    airport = MapPoint(name="萧山机场", address="杭州", point_type="airport",
+                       location=Location(longitude=120.43, latitude=30.23))
+    only = _attraction("离机场 41 公里", 120.0, 30.25, "自然风景", 4.0)
+
+    picked = agent._pick_day_attractions(
+        [only], _ARRIVAL_DAY, airport, None, 1000, 1, set(), None, None, None)
+
+    assert [a.name for a in picked] == ["离机场 41 公里"]
+
+
+def test_departure_day_takes_the_union_of_the_hotel_and_the_port():
+    """判据 4 的"或"是**并集**：要求和酒店、口岸同时近，等于要求住机场旁边，一个都选不出来。"""
+    agent = build_planner_agent()
+    hotel = _hotel_at(120.15, 30.27)
+    airport = MapPoint(name="萧山机场", address="杭州", point_type="airport",
+                       location=Location(longitude=120.43, latitude=30.23))
+    near_hotel = _attraction("酒店旁", 120.16, 30.27, "自然风景", 4.0)
+    near_airport = _attraction("机场旁", 120.42, 30.23, "人文历史", 4.9)   # 离酒店 26 公里
+
+    picked = agent._pick_day_attractions(
+        [near_hotel, near_airport], _DEPARTURE_DAY, None, airport, 1000, 1, set(), None, None, None,
+        hotel=hotel)
+
+    assert [a.name for a in picked] == ["机场旁"]
+
+
+def test_hotel_lands_on_the_days_last_stop_not_the_average():
+    """判据 5：酒店贴当天动线的**末站**。两家一样贵、一样好，旧的算术平均法分不出来。"""
+    agent = build_planner_agent()
+    first = _attraction("第一站", 120.10, 30.30, "自然风景", 4.0)
+    last = _attraction("末站", 120.30, 30.30, "自然风景", 4.0)
+    hotels = [_hotel("贴第一站", 120.10, 30.30, 500), _hotel("贴末站", 120.30, 30.30, 500)]
+
+    chosen = agent._select_hotel(hotels, [first, last])
+
+    assert chosen.name == "贴末站"
 
 
 def test_apply_day_pins_puts_pin_last_and_anchors_hotel_near_it():
@@ -471,12 +623,16 @@ def test_local_transport_cost_is_flat_for_public_transit_and_mileage_based_other
 
 
 def test_ticket_reserve_is_planned_before_the_hotel_takes_its_share():
-    """老公式给门票只剩 666−500−180＝负数，一个景点都装不下；先预留之后能装下两个。"""
+    """门票是按"目标数 × 60"预留的，不再跟酒店抢同一笔日预算。
+
+    老公式给门票只剩 666−500−180＝负数，一个景点都装不下；改成先预留之后能装下两个，
+    第三个（累计 180）才被挡。酒店在这条路上根本不参与，这正是当初换公式要达到的效果。
+    """
     agent = build_planner_agent()
     pool = [_attraction(f"景{i}", 120.15 + i * 0.003, 30.27, "自然风景", 4.5, price=60) for i in range(4)]
 
-    picked = agent._pick_daily_attractions(pool, 1, 666, 2, _hotel("贵店", 120.15, 30.27, 500),
-                                           set(), ["自然风景"], None, None)
+    picked = agent._compose_day_route(
+        Location(longitude=120.15, latitude=30.27), pool, 3, set(), 2 * 60)
 
     assert len(picked) == 2
 

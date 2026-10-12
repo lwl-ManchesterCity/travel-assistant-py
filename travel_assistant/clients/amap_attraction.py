@@ -134,6 +134,8 @@ class AmapAttractionClient(AttractionClient):
         type_ = self._safe_string(poi.get("type"), "城市景点")
         category = self._map_type_to_category(type_)
         return Attraction(
+            # POI id 一直就在手上（`_contains_poi_by_id` 拿它去重），只是以前没往上传。
+            id=self._safe_string(poi.get("id"), None),
             name=name,
             address=address,
             location=location,

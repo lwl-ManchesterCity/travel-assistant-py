@@ -6,9 +6,20 @@
 住宿位置或要求整趟住同一家时，这里会先按锚点筛掉圈外候选、再按远近分档，同档内仍跑 Java 原样的
 三项打分；打分公式与既有常数一个字没改。Java 没有这三格，因为它的请求里没有对应字段。
 
-第二处偏离（2026-10-09）：选景点时同样让它贴酒店——候选先按离酒店 5/10km 分档、近档整档先选，
-同档内仍跑 Java 原样的 `_score_attraction`；离酒店超过 15km 的景点被剔掉（不足 2 个则回落全城，
-防某天选空）。Java 里景点对距离既不分档也不设这 15km 顶，只按分数排。
+第二处偏离（2026-10-09）：选景点时同样让它贴酒店——候选先按离酒店 5/10km 分档、近档整档先选。
+**这一层已在 2026-10-12 撤掉**，理由见下一段，也见 docs/PLANNER_SELECTION_DESIGN.md。
+
+第三处偏离（2026-10-12，见 docs/PLANNER_SELECTION_DESIGN.md）：酒店和景点不再互相依赖。
+原来是一条环——①按分数挑一批景点（完全不看地理）→ ②把酒店放在这批景点的算术平均点上
+→ ③再按"离酒店 15km 内"重挑一批景点。③ 之后 ① 那批就不存在了，② 依据的是一批
+最终不存在的景点。现在换成：
+
+    先按位置把当天的景点串成一条**动线**（起点＝前一晚酒店，第 1 天＝到达口岸），
+    再把酒店放在**动线的末站**——晚上你人在那儿，平均值落在中间等于两头都要跑。
+
+天的类型不同，串法不同：到达日／离开日只排一个，在"附近"圈里取分数最高的；普通天走
+**贪心插入**——每步挑"插进来最不绕"的那个，插到哪就定它在第几站。插入增量同时替掉了
+原来那两个各自为政的闸门（近邻 30km + 酒店 15km），也不再锁死已选景点。
 """
 
 from datetime import date, timedelta
@@ -36,12 +47,24 @@ from ..models.weather_info import WeatherInfo
 from ..utils import jround
 from .route_agent import RouteAgent
 
-# 景点贴酒店（2026-10-09 第二次主动偏离 Java，见 MIGRATION_NOTES）：
-# 硬顶把离酒店太远的候选剔掉，分档让"近"排在"分数"前面——同档内仍跑 Java 原样打分。
-# 初步景点趟没有酒店（hotel=None），分档恒为 0，退化成纯分数，酒店选取因此不受影响。
-_ATTRACTION_HOTEL_RADIUS_KM = 15.0
-_ATTRACTION_NEAR_KM = 5.0
-_ATTRACTION_MID_KM = 10.0
+# 选景点（2026-10-12 第三次偏离 Java，见 docs/PLANNER_SELECTION_DESIGN.md 四）：
+# 酒店跟着动线的末站走，景点跟酒店无关——顺序只由"起点→…→收工点"定。
+_ARRIVAL_DAY = "arrival"
+_DEPARTURE_DAY = "departure"
+_ORDINARY_DAY = "ordinary"
+
+# 到达日／离开日的"附近"半径：10km 起步，圈里不够挑就逐级放宽，最后一级 None＝不限范围
+# （纯按分数，等于 Java 原样）。机场都在远郊（萧山机场离西湖 25km+），没有最后这一级会选空。
+_ANCHOR_DAY_RADII_KM: tuple[float | None, ...] = (10.0, 20.0, 30.0, None)
+# 圈里少于这个数就不叫"挑"了，只是没得选——放宽一级再挑。
+_ANCHOR_DAY_MIN_CHOICES = 2
+# 普通天动线总长上限：贪心插入每一步都要求"插完不超这个数"，超了就换下一个候选。
+# 25 公里 ≈ 75 分钟通勤。锚是用户那份真实方案：31.4 公里 / 93 分钟，模型自己判它"赶"。
+_DAY_ROUTE_CAP_KM = 25.0
+# 排不出就往宽放一级。**放宽而不是"硬给一个最近的"**，是为了还能多接一站：
+#   起点 →33km→ A →3km→ B   25 只能给 A，50 能把 B 也带上。
+# 放到 50 就停：再宽下去贪心会一路填满，排出两站相隔 70 公里的天，跟"宁可少排也不要赶"打架。
+_DAY_ROUTE_CAP_LADDER_KM: tuple[float, ...] = (_DAY_ROUTE_CAP_KM, 50.0)
 
 # 当天游玩先后的判据（2026-10-10）：里程优先，时段常识只在"并列"时才有否决权。
 # 容差取 3 公里——再大就是用"适合傍晚"当借口绕远路了。
@@ -103,11 +126,13 @@ class PlannerAgent:
         constraints = planner_input.constraints
         day_plans: list[DayPlan] = []
         agent_traces: list[AgentTrace] = list(planner_input.agent_traces or [])
-        used_attraction_names: set[str] = set()
+        # 存的是 `_attraction_key`（POI id 优先，没有才退回名字），不是名字——
+        # 见 3.5：比名字会让同名景点塌成一个、让差一个括号的变成两个。
+        used_attraction_keys: set[str] = set()
         # 预留：被点名的必去景点先占住，任何一天的常规挑选都不许拿走（必去那天在 _refine 后强制塞回）。
         for pinned in (planner_input.pinned_attractions_by_day or {}).values():
             for attraction in pinned:
-                used_attraction_names.add(attraction.name)
+                used_attraction_keys.add(self._attraction_key(attraction))
         start_date = date.fromisoformat(request.start_date)
         days = request.calculate_days()
         # 大交通先从总预算里一次性扣掉，剩下的"可玩预算"才按天分——不填出发城市时这笔是 0，与现状一致。
@@ -125,61 +150,67 @@ class PlannerAgent:
             # 这天打算玩几个先定下来：它同时决定门票预留多少、以及酒店最多能花多少。
             target_count = self._determine_target_count(
                 day_index, days, daily_budget_limit, constraints, current_weather)
-            preliminary_attractions = self._pick_daily_attractions(
-                attractions,
-                day_index,
-                daily_budget_limit,
-                target_count,
-                None,
-                used_attraction_names,
-                request.preferences,
-                constraints,
-                current_weather,
-            )
+            day_kind = self._day_kind(day_index, days)
+            # 这一天的起点：第 1 天是到达口岸，其余天是前一晚住的那家。
+            day_start = planner_input.arrival_point if day_index == 0 else self._point_of_hotel(previous_hotel)
+            day_end = planner_input.day_end_points.get(day_index) if planner_input.day_end_points else None
+            # ① 先定这天的景点和顺序。顺序是从"起点"推出来的，**不拿酒店推**——那正是原来那个环。
+            #    离开日例外：它的圆心之一就是酒店，得等酒店定下来再挑，见下面第二次调用。
+            day_attractions = [] if day_kind == _DEPARTURE_DAY else self._pick_day_attractions(
+                attractions, day_kind, day_start, day_end, daily_budget_limit, target_count,
+                used_attraction_keys, request.preferences, constraints, current_weather)
             anchor_label = request.hotel_anchor_label_for_day(day_index)
+            day_anchor_label = (request.day_hotel_anchors or {}).get(day_index)
             anchor_notes: list[str] = []
-            if strict_continuity and day_index > 0 and locked_hotel is not None:
+            locked_note_for: tuple[Hotel, str | None] | None = None
+            if day_kind == _DEPARTURE_DAY and day_anchor_label is None:
+                # 返程那天**没有住宿**：那天你直接从口岸走了，晚上不在城里。
+                # 这一格留空，酒店钱也就不会算进总预算——3 天的行程本来就只该有 2 晚。
+                # 排在 strict 前面：整趟住同一家管的是"住哪几晚"，返程那天压根不是一晚。
+                # 用户为这天亲口指了住宿位置（day_anchor_label 非空）时听人的，落到下面那一支。
+                candidate_hotels = []
+                selected_hotel = None
+            elif strict_continuity and day_index > 0 and locked_hotel is not None:
                 # 只留锁定的这一家：另一处换店入口（reduce_budget 分支）也拿不到别的选择
                 candidate_hotels = [locked_hotel]
                 selected_hotel = locked_hotel
-                # 只有"某一天单独指定的位置"才算被 strict 顶掉；整趟那个锚点在第 1 天已经生效过
-                day_anchor_label = (request.day_hotel_anchors or {}).get(day_index)
-                anchor_notes.append(self._locked_hotel_note(
-                    locked_hotel, hotels, preliminary_attractions, day_anchor_label, day_index))
+                # 那句"它离当天景点中心 X 公里"要拿当天景点算，所以留到最后再写——
+                # 当天景点可能还在下面才挑出来。
+                locked_note_for = (locked_hotel, day_anchor_label)
             else:
                 day_pool = planner_input.hotel_candidates_for_day(day_index, hotels)
                 candidate_hotels = self._narrow_hotel_candidates(
                     day_pool, planner_input.hotel_anchor_for_day(day_index), anchor_label, anchor_notes)
                 candidate_hotels = self._cap_hotel_candidates(
                     candidate_hotels, self._hotel_budget_cap(daily_budget_limit, target_count), anchor_notes)
-                selected_hotel = self._select_hotel(candidate_hotels, preliminary_attractions)
+                # ② 酒店贴**当天动线的末站**，不是所有景点的算术平均——动线是有方向的，
+                #    平均值落在中间，等于两头都要跑；晚上你人在末站。
+                selected_hotel = self._select_hotel(candidate_hotels, day_attractions)
                 if strict_continuity:
                     locked_hotel = selected_hotel
-            daily_attractions = self._pick_daily_attractions(
-                attractions,
-                day_index,
-                daily_budget_limit,
-                target_count,
-                selected_hotel,
-                used_attraction_names,
-                request.preferences,
-                constraints,
-                current_weather,
-            )
-            day_start = planner_input.arrival_point if day_index == 0 else self._point_of_hotel(previous_hotel)
-            day_end = planner_input.day_end_points.get(day_index) if planner_input.day_end_points else None
+            if day_kind == _DEPARTURE_DAY:
+                # 圆心是"你早上从哪儿醒的"＋口岸。返程日自己没有住宿，所以退回前一晚那家；
+                # 用户为这天亲口指了位置时用他指的那家。
+                day_attractions = self._pick_day_attractions(
+                    attractions, day_kind, day_start, day_end, daily_budget_limit, target_count,
+                    used_attraction_keys, request.preferences, constraints, current_weather,
+                    hotel=selected_hotel or previous_hotel)
+            if locked_note_for is not None:
+                # 只有"某一天单独指定的位置"才算被 strict 顶掉；整趟那个锚点在第 1 天已经生效过
+                anchor_notes.append(self._locked_hotel_note(
+                    locked_note_for[0], hotels, day_attractions, locked_note_for[1], day_index))
             decision = self._refine_daily_plan(
                 request,
                 constraints,
                 candidate_hotels,
                 attractions,
-                used_attraction_names,
+                used_attraction_keys,
                 agent_traces,
                 day_index,
                 daily_budget_limit,
                 current_weather,
                 selected_hotel,
-                daily_attractions,
+                day_attractions,
                 day_start,
                 day_end,
             )
@@ -192,7 +223,7 @@ class PlannerAgent:
             for note in anchor_notes:
                 if note not in decision.notes:
                     decision.notes.append(note)
-            self._mark_attractions_as_used(used_attraction_names, decision.attractions)
+            self._mark_attractions_as_used(used_attraction_keys, decision.attractions)
             lead_attraction = decision.attractions[0]
             day_plan = DayPlan(
                 date=current_date,
@@ -241,43 +272,161 @@ class PlannerAgent:
             agent_traces=agent_traces,
         )
 
-    def _pick_daily_attractions(self,
-                                attractions: list[Attraction],
-                                day_index: int,
-                                daily_budget_limit: int,
-                                target_count: int,
-                                hotel: Hotel | None,
-                                used_attraction_names: set[str],
-                                preferences: list[str] | None,
-                                constraints: PlanningConstraints | None,
-                                current_weather: WeatherInfo | None) -> list[Attraction]:
-        selected: list[Attraction] = []
-        nearby_attractions = self._filter_nearby_attractions(attractions, hotel)
+    def _day_kind(self, day_index: int, days: int) -> str:
+        """三种天。只有一天的行程算**到达日**——那天同时是最后一天，到达口岸比返程口岸更该用。"""
+        if day_index == 0:
+            return _ARRIVAL_DAY
+        if day_index == days - 1:
+            return _DEPARTURE_DAY
+        return _ORDINARY_DAY
+
+    def _pick_day_attractions(self,
+                              attractions: list[Attraction],
+                              day_kind: str,
+                              start_point: MapPoint | None,
+                              end_point: MapPoint | None,
+                              daily_budget_limit: int,
+                              target_count: int,
+                              used_attraction_keys: set[str],
+                              preferences: list[str] | None,
+                              constraints: PlanningConstraints | None,
+                              current_weather: WeatherInfo | None,
+                              hotel: Hotel | None = None) -> list[Attraction]:
+        """按天的类型选景点，顺带把顺序定下来。
+
+        顺序只由「起点 → … → 收工点」定，**不由酒店反推**——原来那一步是拿"离酒店近"排的，
+        再拿排出来的顺序去定酒店，绕成一个环。
+        """
+        candidates = self._prioritize_candidate_attractions(
+            attractions, preferences, constraints, current_weather, daily_budget_limit)
+        if day_kind == _ARRIVAL_DAY:
+            return self._pick_anchor_day_attraction(candidates, [start_point], used_attraction_keys)
+        if day_kind == _DEPARTURE_DAY:
+            return self._pick_anchor_day_attraction(
+                candidates, [self._point_of_hotel(hotel), end_point], used_attraction_keys)
         # 门票是先预留的（目标景点数 × 每个 60 元），不再是"日预算减掉酒店和吃行之后剩多少"——
         # 后者正是 2000 预算那单每天只排一个景点的原因：酒店先占，门票捡剩 106 元。
-        remaining_ticket_budget = target_count * _TICKET_RESERVE_PER_ATTRACTION
-        candidate_attractions = self._prioritize_candidate_attractions(
-            nearby_attractions or attractions,
-            hotel,
-            preferences,
-            constraints,
-            current_weather,
-            daily_budget_limit,
-        )
-        self._try_select_attractions(selected, candidate_attractions, day_index, target_count, remaining_ticket_budget, used_attraction_names, True)
-        if len(selected) < target_count:
-            self._try_select_attractions(selected, candidate_attractions, day_index, target_count, remaining_ticket_budget, used_attraction_names, False)
-        if not selected:
-            fallback = self._find_fallback_attraction(candidate_attractions, used_attraction_names)
-            if fallback is not None:
-                selected.append(fallback)
-        return selected
+        return self._compose_day_route(
+            start_point.location if start_point is not None else None,
+            candidates, target_count, used_attraction_keys,
+            target_count * _TICKET_RESERVE_PER_ATTRACTION)
 
-    def _find_fallback_attraction(self, candidate_attractions: list[Attraction], used_attraction_names: set[str]) -> Attraction | None:
-        for candidate_attraction in candidate_attractions:
-            if candidate_attraction.name not in used_attraction_names:
-                return candidate_attraction
-        return candidate_attractions[0] if candidate_attractions else None
+    def _pick_anchor_day_attraction(self,
+                                    candidates: list[Attraction],
+                                    centers: list[MapPoint | None],
+                                    used_attraction_keys: set[str]) -> list[Attraction]:
+        """到达日／离开日只排一个：在"附近"圈里取分数最高的那个。
+
+        两个圆心（离开日是当晚那家酒店 + 返程口岸）取**并集**，不是交集：机场都在远郊，
+        要求一个景点同时落在两边的 10 公里内，等于要求"住机场旁边"，一个都选不出来。
+
+        半径圈只管"挑哪个"，**不设总长闸门**：这天只有一站，谈不上动线。
+        """
+        pool = [a for a in candidates if self._attraction_key(a) not in used_attraction_keys] or list(candidates)
+        if not pool:
+            return []
+        usable = [center.location for center in centers
+                  if center is not None and center.location is not None]
+        # `candidates` 进来时已按分数降序，所以圈里取头一个就是"圈内分数最高"。
+        for radius_km in _ANCHOR_DAY_RADII_KM:
+            inside = [a for a in pool if self._within_any_center(a, usable, radius_km)]
+            if radius_km is None or len(inside) >= _ANCHOR_DAY_MIN_CHOICES:
+                return inside[:1]
+        return pool[:1]
+
+    def _within_any_center(self, attraction: Attraction, centers: list[Location],
+                           radius_km: float | None) -> bool:
+        """落在任一圆心的半径内。没给半径（最后一级）、没给圆心、这条没坐标，都算命中。"""
+        if radius_km is None or not centers or attraction.location is None:
+            return True
+        return any(self._calculate_distance_km(attraction.location, center) <= radius_km
+                   for center in centers)
+
+    def _compose_day_route(self,
+                           start: Location | None,
+                           candidates: list[Attraction],
+                           target_count: int,
+                           used_attraction_keys: set[str],
+                           ticket_budget: int) -> list[Attraction]:
+        """普通天的动线：每步挑"插进来最不绕"的那个，插到哪就定它在第几站。
+
+        这一条同时替掉原来那两个各自为政的闸门：
+        - 不设"近邻"——增量小自然接得顺，不必再跟每一站比一遍 30 公里；
+        - 不锁死已选——每步都重看全部候选，所以没有"谁先进谁锁死"。
+
+        总长上限是**逐级放宽**的（`_DAY_ROUTE_CAP_LADDER_KM`）：25 排不出就往 50 放。
+        **放宽而不是"硬给一个最近的"**——放一级之后还能多接一站，见常量那段注释。
+        梯子走完还是空（候选全被用过、或根本没有候选），才退回"只给最近的一个"。
+        """
+        for cap_km in _DAY_ROUTE_CAP_LADDER_KM:
+            route = self._fill_route_within(
+                start, candidates, target_count, used_attraction_keys, ticket_budget, cap_km)
+            if route:
+                return route
+        # 连放宽到 50 都排不出来：还是得给一个——`_build_meals` 和 `_build_description`
+        # 都拿 attractions[0]／[-1] 当锚，空列表会直接炸。既然非给不可，就挑**离起点最近**的：
+        # 这天反正已经超上限了，再挑个"分数最高但更远"的只会更赶。起点未知时全部并列，
+        # 退回分数最高的那个（与 Java 原样一致）。超了多少由 ReflectionAgent 写成备注，不静默。
+        fallback = self._nearest_unused(candidates, start, used_attraction_keys)
+        return [fallback] if fallback is not None else []
+
+    def _fill_route_within(self,
+                           start: Location | None,
+                           candidates: list[Attraction],
+                           target_count: int,
+                           used_attraction_keys: set[str],
+                           ticket_budget: int,
+                           cap_km: float) -> list[Attraction]:
+        """按贪心把动线填到 target_count，每步都要求插完不超 cap_km。一个都插不进就返回空。"""
+        route: list[Attraction] = []
+        # 候选已按分数降序，序号就是"分数高的排前面"，拿来当并列时的裁判，省一次重算。
+        rank = {id(attraction): index for index, attraction in enumerate(candidates)}
+        for _ in range(max(1, target_count)):
+            best: tuple[tuple[float, int], int, Attraction] | None = None
+            spent = sum(item.ticket_price for item in route)
+            for candidate in candidates:
+                if self._attraction_key(candidate) in used_attraction_keys:
+                    continue
+                if self._contains_attraction(route, self._attraction_key(candidate)):
+                    continue
+                # 第一个不受门票预留限制，与原来一致。
+                if route and spent + candidate.ticket_price > ticket_budget:
+                    continue
+                index, length = self._best_insertion(start, route, candidate)
+                if length > cap_km:
+                    continue
+                key = (round(length - self._route_length_km(route, start, None), 6), rank[id(candidate)])
+                if best is None or key < best[0]:
+                    best = (key, index, candidate)
+            if best is None:
+                break
+            route.insert(best[1], best[2])
+        return route
+
+    def _nearest_unused(self, candidates: list[Attraction], start: Location | None,
+                        used_attraction_keys: set[str]) -> Attraction | None:
+        """离起点最近的那个还没用过的候选；候选按分数降序，所以并列时分数高的赢。"""
+        pool = [a for a in candidates if self._attraction_key(a) not in used_attraction_keys] or list(candidates)
+        if not pool:
+            return None
+        rank = {id(attraction): index for index, attraction in enumerate(candidates)}
+        return min(pool, key=lambda a: (round(self._route_length_km([a], start, None), 6), rank[id(a)]))
+
+    def _best_insertion(self, start: Location | None, route: list[Attraction],
+                        candidate: Attraction) -> tuple[int, float]:
+        """把 candidate 插进 route 里最省的那个位置：返回（下标，插完的全程公里数）。
+
+        动线最多三四站，穷举所有位置就够。**插入增量是这个方案里唯一的空间判据**——
+        原来那两个闸门（近邻 30 公里、酒店 15 公里）都换成它。
+        """
+        best_index, best_length = 0, float("inf")
+        for index in range(len(route) + 1):
+            length = self._route_length_km(route[:index] + [candidate] + route[index:], start, None)
+            # 并列时取**靠后**的位置（`<=` 而不是 `<`）：两条一样长就走"今天新加的一站排在最后"，
+            # 否则纯粹因为浮点次序不同，同一批景点会一会儿插在队首一会儿插在队尾。
+            if length <= best_length:
+                best_index, best_length = index, length
+        return best_index, best_length
 
     def _determine_target_count(self,
                                 day_index: int,
@@ -332,31 +481,22 @@ class PlannerAgent:
 
     def _prioritize_candidate_attractions(self,
                                           attractions: list[Attraction],
-                                          hotel: Hotel | None,
                                           preferences: list[str] | None,
                                           constraints: PlanningConstraints | None,
                                           current_weather: WeatherInfo | None,
                                           daily_budget_limit: int) -> list[Attraction]:
         # Java: Comparator.comparingDouble(score).reversed().thenComparingInt(ticketPrice)
-        # 偏离：先按离酒店距离分档（近的整档先选），同档内仍是 Java 的"分数降序、票价升序"。
+        #
+        # 2026-10-09 那层"先按离酒店 5/10 公里分档、近的整档先选"已在 2026-10-12 撤掉：
+        # 它让顺序由酒店推出来，而酒店又要拿顺序去定，绕成一个环（见模块 docstring）。
+        # 远近现在由 `_compose_day_route` 的"插入增量"在选的那一步管，这里回到 Java 原样。
         return sorted(
             attractions,
             key=lambda attraction: (
-                self._distance_band_to_hotel(hotel, attraction),
                 -self._score_attraction(attraction, preferences, constraints, current_weather, daily_budget_limit),
                 attraction.ticket_price,
             ),
         )
-
-    def _distance_band_to_hotel(self, hotel: Hotel | None, attraction: Attraction) -> int:
-        if hotel is None or hotel.location is None or attraction.location is None:
-            return 0
-        distance_km = self._calculate_distance_km(hotel.location, attraction.location)
-        if distance_km <= _ATTRACTION_NEAR_KM:
-            return 0
-        if distance_km <= _ATTRACTION_MID_KM:
-            return 1
-        return 2
 
     def _score_attraction(self,
                           attraction: Attraction,
@@ -409,29 +549,9 @@ class PlannerAgent:
         category = attraction.category or ""
         return category in ("人文历史", "城市漫游")
 
-    def _try_select_attractions(self,
-                                selected: list[Attraction],
-                                candidate_attractions: list[Attraction],
-                                day_index: int,
-                                target_count: int,
-                                remaining_ticket_budget: int,
-                                used_attraction_names: set[str],
-                                skip_used_attractions: bool) -> None:
-        size = len(candidate_attractions)
-        for offset in range(size):
-            if len(selected) >= target_count:
-                break
-            attraction = candidate_attractions[(day_index + offset) % size]
-            if skip_used_attractions and attraction.name in used_attraction_names:
-                continue
-            next_ticket_total = sum(item.ticket_price for item in selected) + attraction.ticket_price
-            if not selected or next_ticket_total <= remaining_ticket_budget:
-                if not self._contains_attraction(selected, attraction.name) and self._is_reasonably_close(selected, attraction):
-                    selected.append(attraction)
-
-    def _mark_attractions_as_used(self, used_attraction_names: set[str], daily_attractions: list[Attraction]) -> None:
+    def _mark_attractions_as_used(self, used_attraction_keys: set[str], daily_attractions: list[Attraction]) -> None:
         for attraction in daily_attractions:
-            used_attraction_names.add(attraction.name)
+            used_attraction_keys.add(self._attraction_key(attraction))
 
     def _build_description(self,
                            attraction: Attraction,
@@ -482,11 +602,16 @@ class PlannerAgent:
             return 0
         return 1
 
-    def _pin_order_km(self,
-                      order: list[Attraction],
-                      start: Location | None,
-                      end: Location | None) -> float:
-        """一条游玩顺序的总里程：出发地→首站→…→末站→收工地点。缺哪端就不算哪段。"""
+    def _route_length_km(self,
+                         order: list[Attraction],
+                         start: Location | None,
+                         end: Location | None) -> float:
+        """一条游玩顺序的总里程：出发地→首站→…→末站→收工地点。缺哪端就不算哪段。
+
+        空动线算 0：贪心插入每一步都要拿它当基准比增量（见 `_best_insertion`）。
+        """
+        if not order:
+            return 0.0
         total = 0.0
         if start is not None and order[0].location is not None:
             total += self._calculate_distance_km(start, order[0].location)
@@ -524,7 +649,7 @@ class PlannerAgent:
         if len(pins) < 2:
             return list(pins), ""
         ranked = sorted(
-            ((list(order), self._pin_order_km(order, start, endpoint)) for order in permutations(pins)),
+            ((list(order), self._route_length_km(order, start, endpoint)) for order in permutations(pins)),
             key=lambda item: item[1],
         )
         best_km = ranked[0][1]
@@ -540,7 +665,7 @@ class PlannerAgent:
             chosen_order, why = chosen
             reason = "先后按少绕路排" if chosen_order is tied[0][0] else "里程相近，先后按时段常识调整"
             reason = f"{reason}（{why}）" if why else reason
-        return chosen_order, f"{reason}，全程约 {jround(self._pin_order_km(chosen_order, start, endpoint))} 公里"
+        return chosen_order, f"{reason}，全程约 {jround(self._route_length_km(chosen_order, start, endpoint))} 公里"
 
     def _apply_day_pins(self,
                         decision: "_DailyPlanDecision",
@@ -629,7 +754,7 @@ class PlannerAgent:
                            constraints: PlanningConstraints | None,
                            hotels: list[Hotel],
                            all_attractions: list[Attraction],
-                           used_attraction_names: set[str],
+                           used_attraction_keys: set[str],
                            agent_traces: list[AgentTrace],
                            day_index: int,
                            daily_budget_limit: int,
@@ -640,6 +765,8 @@ class PlannerAgent:
                            end_point: MapPoint | None = None) -> _DailyPlanDecision:
         working_hotel = selected_hotel
         working_attractions = list(daily_attractions)
+        # 换景点时要拿它算"换完这条动线还超不超上限"，所以起点得带下来。
+        start_location = start_point.location if start_point is not None else None
         notes: list[str] = []
         hotel_adjusted = False
         adjust_rounds = 0
@@ -696,12 +823,13 @@ class PlannerAgent:
                 indoor_alternative = self._select_replacement_attraction(
                     all_attractions,
                     working_attractions,
-                    used_attraction_names,
+                    used_attraction_keys,
                     working_hotel,
                     request.preferences,
                     constraints,
                     current_weather,
                     daily_budget_limit,
+                    start_location,
                     indoor_replacement_target,
                     "indoor",
                 )
@@ -726,12 +854,13 @@ class PlannerAgent:
                 cheaper_alternative = self._select_replacement_attraction(
                     all_attractions,
                     working_attractions,
-                    used_attraction_names,
+                    used_attraction_keys,
                     working_hotel,
                     request.preferences,
                     constraints,
                     current_weather,
                     daily_budget_limit,
+                    start_location,
                     expensive_target,
                     "budget",
                 )
@@ -745,12 +874,13 @@ class PlannerAgent:
                 closer_alternative = self._select_replacement_attraction(
                     all_attractions,
                     working_attractions,
-                    used_attraction_names,
+                    used_attraction_keys,
                     working_hotel,
                     request.preferences,
                     constraints,
                     current_weather,
                     daily_budget_limit,
+                    start_location,
                     farthest_target,
                     "distance",
                 )
@@ -798,15 +928,15 @@ class PlannerAgent:
             return current_hotel
         best_hotel = current_hotel
         best_score = float("inf")
-        attraction_center = self._calculate_center(attractions)
+        route_end = self._route_end_location(attractions)
         for hotel in hotels:
             if current_hotel is not None and hotel.estimated_cost >= current_hotel.estimated_cost:
                 continue
             budget_penalty = 10.0 if hotel.estimated_cost > daily_budget_limit * 0.48 else 0.0
             distance_penalty = (
                 0.0
-                if attraction_center is None or hotel.location is None
-                else self._calculate_distance_km(hotel.location, attraction_center)
+                if route_end is None or hotel.location is None
+                else self._calculate_distance_km(hotel.location, route_end)
             )
             score = budget_penalty + distance_penalty
             if score < best_score:
@@ -845,33 +975,28 @@ class PlannerAgent:
     def _select_replacement_attraction(self,
                                        all_attractions: list[Attraction],
                                        working_attractions: list[Attraction],
-                                       used_attraction_names: set[str],
+                                       used_attraction_keys: set[str],
                                        hotel: Hotel | None,
                                        preferences: list[str] | None,
                                        constraints: PlanningConstraints | None,
                                        current_weather: WeatherInfo | None,
                                        daily_budget_limit: int,
+                                       start_location: Location | None,
                                        target: Attraction | None,
                                        mode: str) -> Attraction | None:
         if target is None:
             return None
-        nearby_attractions = self._filter_nearby_attractions(all_attractions, hotel)
         candidate_attractions = self._prioritize_candidate_attractions(
-            nearby_attractions or all_attractions,
-            hotel,
-            preferences,
-            constraints,
-            current_weather,
-            daily_budget_limit,
-        )
+            all_attractions, preferences, constraints, current_weather, daily_budget_limit)
         for candidate in candidate_attractions:
             if candidate.name == target.name:
                 continue
-            if self._contains_attraction(working_attractions, candidate.name):
+            if self._contains_attraction(working_attractions, self._attraction_key(candidate)):
                 continue
-            if candidate.name in used_attraction_names:
+            if self._attraction_key(candidate) in used_attraction_keys:
                 continue
-            if not self._is_reasonably_close_excluding_target(working_attractions, target, candidate):
+            if not self._replacement_keeps_the_route_short(
+                    working_attractions, target, candidate, start_location):
                 continue
             if mode == "indoor" and not self._is_indoor_friendly(candidate):
                 continue
@@ -888,12 +1013,19 @@ class PlannerAgent:
                 attractions[index] = replacement
                 return
 
-    def _is_reasonably_close_excluding_target(self,
-                                              working_attractions: list[Attraction],
-                                              target: Attraction,
-                                              candidate: Attraction) -> bool:
-        remaining = [attraction for attraction in working_attractions if attraction.name != target.name]
-        return self._is_reasonably_close(remaining, candidate)
+    def _replacement_keeps_the_route_short(self,
+                                           working_attractions: list[Attraction],
+                                           target: Attraction,
+                                           candidate: Attraction,
+                                           start: Location | None) -> bool:
+        """换进来的这个不能把当天动线撑过上限。
+
+        原来是"跟每一站都算一遍距离，有一个超 30 公里就拒"——那会把顺路的链子从中间砍断：
+        (0,0)→(30,0)→(60,0) 里末站离起点 60 公里，可它离上一站只有 30。改成整条线算总长。
+        """
+        remaining = [a for a in working_attractions if a.name != target.name]
+        _, length = self._best_insertion(start, remaining, candidate)
+        return length <= _DAY_ROUTE_CAP_KM
 
     def _is_closer_to_hotel(self, candidate: Attraction, target: Attraction | None, hotel: Hotel | None) -> bool:
         if (hotel is None or hotel.location is None or candidate.location is None
@@ -1177,21 +1309,25 @@ class PlannerAgent:
     def _select_hotel(self, hotels: list[Hotel] | None, attractions: list[Attraction]) -> Hotel | None:
         """在已经过了住宿上限过滤的候选里，比"远近、贵贱、好坏"。
 
+        "远近"量的是离**当天动线的末站**多远——不是所有景点的算术平均：
+        动线是有方向的，平均值落在中间，等于两头都要跑；晚上你人在末站。
+        `attractions` 传进来的顺序就是游玩顺序。
+
         价格折成公里当量（每 60 元＝1 公里）才能跟距离直接相加：Java 那套"一晚超日预算 55% 才罚 12 分"
         的阶梯，在 6~110 公里的距离跨度面前几乎不起作用，于是近的贵的稳赢——2000 预算那单
         每晚 380、每天只剩一个景点就是这么来的。评分同理给得很小（0.1 分＝0.5 公里当量）。
         """
         if not hotels:
             return None
-        attraction_center = self._calculate_center(attractions)
+        route_end = self._route_end_location(attractions)
         best_hotel = hotels[0]
         best_score = float("inf")
 
         for hotel in hotels:
             distance_penalty = (
                 0.0
-                if attraction_center is None or hotel.location is None
-                else self._calculate_distance_km(hotel.location, attraction_center)
+                if route_end is None or hotel.location is None
+                else self._calculate_distance_km(hotel.location, route_end)
             )
             score = (distance_penalty
                      + hotel.estimated_cost / _HOTEL_COST_KM_DIVISOR
@@ -1238,8 +1374,18 @@ class PlannerAgent:
     def _estimate_hotel_cost(self, hotel: Hotel | None) -> int:
         return 0 if hotel is None else hotel.estimated_cost
 
-    def _contains_attraction(self, attractions: list[Attraction], attraction_name: str) -> bool:
-        return any(attraction.name == attraction_name for attraction in attractions)
+    @staticmethod
+    def _attraction_key(attraction: Attraction) -> str:
+        """判重用的身份：有 POI id 就用 id，没有才退回名字。
+
+        本地知识库那个源造不出 id，所以同一次规划里两种键可能混着用——这是有意的：
+        比"全按名字"准（同名景点不再塌成一个），也比"没 id 就不判重"稳。
+        """
+        return attraction.id or attraction.name or ""
+
+    def _contains_attraction(self, attractions: list[Attraction], key: str) -> bool:
+        """当天动线里有没有同一个景点。传 `_attraction_key` 的结果，不是名字。"""
+        return any(self._attraction_key(attraction) == key for attraction in attractions)
 
     def _sanitize_attractions(self, attractions: list[Attraction]) -> list[Attraction]:
         scenic_attractions: list[Attraction] = []
@@ -1259,25 +1405,6 @@ class PlannerAgent:
             if center is None or self._calculate_distance_km(attraction.location, center) <= 35
         ]
         return clustered_attractions if len(clustered_attractions) >= 3 else scenic_attractions
-
-    def _filter_nearby_attractions(self, attractions: list[Attraction], hotel: Hotel | None) -> list[Attraction]:
-        if hotel is None or hotel.location is None:
-            return attractions
-        nearby_attractions = [
-            attraction
-            for attraction in attractions
-            if attraction.location is not None
-            and self._calculate_distance_km(hotel.location, attraction.location) <= _ATTRACTION_HOTEL_RADIUS_KM
-        ]
-        return nearby_attractions if len(nearby_attractions) >= 2 else attractions
-
-    def _is_reasonably_close(self, selected: list[Attraction], candidate: Attraction) -> bool:
-        if not selected or candidate.location is None:
-            return True
-        for attraction in selected:
-            if attraction.location is not None and self._calculate_distance_km(attraction.location, candidate.location) > 30:
-                return False
-        return True
 
     def _is_food_like_attraction(self, attraction: Attraction) -> bool:
         category = attraction.category or ""
@@ -1303,6 +1430,13 @@ class PlannerAgent:
             or "公司" in name
             or "有限公司" in name
         )
+
+    @staticmethod
+    def _route_end_location(attractions: list[Attraction]) -> Location | None:
+        """动线末站的坐标。没有景点就没有锚，返回 None，让打分退化成"只比贵贱、好坏"。"""
+        if not attractions:
+            return None
+        return attractions[-1].location
 
     def _calculate_center(self, attractions: list[Attraction]) -> Location | None:
         longitude_sum = 0.0

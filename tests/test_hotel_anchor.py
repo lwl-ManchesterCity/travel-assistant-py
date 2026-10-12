@@ -113,8 +113,14 @@ def _narrow(planner: PlannerAgent, hotels: list[Hotel], anchor: Location | None,
     return planner._narrow_hotel_candidates(hotels, anchor, label, notes), notes
 
 
-def _day_hotels(plan) -> list[str]:
-    return [day.hotel.name for day in plan.days]
+def _day_hotels(plan) -> list[str | None]:
+    """每天那一格显示的住宿。**返程那天是 None** —— 那天直接去口岸，没有住宿。"""
+    return [day.hotel.name if day.hotel else None for day in plan.days]
+
+
+def _night_hotels(plan) -> list[str]:
+    """真正住的那几晚（去掉返程那天的空档）。"整趟住同一家"要拿它比。"""
+    return [name for name in _day_hotels(plan) if name]
 
 
 def _notes(plan) -> list[str]:
@@ -151,7 +157,8 @@ def test_shouldPreferTheNearestTierEvenWhenTheScoringWouldPickAnother():
 
     assert [hotel.name for hotel in narrowed] == [NEAR_HOTEL]
     plan = planner.build_plan(_input(_request(hotel_anchor="西湖"), anchor=ANCHOR))
-    assert _day_hotels(plan) == [NEAR_HOTEL] * 3
+    # 前两晚是同一家；返程那天没有住宿（那天直接去口岸）
+    assert _day_hotels(plan) == [NEAR_HOTEL, NEAR_HOTEL, None]
 
 
 def test_shouldFallToNextTierWhenNearestTierIsEmpty():
@@ -212,13 +219,15 @@ def test_shouldBehaveAsBeforeWhenNoCandidateHasCoordinates():
 
 
 def test_shouldReuseFirstDayHotelAndSaySoForEveryLaterDay():
-    """判据 3：strict 三天同名，且每天有一句明写的沿用备注。"""
+    """判据 3：strict 下每一**晚**都是同一家，且有一句明写的沿用备注。"""
     plan = _planner().build_plan(_input(_request(hotel_anchor="西湖", hotel_continuity="strict"), anchor=ANCHOR))
 
-    assert _day_hotels(plan) == [NEAR_HOTEL] * 3
+    # 前两晚是同一家；返程那天没有住宿（那天直接去口岸）
+    assert _day_hotels(plan) == [NEAR_HOTEL, NEAR_HOTEL, None]
     notes = " ".join(_notes(plan))
-    assert "第 2 天沿用第 1 天的酒店" in notes and "第 3 天沿用第 1 天的酒店" in notes
+    assert "第 2 天沿用第 1 天的酒店" in notes
     assert "整趟住同一家" in notes
+    assert "第 3 天沿用" not in notes    # 返程那天没有住宿，也就没有这句
 
 
 def test_shouldStateHowMuchFartherTheLockedHotelIs():
@@ -239,11 +248,16 @@ def test_shouldNotSwapHotelsOnLaterDaysEvenWhenBudgetBranchFires():
     request = _request(hotel_anchor="西湖", hotel_continuity="strict", budget=900)
     plan = _planner().build_plan(_input(request, anchor=ANCHOR))
 
-    assert len(set(_day_hotels(plan))) == 1
+    assert len(set(_night_hotels(plan))) == 1
 
 
 def test_shouldOnlyChangeTheDayThatCarriesAnAnchor():
-    """判据 4：dayHotelAnchors 只影响第 2 天，其余两天不受影响。"""
+    """判据 4：dayHotelAnchors 只影响第 2 天。
+
+    第 3 天（返程那天）的住宿显示第 2 天那家，不是自己另挑的——那天晚上不住店，
+    住的就是前一晚那家（docs/PLANNER_SELECTION_DESIGN.md 4.5）。所以它跟着第 2 天走
+    不算"锚点漏了出去"，下面两条断言分别钉住这两件事。
+    """
     planner = _planner()
     without_anchor = planner.build_plan(_input(_request()))
     plan = planner.build_plan(_input(
@@ -253,7 +267,9 @@ def test_shouldOnlyChangeTheDayThatCarriesAnAnchor():
     days = _day_hotels(plan)
     baseline = _day_hotels(without_anchor)
     assert days[1] == NEAR_HOTEL
-    assert days[0] == baseline[0] and days[2] == baseline[2]
+    assert days[0] == baseline[0]        # 锚点没漏到第 1 天
+    assert days[2] is None               # 返程那天没有住宿
+    assert baseline[2] is None           # 不填锚点时同样没有
 
 
 def test_shouldLetStrictWinAndStateThatTheDayAnchorWasDropped():
@@ -262,7 +278,7 @@ def test_shouldLetStrictWinAndStateThatTheDayAnchorWasDropped():
         _request(hotel_continuity="strict", day_hotel_anchors={1: "西湖"}),
     ).model_copy(update={"day_hotel_anchor_locations": {1: ANCHOR}}))
 
-    assert len(set(_day_hotels(plan))) == 1
+    assert len(set(_night_hotels(plan))) == 1
     assert "第 2 天指定的住宿位置「西湖」未生效" in " ".join(_notes(plan))
 
 
