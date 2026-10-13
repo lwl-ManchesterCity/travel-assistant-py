@@ -26,9 +26,10 @@ from scripts.kb.kb_schema import (  # noqa: E402
     load_tag_vocabulary,
     validate_records,
 )
+from scripts.kb.keywords import SPECS_BY_CITY, city_slug  # noqa: E402
 from scripts.kb.normalize import fixture_to_skeletons, load_fixture  # noqa: E402
 
-FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "amap_pois_hangzhou.json"
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 SUPPLEMENT_PATH = DATA_DIR / "llm_supplement.json"
 
 # 第三层只允许覆盖这些字段；骨架字段（amap_poi_id/location/category…）不在此列，
@@ -38,6 +39,12 @@ SUPPLEMENTABLE_FIELDS = (
 )
 # 骨架自带这几个字段，属于内部推导过程，落库时不该出现在最终文件里。
 _INTERNAL_FIELDS = ("rating", "type", "address", "tel", "website", "biz_ext_cost", "city_slug")
+
+DEFAULT_UPDATED_AT = "2026-10-10"
+
+
+def fixture_path_for(city: str) -> Path:
+    return FIXTURE_DIR / f"amap_pois_{city_slug(city)}.json"
 
 
 def merge_skeleton(skeleton: dict, supplement: dict | None) -> dict:
@@ -58,25 +65,55 @@ def merge_skeleton(skeleton: dict, supplement: dict | None) -> dict:
                 if tag not in combined:
                     combined.append(tag)
             merged["tags"] = combined
-    merged.setdefault("updated_at", "2026-10-10")
+    merged.setdefault("updated_at", DEFAULT_UPDATED_AT)
     return merged
 
 
-def build(supplement_path: Path = SUPPLEMENT_PATH, fixture_path: Path = FIXTURE_PATH) -> tuple[list[dict], list[str]]:
-    fixture = load_fixture(fixture_path)
-    skeletons = fixture_to_skeletons(fixture)
+def build_city(city: str, supplements: dict) -> tuple[list[dict], list[str]]:
+    """单城：fixture → 骨架 → 合并第三层。返回 (记录, 缺补充数据的景点名)。"""
+    path = fixture_path_for(city)
+    if not path.exists():
+        return [], [f"[{city}] 还没有 fixture：{path}（先跑 fetch_amap_fixture --city {city}）"]
+
+    skeletons = fixture_to_skeletons(load_fixture(path), city=city)
+    records: list[dict] = []
+    missing: list[str] = []
+    for skeleton in skeletons:
+        supplement = supplements.get(skeleton["amap_poi_id"])
+        if not supplement:
+            missing.append(f"{skeleton['name']}({skeleton['amap_poi_id']})")
+        records.append(merge_skeleton(skeleton, supplement))
+    return records, missing
+
+
+def build(
+    supplement_path: Path = SUPPLEMENT_PATH,
+    cities: list[str] | None = None,
+) -> tuple[list[dict], list[str]]:
+    """多城合并。cities 给了就只build 这几座并按给定顺序输出；没给就按规格表的顺序全建。
+
+    **跨城去重**：四座城可能命中同一个 amap_poi_id（比如连锁品牌的馆），
+    重复的会被丢掉——落库时 id 是按城市 slug 生成的，所以同poi_id 在不同城是两条不同记录，
+    这里按 (city, amap_poi_id) 去重，不按 amap_poi_id 单字段去。
+    """
+    target_cities = cities if cities else list(SPECS_BY_CITY)
     supplements = (
         json.loads(supplement_path.read_text(encoding="utf-8")) if supplement_path.exists() else {}
     )
 
     merged: list[dict] = []
     missing_supplement: list[str] = []
-    for skeleton in skeletons:
-        poi_id = skeleton["amap_poi_id"]
-        supplement = supplements.get(poi_id)
-        if not supplement:
-            missing_supplement.append(f"{skeleton['name']}({poi_id})")
-        merged.append(merge_skeleton(skeleton, supplement))
+    seen: set[tuple[str, str]] = set()
+    for city in target_cities:
+        records, missing = build_city(city, supplements)
+        for record in records:
+            key = (record["city"], record["amap_poi_id"])
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(record)
+        if missing:
+            missing_supplement.extend(f"{city}/{name}" for name in missing)
 
     vocabulary = load_tag_vocabulary()
     accepted, warnings = validate_records(merged, vocabulary)
@@ -92,6 +129,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="合成并校验 data/attractions.json")
     parser.add_argument("--check-only", action="store_true", help="只校验现有文件")
     parser.add_argument("--strict", action="store_true", help="有任何告警就返回非零")
+    parser.add_argument(
+        "--cities",
+        default="",
+        help="只 build 这几座城（逗号分隔，按给定顺序）。不传= 按规格表顺序全建",
+    )
     args = parser.parse_args()
 
     if args.check_only:
@@ -100,13 +142,19 @@ def main() -> int:
         accepted, warnings = validate_records(records, vocabulary)
         failed = len(records) - len(accepted)
     else:
-        accepted, warnings = build()
+        cities = [city.strip() for city in args.cities.split(",") if city.strip()] or None
+        accepted, warnings = build(cities=cities)
         failed = 0
         ATTRACTIONS_PATH.write_text(
             json.dumps(accepted, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
 
+    counts: dict[str, int] = {}
+    for record in accepted:
+        counts[record.get("city") or "?"] = counts.get(record.get("city") or "?", 0) + 1
+
     print(f"合格记录 {len(accepted)} 条 | 校验失败 {failed} 条 | 告警 {len(warnings)} 条")
+    print("  分城：" + " | ".join(f"{city} {count}" for city, count in counts.items()))
     for warning in warnings:
         print(f"  - {warning}")
     if not args.check_only:

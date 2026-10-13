@@ -242,19 +242,21 @@ def _parse_location(raw: Any) -> dict[str, float] | None:
         return None
 
 
-def _make_id(city: str, name: str, poi_id: str) -> str:
-    """稳定主键：城市拼音-短名拼音。不许用 name 直接当主键（会随官方改名而变）。
+def _make_id(city: str, poi_id: str) -> str:
+    """稳定主键：{城市slug}-{poi_id 小写短码}。
 
-    不引入 pypinyin：这是一个一次性离线作业，为十几条 id 拼音化不值得给项目加依赖。
-    城市用固定映射（目前只做杭州），景点部分用高德 poi_id 的小写短码——
-    poi_id 本身已经是稳定的官方标识，比拼音更不容易撞。
+    不引入 pypinyin：这是一个一次性离线作业，为几十条 id 拼音化不值得给项目加依赖。
+    poi_id 本身已经是稳定的官方标识（设计文档 4.1「与高德对齐的外键」），
+    比拼音更不容易撞。
+
+    城市前缀取不到时走sha1 兜底，**不能**退化成字面量 "city"——
+    那样四座城会共用一个前缀，主键就失去了区分城市的能力。
     """
-    city_part = _CITY_PINYIN.get(city, "hz" if city.startswith("杭州") else "city")
+    from scripts.kb.keywords import city_id_prefix
+
+    city_part = city_id_prefix(city)
     short = "".join(char for char in poi_id.lower() if char.isalnum())[-8:]
     return f"{city_part}-{short}"
-
-
-_CITY_PINYIN: dict[str, str] = {"杭州": "hz"}
 
 
 def is_pickable_poi(poi: dict) -> bool:
@@ -337,7 +339,7 @@ def poi_to_skeleton(
         # open_time 是简版时段（实测覆盖 55%），作为 opentime2 缺失时的备份。
         hours, _ = parse_opentime2(biz_ext.get("open_time"))
 
-    record_id = _make_id(city, name, poi_id)
+    record_id = _make_id(city, poi_id)
     if not record_id.split("-", 1)[1]:
         record_id = f"{record_id}-{fallback_index:02d}"
 
@@ -393,19 +395,29 @@ def _build_address(poi: dict) -> str:
 
 def fixture_to_skeletons(
     fixture: dict,
+    city: str | None = None,
     specs: tuple[dict[str, str | None], ...] | None = None,
     one_per_keyword: bool = True,
 ) -> list[dict]:
-    """整份fixture → 骨架列表，按 amap_poi_id 去重，保持稳定顺序（可重复运行）。
+    """整份 fixture → 骨架列表，按 amap_poi_id 去重，保持稳定顺序（可重复运行）。
 
     one_per_keyword=True 时每个关键词只取一个最佳候选——这是设计文档第五节第 1 步要的
     「一个城市的核心景点 30 个」，而不是把 302 条 POI 全部收进来。
-    specs 给了就走规格表的 expect_name 与 category 覆写；没给就退回纯打分。
-    """
-    from scripts.kb.keywords import ATTRACTION_SPECS
 
-    specs = specs if specs is not None else ATTRACTION_SPECS
-    by_keyword = {str(spec["keyword"]): spec for spec in specs}
+    specs 没给时**按 city 从keywords.SPECS_BY_CITY 取对应那张表**，不写死杭州：
+    写死的话拿北京的 fixture 也会去套杭州的 expect_name，挑出一批错的 POI 且不报错。
+    """
+    from scripts.kb.keywords import specs_for
+
+    if specs is None:
+        resolved_city = city
+        if resolved_city is None:
+            # 从 fixture 里反查城市：每条 entry 都记了抓的时候传的 --city。
+            entries = [entry for entry in fixture.values() if isinstance(entry, dict)]
+            cities = {str(entry.get("city")) for entry in entries if entry.get("city")}
+            if len(cities) == 1:
+                resolved_city = cities.pop()
+        specs = specs_for(resolved_city or "")
 
     skeletons: list[dict] = []
     seen: set[str] = set()
@@ -415,14 +427,14 @@ def fixture_to_skeletons(
         entry = fixture.get(keyword.replace(" ", "_"))
         if entry is None:
             continue
-        city = entry.get("city") or "杭州"
+        entry_city = entry.get("city") or city or "杭州"
         pois = (entry.get("response") or {}).get("pois") or []
         if one_per_keyword:
             candidate = pick_candidate(pois, keyword, spec.get("expect_name"))
             pois = [candidate] if candidate else []
         for index, poi in enumerate(pois):
             skeleton = poi_to_skeleton(
-                poi, city, category_override=spec.get("category"), fallback_index=index
+                poi, entry_city, category_override=spec.get("category"), fallback_index=index
             )
             if skeleton is None:
                 continue

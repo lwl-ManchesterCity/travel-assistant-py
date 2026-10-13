@@ -5,6 +5,7 @@
 """
 
 import json
+import re
 
 import pytest
 
@@ -420,6 +421,23 @@ def test_committed_attractions_has_no_free_for_everything():
     assert not all(price == 0 for price in prices), "全部票价都是 0，说明把未知当成了免费"
 
 
+def test_descriptions_are_pure_chinese():
+    """description 会直接进向量库并被追问 agent 读出来，不该混进英文单词。
+
+    校验器管的是格式（长度、字段），管不了语言——实际写数据时中英混排很容易发生
+    （实测「最 famous 的长城段」「三月最 popular 的去处」都是这么漏进去的），
+    所以这里单独守一条。
+    """
+    if not ATTRACTIONS_PATH.exists():
+        pytest.skip("attractions.json 尚未生成")
+    offenders = []
+    for record in json.loads(ATTRACTIONS_PATH.read_text(encoding="utf-8")):
+        words = re.findall(r"[A-Za-z]{3,}", record.get("description") or "")
+        if words:
+            offenders.append(f"{record['name']}: {words}")
+    assert not offenders, "description 里混进了英文：" + "；".join(offenders)
+
+
 def test_tags_vocabulary_file_is_intact():
     raw = json.loads(TAGS_PATH.read_text(encoding="utf-8"))
     assert set(raw) == {"场景", "属性", "类型"}
@@ -427,11 +445,145 @@ def test_tags_vocabulary_file_is_intact():
 
 
 def test_fixture_to_skeletons_is_stable():
-    from scripts.kb.normalize import load_fixture
-    from scripts.kb.fetch_amap_fixture import FIXTURE_PATH
+    from scripts.kb.fetch_amap_fixture import fixture_path_for
+    from scripts.kb.normalize import fixture_to_skeletons, load_fixture
 
-    fixture = load_fixture(FIXTURE_PATH)
-    first = fixture_to_skeletons(fixture)
-    second = fixture_to_skeletons(fixture)
+    fixture = load_fixture(fixture_path_for("杭州"))
+    first = fixture_to_skeletons(fixture, city="杭州")
+    second = fixture_to_skeletons(fixture, city="杭州")
     assert first == second
     assert all(record["amap_poi_id"] for record in first)
+
+
+# ---------- 多城参数化（第二轮：铺北京/上海/广州） ----------
+
+def test_fixture_paths_are_city_scoped():
+    """fixture 必须按城市分开存。
+
+    曾经全塞进一个文件：用北京的关键词去搜时，已存在的 34 个杭州 slug 会被当成
+    「已存在」整条跳过，循环还打印一串「已存在」——**静默失败**，一条都没抓。
+    """
+    from scripts.kb.fetch_amap_fixture import fixture_path_for
+
+    paths = [fixture_path_for(city) for city in ("杭州", "北京", "上海", "广州")]
+    assert len(set(paths)) == 4, "四座城的 fixture 路径必须互不相同"
+    assert paths[0].name == "amap_pois_hangzhou.json"
+    assert paths[1].name == "amap_pois_beijing.json"
+
+
+def test_city_id_prefixes_are_short_and_distinct():
+    """主键前缀要短（hz 不是 hangzhou），且四城互不相同。
+
+    前缀退化成一个字面量 "city-" 会让多座城共用一段主键前缀，
+    主键就失去了区分城市的能力。
+    """
+    from scripts.kb.keywords import city_id_prefix
+
+    prefixes = [city_id_prefix(city) for city in ("杭州", "北京", "上海", "广州")]
+    assert prefixes == ["hz", "bj", "sh", "gz"]
+    assert "city" not in prefixes
+
+
+def test_city_slug_and_id_prefix_are_independent():
+    """文件名的 slug（长）与主键前缀（短）是两个东西，不能共用一个映射。
+
+    曾经共用 CITY_SLUGS，结果杭州前缀从 hz 变成 hangzhou，34 条 id 全变——
+    靠「杭州逐字节未变」这条回归判据才发现。
+    """
+    from scripts.kb.keywords import city_id_prefix, city_slug
+
+    assert city_slug("杭州") == "hangzhou"
+    assert city_id_prefix("杭州") == "hz"
+
+
+def test_unknown_city_gets_distinct_prefixes():
+    """没配的城市也要拿到互不相同的前缀，不能都落到 "city"。"""
+    from scripts.kb.keywords import city_id_prefix, city_slug
+
+    assert city_slug("成都") != city_slug("西安")
+    assert city_id_prefix("成都") != city_id_prefix("西安")
+    assert city_id_prefix("成都") != "city"
+
+
+def test_specs_cover_four_cities():
+    from scripts.kb.keywords import SPECS_BY_CITY, keywords_for
+
+    assert set(SPECS_BY_CITY) >= {"杭州", "北京", "上海", "广州"}
+    for city in ("杭州", "北京", "上海", "广州"):
+        specs = SPECS_BY_CITY[city]
+        assert len(specs) >= 30, f"{city} 只有 {len(specs)} 条规格，低于 30 条的基线"
+        keywords = keywords_for(city)
+        assert len(keywords) == len(set(keywords)), f"{city} 的关键词有重复"
+        for spec in specs:
+            assert {"keyword", "expect_name", "category"} <= set(spec)
+
+
+def test_build_uses_city_scoped_specs():
+    """fixture_to_skeletons 默认按 city 取规格表，不写死杭州。
+
+    写死的话拿上海的 fixture 去套杭州的 expect_name，会挑出一批错的 POI 且不报错。
+    """
+    from scripts.kb.keywords import SPECS_BY_CITY, city_id_prefix
+    from scripts.kb.normalize import fixture_to_skeletons
+
+    fake_fixture = {
+        str(spec["keyword"]): {
+            "keyword": spec["keyword"],
+            "city": "上海",
+            "response": {"pois": [{
+                "id": f"B0FAKE{i:04d}", "name": f"上海测试点{i}",
+                "type": "风景名胜;风景名胜;风景名胜",
+                "location": "121.47,31.23",
+            }]},
+        }
+        for i, spec in enumerate(SPECS_BY_CITY["上海"])
+    }
+    skeletons = fixture_to_skeletons(fake_fixture, city="上海")
+    assert len(skeletons) == len(SPECS_BY_CITY["上海"])
+    assert all(record["city"] == "上海" for record in skeletons)
+    # 主键前缀走city_id_prefix（短的 sh），不是 city_slug（长的 shanghai）。
+    assert all(record["id"].startswith(f"{city_id_prefix('上海')}-") for record in skeletons)
+
+
+def test_build_infers_city_from_fixture():
+    """city 不传时从 fixture 反查——单城调试时不必每次都传。
+
+    关键词必须取广州规格表里真实存在的那一条：fixture_to_skeletons 是**按规格表**
+    遍历的，规格表里没有的关键词会被直接跳过。
+    """
+    from scripts.kb.keywords import SPECS_BY_CITY
+    from scripts.kb.normalize import fixture_to_skeletons
+
+    keyword = SPECS_BY_CITY["广州"][0]["keyword"]
+    fake_fixture = {
+        keyword: {
+            "keyword": keyword, "city": "广州",
+            "response": {"pois": [{
+                "id": "B0FAKE9999", "name": "广州测试点",
+                "type": "风景名胜;风景名胜;风景名胜", "location": "113.26,23.13",
+            }]},
+        }
+    }
+    skeletons = fixture_to_skeletons(fake_fixture)
+    assert len(skeletons) == 1
+    assert skeletons[0]["city"] == "广州"
+
+
+def test_build_skips_keywords_absent_from_specs():
+    """规格表里没有的关键词不会被收进来——这是刻意的，不是漏网。
+
+    反过来说：规格表少写一条，就少一个景点，且**不会报错**。
+    所以每座城的规格表条数要单独核对。
+    """
+    from scripts.kb.normalize import fixture_to_skeletons
+
+    fake_fixture = {
+        "一个不存在的景点名": {
+            "keyword": "一个不存在的景点名", "city": "北京",
+            "response": {"pois": [{
+                "id": "B0FAKE8888", "name": "某野景点",
+                "type": "风景名胜;风景名胜;风景名胜", "location": "116.40,39.90",
+            }]},
+        }
+    }
+    assert fixture_to_skeletons(fake_fixture, city="北京") == []

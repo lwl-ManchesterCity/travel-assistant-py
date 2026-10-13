@@ -2,8 +2,13 @@
   "B023B06XVX": {
     "ticket_price": 0,
     "hours": "09:00-17:00",
-    "closed_days": ["周一"],
-    "tags": ["免费", "亲子"],
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "亲子"
+    ],
     "description": "位于西湖边孤山路，全程室内参观，不受天气影响，适合雨天或带孩子慢慢逛。",
     "source_url": "http://nb.ncha.gov.cn/museumdetail.html?msg=7894df8add9449c8bb201f4f94ef51e2&nianfen=2025",
     "updated_at": "2026-10-10"
@@ -11,8 +16,13 @@
   "B023B09JLL": {
     "ticket_price": 0,
     "hours": "09:00-17:00",
-    "closed_days": ["周一"],
-    "tags": ["免费", "亲子"],
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "亲子"
+    ],
     "description": "玉皇山下的大型丝绸专题馆，室内恒温，展陈从养蚕缫丝到织造全流程，下雨天照样能逛。",
     "source_url": "https://www.chinasilkmuseum.com/cgjyy/info_6.aspx?itemid=8969&lcid=",
     "updated_at": "2026-10-10"
@@ -20,8 +30,13 @@
   "B023B0A45Y": {
     "ticket_price": 0,
     "hours": "09:00-17:00",
-    "closed_days": ["周一"],
-    "tags": ["免费", "亲子"],
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "亲子"
+    ],
     "description": "馆藏玉琮玉璧等良渚文物，室内展陈为主，适合雨天与人文亲子半日游。",
     "source_url": "https://www.lzmuseum.cn/ZuiXinGongGao/2024934396935.html",
     "updated_at": "2026-10-10"
@@ -30,7 +45,10 @@
     "ticket_price": 30,
     "hours": "07:30-17:30",
     "closed_days": [],
-    "tags": ["需预约", "拍照"],
+    "tags": [
+      "需预约",
+      "拍照"
+    ],
     "description": "飞来峰免门票但需提前实名预约，进灵隐寺另购香花券，寺院依山而建，上午光线与客流都更合适。",
     "source_url": "https://hz.bendibao.com/tour/2023426/145270.shtm",
     "updated_at": "2026-10-10"
@@ -39,7 +57,9 @@
     "ticket_price": 25,
     "hours": "07:30-17:30",
     "closed_days": [],
-    "tags": ["拍照"],
+    "tags": [
+      "拍照"
+    ],
     "description": "北山街上的岳飞墓祠，规模不大参观约一小时，清晨人少，适合与断桥、苏堤串成半日步行。",
     "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
     "updated_at": "2026-10-10"
@@ -48,7 +68,9 @@
     "ticket_price": 20,
     "hours": "08:00-17:30",
     "closed_days": [],
-    "tags": ["拍照"],
+    "tags": [
+      "拍照"
+    ],
     "description": "晚清首富宅邸，院落精巧含芝园假山，参观约两小时，出门即河坊街，室内为主适合雨天。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/urumqi117/25535.html",
     "updated_at": "2026-10-10"
@@ -57,7 +79,9 @@
     "ticket_price": 30,
     "hours": "07:00-17:30",
     "closed_days": [],
-    "tags": ["拍照"],
+    "tags": [
+      "拍照"
+    ],
     "description": "钱塘江北岸的宋代古塔，登塔可眺钱江，落日与江景是主要看点，门票含登塔。",
     "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
     "updated_at": "2026-10-10"
@@ -66,7 +90,10 @@
     "ticket_price": 0,
     "hours": null,
     "closed_days": [],
-    "tags": ["免费", "拍照"],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
     "description": "世界文化遗产，主景区免费开放，环湖步道与十景适合安排大半天，晴天傍晚光线最好。",
     "source_url": "https://hz.bendibao.com/tour/2023426/145270.shtm",
     "updated_at": "2026-10-10"
@@ -75,7 +102,10 @@
     "ticket_price": 80,
     "hours": "08:00-17:30",
     "closed_days": [],
-    "tags": ["拍照", "避暑"],
+    "tags": [
+      "拍照",
+      "避暑"
+    ],
     "description": "城市里的芦苇湿地，乘摇橹船穿行最出片，园内福堤与绿堤部分区域免费，需留半天。",
     "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
     "updated_at": "2026-10-10"
@@ -84,7 +114,10 @@
     "ticket_price": 130,
     "hours": "08:00-15:50",
     "closed_days": [],
-    "tags": ["避暑", "拍照"],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
     "description": "5A 湖岛景区，需坐船上岛，中心湖区与东南湖区间船票不通用，暑期避暑首选且需留一整天。",
     "source_url": "https://you.ctrip.com/sight/chunan2249/135831.html",
     "updated_at": "2026-10-10"
@@ -93,7 +126,9 @@
     "ticket_price": 20,
     "hours": "07:00-17:30",
     "closed_days": [],
-    "tags": ["亲子"],
+    "tags": [
+      "亲子"
+    ],
     "description": "虎跑路上的动物园，园区大适合带孩子，春秋两季动物活动多，雨天部分场馆仍可参观。",
     "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
     "updated_at": "2026-10-10"
@@ -102,7 +137,10 @@
     "ticket_price": 10,
     "hours": "08:30-16:30",
     "closed_days": [],
-    "tags": ["避暑", "拍照"],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
     "description": "桃源岭上的城市植物园，春季玉兰花与秋季桂花是亮点，十六点半后免费开放可看夜景。",
     "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
     "updated_at": "2026-10-10"
@@ -111,7 +149,10 @@
     "ticket_price": 57,
     "hours": "08:30-17:00",
     "closed_days": [],
-    "tags": ["避暑", "亲子"],
+    "tags": [
+      "避暑",
+      "亲子"
+    ],
     "description": "双浦镇的喀斯特溶洞，洞内常年十八度适合避暑，景区较大建议配景交车，雨天也可游览。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/Guangzhou152/135753.html",
     "updated_at": "2026-10-10"
@@ -120,7 +161,11 @@
     "ticket_price": 0,
     "hours": null,
     "closed_days": [],
-    "tags": ["免费", "亲子", "避暑"],
+    "tags": [
+      "免费",
+      "亲子",
+      "避暑"
+    ],
     "description": "西湖姊妹湖，全域免费开放，游船与游乐设施另收费，人比西湖少，适合骑行环湖与带孩子。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/8/1477898.html",
     "updated_at": "2026-10-10"
@@ -129,7 +174,10 @@
     "ticket_price": 0,
     "hours": null,
     "closed_days": [],
-    "tags": ["免费", "避暑"],
+    "tags": [
+      "免费",
+      "避暑"
+    ],
     "description": "西湖景区内的溪谷步道，全程免费，夏日林荫浓密是避暑首选，蚊虫较多需备驱蚊。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/17/16658.html",
     "updated_at": "2026-10-10"
@@ -138,7 +186,10 @@
     "ticket_price": 8,
     "hours": "07:00-17:00",
     "closed_days": [],
-    "tags": ["避暑", "拍照"],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
     "description": "梅灵南路的竹林小径，《卧虎藏龙》取景地，票价便宜，夏季竹荫清凉适合早场。",
     "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
     "updated_at": "2026-10-10"
@@ -147,7 +198,11 @@
     "ticket_price": 0,
     "hours": null,
     "closed_days": [],
-    "tags": ["免费", "夜游", "拍照"],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
     "description": "世界遗产运河的杭州段，街区与拱宸桥免费，夜游游船另收费，傍晚灯光与货船同框很出片。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/Hangzhou14/135709.html",
     "updated_at": "2026-10-10"
@@ -156,7 +211,10 @@
     "ticket_price": 0,
     "hours": "10:00-21:00",
     "closed_days": [],
-    "tags": ["免费", "夜游"],
+    "tags": [
+      "免费",
+      "夜游"
+    ],
     "description": "市中心的老牌广场与商圈，夜间有裸眼3D灯光秀，周边商场餐饮密集适合作为行程补给点。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/hangzhou14/1478671.html",
     "updated_at": "2026-10-10"
@@ -165,7 +223,11 @@
     "ticket_price": 0,
     "hours": "19:00-21:00",
     "closed_days": [],
-    "tags": ["免费", "夜游", "拍照"],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
     "description": "钱江新城的灯光秀观赏点，本身免费，定时演出，建议提前占位看两岸楼宇亮灯。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/8/1477898.html",
     "updated_at": "2026-10-10"
@@ -174,7 +236,10 @@
     "ticket_price": 0,
     "hours": null,
     "closed_days": [],
-    "tags": ["免费", "拍照"],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
     "description": "龙井村口的牌坊与茶园步道起点，免门票，清晨可沿十里琅珰走茶园，夏季遮荫良好。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/17/16658.html",
     "updated_at": "2026-10-10"
@@ -183,7 +248,10 @@
     "ticket_price": 80,
     "hours": "07:30-18:30",
     "closed_days": [],
-    "tags": ["拍照", "避暑"],
+    "tags": [
+      "拍照",
+      "避暑"
+    ],
     "description": "西溪东区的洪园，以洪氏家族园林与百年柿树闻名，遊船可达，适合亲子慢游半天。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/huangshan120061/145175693.html",
     "updated_at": "2026-10-10"
@@ -192,7 +260,11 @@
     "ticket_price": 253,
     "hours": "09:30-21:00",
     "closed_days": [],
-    "tags": ["夜游", "亲子", "拍照"],
+    "tags": [
+      "夜游",
+      "亲子",
+      "拍照"
+    ],
     "description": "以《宋城千古情》为核心的大型演出景区，门票含主秀，仿宋街市与夜游灯光是加分项。",
     "source_url": "https://www.songcn.com/",
     "updated_at": "2026-10-10"
@@ -201,7 +273,9 @@
     "ticket_price": 40,
     "hours": "08:00-19:00",
     "closed_days": [],
-    "tags": ["拍照"],
+    "tags": [
+      "拍照"
+    ],
     "description": "南山路上的雷峰塔，票价按季节浮动，登塔可俯瞰西湖全景，日落前一小时最值得上塔。",
     "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
     "updated_at": "2026-10-10"
@@ -210,7 +284,11 @@
     "ticket_price": 0,
     "hours": null,
     "closed_days": [],
-    "tags": ["免费", "拍照", "亲子"],
+    "tags": [
+      "免费",
+      "拍照",
+      "亲子"
+    ],
     "description": "老复兴路上的白塔公园，含南宋白塔与铁路遗存，园内大草坪适合亲子，江边可看日落。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/hangzhou14/5140832.html",
     "updated_at": "2026-10-10"
@@ -219,7 +297,11 @@
     "ticket_price": 0,
     "hours": null,
     "closed_days": [],
-    "tags": ["免费", "夜游", "拍照"],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
     "description": "吴山脚下的清河坊古街，全程免费，灯笼夜景在傍晚十八点半后最美，商铺营业到二十二点。",
     "source_url": "https://m.ctrip.com/html5/you/sight/linxiang2840/132386.html",
     "updated_at": "2026-10-10"
@@ -228,7 +310,11 @@
     "ticket_price": 0,
     "hours": null,
     "closed_days": [],
-    "tags": ["免费", "夜游", "拍照"],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
     "description": "南宋都城中轴线的步行街，全天开放且免费，中山中路一侧老字号集中，适合边逛边吃。",
     "source_url": "https://travelnews.qunar.com/qa_strategy/hangzhou-first-time-travel-guide",
     "updated_at": "2026-10-10"
@@ -237,7 +323,11 @@
     "ticket_price": 0,
     "hours": null,
     "closed_days": [],
-    "tags": ["免费", "夜游", "拍照"],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
     "description": "运河边的清末民初老街，街区免费开放且商业化低，傍晚河岸灯光亮起后氛围最好。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/xuedoutemplechiangshometownxikouscenicspot2032148/144033.html",
     "updated_at": "2026-10-10"
@@ -246,7 +336,11 @@
     "ticket_price": 0,
     "hours": "05:00-22:00",
     "closed_days": [],
-    "tags": ["免费", "夜游", "拍照"],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
     "description": "拱宸桥西的运河历史街区，四大国有博物馆聚集且街区免费，傍晚看货船穿行拱宸桥很出片。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/Hangzhou14/135709.html",
     "updated_at": "2026-10-10"
@@ -255,7 +349,10 @@
     "ticket_price": 0,
     "hours": "08:00-17:30",
     "closed_days": [],
-    "tags": ["免费", "拍照"],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
     "description": "南宋官窑遗址上的八卦形公园，园区免费且面积不大，登高可俯瞰遗址，逛一两个小时足够。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/Hangzhou14/135709.html",
     "updated_at": "2026-10-10"
@@ -264,7 +361,11 @@
     "ticket_price": 0,
     "hours": "09:00-21:00",
     "closed_days": [],
-    "tags": ["免费", "室内", "避暑"],
+    "tags": [
+      "免费",
+      "室内",
+      "避暑"
+    ],
     "description": "曙光路上的省级公共图书馆，免费入馆自习，五楼古籍区安静，适合雨天与酷暑时段避着。",
     "source_url": "https://www.zjlib.cn/",
     "updated_at": "2026-10-10"
@@ -272,8 +373,14 @@
   "B023B0BMJ6": {
     "ticket_price": 0,
     "hours": "09:00-17:00",
-    "closed_days": ["周一"],
-    "tags": ["免费", "室内", "拍照"],
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "拍照"
+    ],
     "description": "西子湖畔的国立美术馆，常设免费而特展另收费，建筑本身与湖景是另一重看点，室内适合雨天。",
     "source_url": "https://www.zjam.org.cn/Site/news/intro/notice.shtml",
     "updated_at": "2026-10-10"
@@ -282,7 +389,9 @@
     "ticket_price": 15,
     "hours": "07:30-17:30",
     "closed_days": [],
-    "tags": ["避暑"],
+    "tags": [
+      "避暑"
+    ],
     "description": "曙光路上的传统溶洞景区，洞内常年凉爽适合避暑，游览约两小时，夏季体验最佳。",
     "source_url": "https://www.hangzhou.gov.cn/col/col1229063429/art/2026/art_07da041e962341a1b8cc75903ea05a9c.html",
     "updated_at": "2026-10-10"
@@ -291,7 +400,10 @@
     "ticket_price": 0,
     "hours": null,
     "closed_days": [],
-    "tags": ["免费", "拍照"],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
     "description": "杨公堤旁的水上森林与木栈道秘境，门票免费且人少，晨雾与白鹭是主要看点。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/hangzhou14/5140832.html",
     "updated_at": "2026-10-10"
@@ -300,9 +412,1342 @@
     "ticket_price": 128,
     "hours": "19:00-21:50",
     "closed_days": [],
-    "tags": ["夜游", "拍照"],
+    "tags": [
+      "夜游",
+      "拍照"
+    ],
     "description": "滨江码头的钱塘江夜游，两艘游船多班次发船，沿途经过钱江新城灯光秀核心区，需提前订票。",
     "source_url": "https://gs.ctrip.com/html5/you/sight/zhangzhou334/135838.html",
     "updated_at": "2026-10-10"
+  },
+  "B000A8UIN8": {
+    "ticket_price": 60,
+    "hours": "08:30-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "需预约",
+      "拍照"
+    ],
+    "description": "明清两代皇宫，中轴线核心。旺季大门票 60 元、淡季 40 元，须提前 7 天实名预约，珍宝馆与钟表馆各另加 10 元。",
+    "source_url": "https://ticket.dpm.org.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B000A83U0P": {
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "需预约"
+    ],
+    "description": "免费预约的国家级综合博物馆，馆藏文物逾百万件。6-10 月延时开放至 17:30，每日 17:00 放票需抢。",
+    "source_url": "https://pcticket.chnmuseum.cn",
+    "updated_at": "2026-10-12"
+  },
+  "B000A81CB2": {
+    "ticket_price": 34,
+    "hours": "06:00-22:00",
+    "closed_days": [],
+    "tags": [
+      "需预约",
+      "拍照"
+    ],
+    "description": "明清皇帝祭天之所。联票 34 元含祈年殿、回音壁、圜丘，仅大门票 15 元进不了核心建筑；祈年殿等核心景点周一闭馆。",
+    "source_url": "https://travel.sina.cn/2026-10-12/detail-iniuwuvt5448477.d.html",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7O1CU": {
+    "ticket_price": 30,
+    "hours": "06:00-19:00",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "清代皇家园林，昆明湖与万寿山。旺季大门票 30 元、联票 60 元，园内游船另收 40 元，苏州街等园中园周一闭馆。",
+    "source_url": "https://www.summerpalace.net.cn/en/",
+    "updated_at": "2026-10-12"
+  },
+  "B000A45467": {
+    "ticket_price": 40,
+    "hours": "06:30-17:30",
+    "closed_days": [],
+    "tags": [
+      "需预约",
+      "拍照"
+    ],
+    "description": "明长城保存最完整、开放最早的一段，旺季 40 元、淡季 35 元。距市区约 70 公里，建议早出发，缆车与滑车另收费。",
+    "source_url": "https://www.badaling.cn/#/lvyoufuwu?channelCode=bdlTourismService",
+    "updated_at": "2026-10-12"
+  },
+  "B000A76B0A": {
+    "ticket_price": 0,
+    "hours": "09:00-20:00",
+    "closed_days": [
+      "周二"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "亲子"
+    ],
+    "description": "免费参观的首都级综合博物馆。2026 年 5 月起闭馆日由周一改为周二，并延长开放至 20:00。",
+    "source_url": "https://www.capitalmuseum.org.cn/visit",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7BC2S": {
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "需预约"
+    ],
+    "description": "国家级美术馆，常设展免费、临展另收费。每日限 6000 人，须提前 7 天 16:00 预约，周一闭馆。",
+    "source_url": "https://www.namoc.cn/zxyy/dl.shtml",
+    "updated_at": "2026-10-12"
+  },
+  "B000A80UL1": {
+    "ticket_price": 10,
+    "hours": "06:00-20:00",
+    "closed_days": [],
+    "tags": [
+      "拍照",
+      "避暑"
+    ],
+    "description": "皇家御苑，琼华岛白塔与九龙壁是核心。旺季大门票 10 元、联票 20 元，静心斋等园中园周一闭馆。",
+    "source_url": "https://www.beihaipark.com.cn/#/guide",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7I1OL": {
+    "ticket_price": 2,
+    "hours": "06:00-20:00",
+    "closed_days": [],
+    "tags": [
+      "拍照"
+    ],
+    "description": "故宫对面的制高点，万春亭可俯瞰整座紫禁城。门票仅 2 元，是俯瞰中轴线全景最便宜的位置。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/461/4676684.html",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7O5PK": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "description": "什刹海一带免费开放，摇橹船与酒吧另收费。傍晚湖边最热闹，与南锣鼓巷、烟袋斜街相连。",
+    "source_url": "https://travelnews.qunar.com/qa_strategy/hangzhou-first-time-travel-guide",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7O684": {
+    "ticket_price": 10,
+    "hours": "06:00-19:30",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "西山赏红叶胜地，双清别墅免费。旺季 10 元、淡季 5 元，碧云寺等院落周一闭馆，秋季周末人流极大。",
+    "source_url": "https://pc.xiangshantickets.com/",
+    "updated_at": "2026-10-12"
+  },
+  "B000A16E89": {
+    "ticket_price": 10,
+    "hours": "07:00-21:00",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "西洋楼遗址与福海园区。通票 25 元含西洋楼遗址区，大门票 10 元只能逛园区，10 月 18 日全园免票。",
+    "source_url": "http://www.yuanmingyuanpark.cn/?a=5wvcb",
+    "updated_at": "2026-10-12"
+  },
+  "B000A87IUX": {
+    "ticket_price": 19,
+    "hours": "07:30-17:00",
+    "closed_days": [],
+    "tags": [
+      "亲子"
+    ],
+    "description": "大熊猫馆 2026 年 7 月重新开放。联票 19 元含熊猫馆，官网另售大门票旺季 15 元、淡季 10 元。",
+    "source_url": "https://www.bjzoo.com/",
+    "updated_at": "2026-10-12"
+  },
+  "B0IA7RGK03": {
+    "ticket_price": 5,
+    "hours": "06:00-20:00",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "原北京植物园北园，樱桃沟水杉林是主打。南北联票 10 元，北园单票 5 元；温室卧佛寺等周一闭馆。",
+    "source_url": "https://chnbg.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B000A4D500": {
+    "ticket_price": 2,
+    "hours": "06:00-21:30",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "四大名亭之一与华夏名亭园。平时门票 2 元，菊花文化节期间调为 10 元，问票价时要说明是不是活动期。",
+    "source_url": "https://www.trt-park.cn/news/N10154.html",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7XIYH": {
+    "ticket_price": 2,
+    "hours": "06:00-21:30",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "西三环上的市民公园，樱花园是三月最受欢迎的去处。门票 2 元，人少价低，适合顺路散步。",
+    "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=53&keyword=%E7%8E%89%E6%B8%8A%E6%BD%AD%E5%85%AC%E5%9B%AD",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFFBWSBB": {
+    "ticket_price": 28,
+    "hours": "09:00-17:00",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "丰台王佐镇的丘陵公园，观景台可俯瞰青龙湖水面。成人 28 元，面积大适合半天慢游。",
+    "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=53&keyword=%E9%9D%92%E9%BE%99%E6%B9%96%E5%85%AC%E5%9B%AD",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFFAH7I9": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "description": "老北京胡同与创意小店，全程免费。避开周末与节假日，否则人流极大，多数小店午后开门。",
+    "source_url": "https://m.ctrip.com/webapp/tnt/list?allianceid=6032594&sid=170732500&pagetype=city&citytype=dt&keyword=%E5%8D%97%E9%93%83%E9%BC%93%E5%B7%BF&id=1&pocount=1&pshowcode=Ticket2",
+    "updated_at": "2026-10-12"
+  },
+  "B0L1FRZG1W": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "什刹海一带的胡同游线路免费，主打摇橹船与胡同生活场景，与银锭桥、后海连成一片。",
+    "source_url": "https://travelnews.qunar.com/qa_strategy/hangzhou-first-time-travel-guide",
+    "updated_at": "2026-10-12"
+  },
+  "B000A8UR3U": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "description": "京味商业老街，街区免费全天开放。仿古观光车 50 元另收，傍晚灯笼亮起后氛围最好。",
+    "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=53&keyword=%E5%89%8D%E9%97%A8%E5%A4%A7%E8%A1%97",
+    "updated_at": "2026-10-12"
+  },
+  "B000A48169": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游"
+    ],
+    "description": "百年历史的繁华商业街，步行街免费。商场营业约 10:00-22:00，VR 展与大戏院演出另购票。",
+    "source_url": "https://opentravelguide.com/china/beijing/beijing/shopping/wangfujing-street",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFFT5A1C": {
+    "ticket_price": 0,
+    "hours": "10:00-22:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "description": "北京最著名的商圈与夜生活聚集地，街区免费。商场约 10:00-22:00 营业，夜间氛围是主要看点。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/linxiang2840/132386.html",
+    "updated_at": "2026-10-12"
+  },
+  "B000AABXEH": {
+    "ticket_price": 120,
+    "hours": "09:00-22:30",
+    "closed_days": [],
+    "tags": [
+      "夜游",
+      "亲子",
+      "拍照"
+    ],
+    "description": "京郊北方水镇，夜景灯光秀与无人机表演是核心卖点。成人 120 元，周五周六延长至 23:00。",
+    "source_url": "https://you.ctrip.com/sight/582/1411592.html",
+    "updated_at": "2026-10-12"
+  },
+  "B0I13APEW5": {
+    "ticket_price": 0,
+    "hours": "06:30-22:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照",
+      "避暑"
+    ],
+    "description": "鸟巢与水立方所在的奥运公园，园区免费开放。夜间灯光与广场散步适合傍晚安排。",
+    "source_url": "https://baike.baidu.com/item/%E5%8C%97%E4%BA%AC%E4%B9%90%E6%96%B7%E8%B0%B7/4887176",
+    "updated_at": "2026-10-12"
+  },
+  "B000A96IIC": {
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "亲子"
+    ],
+    "description": "中国第一座园林主题博物馆，免费开放。内有江南园林与岭南园林等室外展区，适合雨天亲子半日游。",
+    "source_url": "https://www.gardensmuseum.cn/web/ybgzc",
+    "updated_at": "2026-10-12"
+  },
+  "B000A0D1F4": {
+    "ticket_price": 0,
+    "hours": "09:00-19:30",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "避暑"
+    ],
+    "description": "一馆三址的公共图书馆，无需预约免费开放。傍晚与雨天可来避暑或自习，周一闭馆。",
+    "source_url": "https://www.clcn.net.cn?cult=cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B000A645D9": {
+    "ticket_price": 40,
+    "hours": "08:30-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "拍照"
+    ],
+    "description": "和珅府邸与福字碑所在地。门票 40 元，园中院落多，参观约两小时，周一闭馆。",
+    "source_url": "https://www.pgm.org.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B000A886RE": {
+    "ticket_price": 60,
+    "hours": "08:30-18:00",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "明代十三位皇帝的陵园群，各陵单独售票，定陵 60 元、长陵 45 元，神路与四陵联票 98 元。",
+    "source_url": "https://www.mingshisanling.com/",
+    "updated_at": "2026-10-12"
+  },
+  "B000A09F5A": {
+    "ticket_price": 45,
+    "hours": "07:30-18:00",
+    "closed_days": [],
+    "tags": [
+      "拍照",
+      "避暑"
+    ],
+    "description": "植被覆盖率高于八达岭的野长城，人少景野。实名预约可提前 30 天，索道滑道单程 100 元。",
+    "source_url": "https://mutianyugreatwall.com/",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFH05QQ3": {
+    "ticket_price": 20,
+    "hours": "09:00-18:00",
+    "closed_days": [],
+    "tags": [
+      "需预约"
+    ],
+    "description": "内城南门正阳门城楼，2025 年修缮后重新开放。门票 20 元需提前在公众号预约，周一闭馆。",
+    "source_url": "https://wwj.beijing.gov.cn/bjww/wwjzzcslm/1729986/1729988/index.html",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7N4BI": {
+    "ticket_price": 299,
+    "hours": "09:00-22:00",
+    "closed_days": [],
+    "tags": [
+      "亲子",
+      "夜游"
+    ],
+    "description": "七大专区的大型主题乐园。成人全天票约 299 元，夜场票 149 元起，需留一整天，节假日排队久。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/beijingwtown1446421/57491.html",
+    "updated_at": "2026-10-12"
+  },
+  "B0JGUCHA7Y": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "由旧电子工业厂区改造的艺术区，园区免费。多数画廊 10:00-18:00 且周一闭馆，特展单独收费。",
+    "source_url": "https://www.wanderinchina.com/zh/destinations/beijing/798-art-district/",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7CRPA": {
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "亲子"
+    ],
+    "description": "恐龙化石与动物标本主题的免费博物馆。每日 11:00 放未来 3 天预约名额，暑期闭馆日会改为周二。",
+    "source_url": "https://www.nnhm.org.cn/?c=0",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7HOIQ": {
+    "ticket_price": 175,
+    "hours": "09:00-17:00",
+    "closed_days": [],
+    "tags": [
+      "室内",
+      "亲子"
+    ],
+    "description": "亚洲规模领先的海底隧道水族馆。成人 175 元，与动物园联票 180 元更划算，全程室内适合雨天。",
+    "source_url": "https://www.bj-sea.com/?id=52",
+    "updated_at": "2026-10-12"
+  },
+  "B000A0B593": {
+    "ticket_price": 0,
+    "hours": "06:00-22:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "拍照"
+    ],
+    "description": "竹林与荷花并称的免费市属公园，夏日赏荷是主要看点。地铁国家图书馆站步行可达。",
+    "source_url": "https://www.beijing.gov.cn/fuwu/bmfw/bmzt/jxqlzn/shdw/202607/t20260713_4760288.html",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7IKC6": {
+    "ticket_price": 20,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "室内"
+    ],
+    "description": "明代真觉寺金刚宝座塔（五塔寺）内的石刻博物馆。周三前 200 名免费，需公众号预约，周一闭馆。",
+    "source_url": "http://nb.ncha.gov.cn/museumdetail.html?msg=ccd463966b664bed9aaa7b1b3aea3535&nianfen=2024",
+    "updated_at": "2026-10-12"
+  },
+  "B000A61F34": {
+    "ticket_price": null,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "室内"
+    ],
+    "description": "中轴线上的老牌剧场，演出票另售。具体场次与票价需查当期官网，未核实到公开票务页面。",
+    "source_url": "https://www.pgm.org.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B000A831SV": {
+    "ticket_price": 145,
+    "hours": "08:30-17:30",
+    "closed_days": [],
+    "tags": [
+      "亲子",
+      "避暑"
+    ],
+    "description": "大兴区的自驾型野生动物园，猛兽区可笼车或自驾游览。旺季 150 元、线上 145 元，建议留一整天。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/nankaidistrict2015146/107469.html",
+    "updated_at": "2026-10-12"
+  },
+  "B000A7HUYQ": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "拍照"
+    ],
+    "description": "什刹海西海一带的水生湿地公园，免费开放。芦苇与水面适合傍晚散步，与后海西海连成片。",
+    "source_url": "https://www.beijing.gov.cn/fuwu/bmfw/bmzt/jxqlzn/shdw/202607/t20260713_4760288.html",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFIFP90V": {
+    "ticket_price": 0,
+    "hours": "10:00-18:00",
+    "closed_days": [
+      "周二"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "亲子"
+    ],
+    "description": "浦东世纪大道的青铜与书画主题馆。散客免预约、刷身份证入馆，周二闭馆；人民广场馆周一闭馆，两者不要跑错。",
+    "source_url": "https://www.shanghaimuseum.net/",
+    "updated_at": "2026-10-12"
+  },
+  "B00150C4B6": {
+    "ticket_price": 45,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "室内",
+      "亲子",
+      "需预约"
+    ],
+    "description": "三馆合一的超大科普场馆，雨天与酷暑首选。成人 45 元、学生 22 元，现场不售票须提前实名分时预约。",
+    "source_url": "https://www.shanghai.gov.cn/pdwl/20260615/4d4dd42ce4ae46949b6ad49b651700cc.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00156NVZG": {
+    "ticket_price": 30,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周二"
+    ],
+    "tags": [
+      "室内",
+      "亲子",
+      "需预约"
+    ],
+    "description": "静安雕塑公园内的自然博物馆，恐龙标本是主打。成人 30 元、学生 12 元，实名分时购票，周二闭馆。",
+    "source_url": "https://www.snhm.org.cn/cgfw/wssp.htm",
+    "updated_at": "2026-10-12"
+  },
+  "B00155L9WI": {
+    "ticket_price": 0,
+    "hours": "10:00-18:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "拍照"
+    ],
+    "description": "原上海美术馆所在，2012 年改称中华艺术宫，常设免费而临展另收费。世博主题馆藏与穹顶壁画是看点。",
+    "source_url": "https://www.shanghai.gov.cn/huangpu/index.html",
+    "updated_at": "2026-10-12"
+  },
+  "B001546728": {
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周三"
+    ],
+    "tags": [
+      "室内",
+      "亲子"
+    ],
+    "description": "城市规划主题馆，以沙盘与模型讲上海的城市发展，免费开放。周三闭馆，室内为主适合雨天亲子。",
+    "source_url": "https://www.shanghai.gov.cn/huangpu/index.html",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFHOQKOJ": {
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "需预约"
+    ],
+    "description": "中共一大会址所在馆，免预约参观，部分专题展需在官方公众号预约。基本陈列《伟大的开端》值得看。",
+    "source_url": "https://www.shanghai.gov.cn/huangpu/index.html",
+    "updated_at": "2026-10-12"
+  },
+  "B0015371A9": {
+    "ticket_price": null,
+    "hours": null,
+    "closed_days": [],
+    "tags": [],
+    "description": "鲁迅纪念馆。高德官方名标注为暂停开放，复馆时间未在公开票务页查到，出发前务必先确认是否已复馆。",
+    "source_url": "https://www.luxunmuseum.com.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B0GKYPFQIW": {
+    "ticket_price": 0,
+    "hours": "06:30-17:30",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "室内"
+    ],
+    "description": "龙华烈士陵园含长明火参观区域，免费开放。位于龙华古寺旁，可与龙华寺一并安排。",
+    "source_url": "https://www.shanghai.gov.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B00152CFDA": {
+    "ticket_price": 0,
+    "hours": "08:30-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "始建于南宋的县级孔庙，内设中国科举博物馆。免费开放，周一闭馆，紧邻汇龙潭公园可一并逛。",
+    "source_url": "https://www.jiading.gov.cn/xinwen/jddt1/msxw/content_974409",
+    "updated_at": "2026-10-12"
+  },
+  "B00155FXB3": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "description": "黄浦江畔的百年老建筑群，街区免费开放。夜间灯光是主要看点，与陆家嘴隔江相望。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/shanghai2/1416847.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00150F6D6": {
+    "ticket_price": 199,
+    "hours": "09:00-21:00",
+    "closed_days": [],
+    "tags": [
+      "拍照",
+      "夜游",
+      "亲子"
+    ],
+    "description": "上海地标观光塔。二球观光 199 元、三球 299 元，二球已含主观光层与悬空玻璃廊。",
+    "source_url": "https://www.orientalpearltower.com/",
+    "updated_at": "2026-10-12"
+  },
+  "B00152F15F": {
+    "ticket_price": 190,
+    "hours": "09:00-17:00",
+    "closed_days": [],
+    "tags": [
+      "亲子",
+      "避暑"
+    ],
+    "description": "浦东的散养式野生动物园，自驾或坐大巴穿行猛兽区。2026 年 3 月起成人 190 元，园内 12 项游乐已免费。",
+    "source_url": "https://www.shwzoo.com/index.do?id=4821&newsDetail=",
+    "updated_at": "2026-10-12"
+  },
+  "B00154DWH8": {
+    "ticket_price": 0,
+    "hours": "06:00-17:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "亲子"
+    ],
+    "description": "徐汇区的大花园，露天园区大门免费免预约。展览温室 30 元、盆景园与兰室各 7 元另付，桂花季人气高。",
+    "source_url": "https://www.shbg.org/sites/zhiwuyuan/InfoContent.aspx?InfoId=730df9f5-9e21-4118-9247-79474614a0c7",
+    "updated_at": "2026-10-12"
+  },
+  "B0015211C2": {
+    "ticket_price": 0,
+    "hours": "05:00-18:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "拍照"
+    ],
+    "description": "杨浦区的免费森林公园，莫奈花园与水杉林是打卡点。周末与节假日建议提前在公众号预约。",
+    "source_url": "https://u.ctrip.com/redirect/apple?allianceid=1045437&pid=t738",
+    "updated_at": "2026-10-12"
+  },
+  "B00156E3VY": {
+    "ticket_price": 20,
+    "hours": "06:00-18:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "宝山区的樱花公园，成人 20 元。樱花节延长开放期间票价 10 元，园内鸟世界与恐龙乐园另收费。",
+    "source_url": "https://news.qq.com/rain/a/20260309A07SC400",
+    "updated_at": "2026-10-12"
+  },
+  "B00155LYLW": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照",
+      "避暑"
+    ],
+    "description": "临港的圆形人工湖景区，环湖免费开放。周边高校与湿地景观开阔，适合骑行或傍晚散步。",
+    "source_url": "https://www.shanghai.gov.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B001529DBC": {
+    "ticket_price": 60,
+    "hours": "08:30-16:30",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "亲子"
+    ],
+    "description": "崇明岛上的国家森林公园，森林覆盖率超九成。成人 60 元，园内小火车另收，秋季红叶与露营是亮点。",
+    "source_url": "https://www.dpslpark.net/",
+    "updated_at": "2026-10-12"
+  },
+  "B00155IWT7": {
+    "ticket_price": 6,
+    "hours": "08:30-17:00",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "上海唯一的自然山林风景区。西佘山园 6 元、东佘山园 10 元，山顶天文台与东佘山竹海是核心。",
+    "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=321&keyword=%E4%BD%98%E5%B1%B1%E5%9B%BD%E5%AE%B6%E6%A3%AE%E6%9E%97%E5%85%AC%E5%9B%AD",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFF5VNSV": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "免费"
+    ],
+    "description": "上海最知名的商业步行街，免费全天开放。周边老字号与商场餐饮密集，适合安排在行程末段补给。",
+    "source_url": "https://opentravelguide.com/china/beijing/beijing/shopping/wangfujing-street",
+    "updated_at": "2026-10-12"
+  },
+  "B00155HO6Y": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "泰康路一带的创意园区与小巷弄堂，街区免费。多为设计店与咖啡馆，午后到傍晚氛围最好。",
+    "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=321&keyword=%E7%94%B0%E5%AD%90%E5%9D%8A",
+    "updated_at": "2026-10-12"
+  },
+  "B00155KUM0": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "免费"
+    ],
+    "description": "石库门改造的时尚街区，街区免费。夜里酒吧与餐厅热闹，与新天地仅几步之遥。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/linxiang2840/132386.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00155MF55": {
+    "ticket_price": 40,
+    "hours": "09:00-16:30",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "拍照",
+      "夜游"
+    ],
+    "description": "明代江南古典园林。园林门票旺季 40 元、淡季 30 元，但九曲桥与豫园商城街区免费，夜景无需购票。",
+    "source_url": "https://www.yugarden.com.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFIK0Z21": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "衡复风貌保护区的历史文化名街，街区免费。老洋房与梧桐成荫，适合慢走拍照，不必停留过久。",
+    "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=321&keyword=%E6%AD%A6%E5%BA%B7%E8%B7%AF",
+    "updated_at": "2026-10-12"
+  },
+  "B001558F5I": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "古镇",
+      "拍照"
+    ],
+    "description": "上海四大古镇之一，古镇主街区全天免费。课植园 20 元另付，傍晚亮灯后的河道夜景是亮点。",
+    "source_url": "https://zhujiajiao.com/",
+    "updated_at": "2026-10-12"
+  },
+  "B00155L7QF": {
+    "ticket_price": 0,
+    "hours": "09:00-18:00",
+    "closed_days": [],
+    "tags": [
+      "古镇",
+      "古镇"
+    ],
+    "description": "闵行区的小古镇，市区最近的一个，老街与蒲汇塘桥免费开放。七宝羊肉是主要吃食。",
+    "source_url": "https://www.danglv.com/zhishi/20260302/39626.html",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFHWH6SA": {
+    "ticket_price": 0,
+    "hours": "10:00-22:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "description": "陆家嘴核心商圈，街区免费开放。东方明珠与三件套集中在此，是看城市天际线的首选位置。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/shanghai2/1416847.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00157AW8O": {
+    "ticket_price": 475,
+    "hours": "08:30-21:30",
+    "closed_days": [],
+    "tags": [
+      "亲子",
+      "避暑"
+    ],
+    "description": "大陆首座迪士尼乐园。浮动票价：平日 475 元、高峰 599 元、法定节假日 719 元起；早享卡另收 149 元起。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/2/1942250.html.html",
+    "updated_at": "2026-10-12"
+  },
+  "B001559PZQ": {
+    "ticket_price": 160,
+    "hours": "09:00-18:00",
+    "closed_days": [],
+    "tags": [
+      "室内",
+      "亲子"
+    ],
+    "description": "陆家嘴的海底隧道水族馆，成人门市价 160 元、提前一天线上 155 元。单向参观建议留两小时，全程室内适合雨天。",
+    "source_url": "https://ticket.sh-aquarium.com/BpsWebSale/Home/List",
+    "updated_at": "2026-10-12"
+  },
+  "B0G3V7F3EF": {
+    "ticket_price": 0,
+    "hours": "10:00-18:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "室内",
+      "亲子"
+    ],
+    "description": "宝山长江边的观光塔，塔本身免费开放，攀爬与蹦床等体验项目另收费。适合亲子，与长滩滨江步道连成一片。",
+    "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=321&keyword=%E4%B8%8A%E6%B5%B7%E9%95%BF%E6%BB%A9%E8%A7%82%E5%85%89%E5%A1%94",
+    "updated_at": "2026-10-12"
+  },
+  "B00155LPBC": {
+    "ticket_price": 0,
+    "hours": "09:00-20:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照",
+      "古镇"
+    ],
+    "description": "远东最大的宰牲场改造的创意园区，街区免费。水泥管道与旋梯是标志，适合拍照。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/shanghai2/5140832.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00154BDE9": {
+    "ticket_price": 50,
+    "hours": "07:30-17:00",
+    "closed_days": [],
+    "tags": [
+      "拍照",
+      "室内"
+    ],
+    "description": "上海最古老的佛寺，金顶与高楼同框是经典机位。平日 50 元含赠香，农历初一十五免票但人流极大。",
+    "source_url": "https://sh.bendibao.com/tour/20161027/171327.shtm",
+    "updated_at": "2026-10-12"
+  },
+  "B001556ZBL": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "拍照"
+    ],
+    "description": "川沙的古城墙公园，免费开放。人少清静，适合与川沙古镇一并安排。",
+    "source_url": "https://www.shanghai.gov.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B00140H88E": {
+    "ticket_price": 10,
+    "hours": "09:00-18:00",
+    "closed_days": [
+      "周二"
+    ],
+    "tags": [
+      "室内",
+      "拍照"
+    ],
+    "description": "岭南建筑艺术的明珠，灰塑、木雕、砖雕、石雕、铁雕并称岭南建筑五绝。全程室内且免费讲解时段多，雨天亲子首选。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/nanjing9/136023015.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00140U6L3": {
+    "ticket_price": 0,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "需预约",
+      "亲子"
+    ],
+    "description": "免费实名预约的国家级博物馆，藏品逾 17 万件。每日 22:00 放次日以后号源，周一闭馆，需分时段预约。",
+    "source_url": "https://www.gdmuseum.com/col668",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFLCWF9J": {
+    "ticket_price": 0,
+    "hours": "09:00-17:30",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "室内",
+      "拍照"
+    ],
+    "description": "以镇海楼为主体的广州通史馆，仲元楼展区免费开放，馆藏从新石器到近代岭南通史。",
+    "source_url": "https://chinahora.com/zh-TW/best-museums-of-guangzhou-china/",
+    "updated_at": "2026-10-12"
+  },
+  "B00140CHC8": {
+    "ticket_price": 0,
+    "hours": "09:00-17:30",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内"
+    ],
+    "description": "烈士陵园内的近代史馆，聚焦晚清到近现代的广州变迁。免费且空调充足，是广州夏日避暑首选。",
+    "source_url": "http://www.gemg1959.cn",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFGER41V": {
+    "ticket_price": 0,
+    "hours": "09:00-17:30",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内"
+    ],
+    "description": "清代十三行商馆区遗址上的博物馆，二楼外销文物与通草画是重点。免费免预约，周一闭馆。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/alfta138404/2046369.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00140UFIZ": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "室内",
+      "拍照"
+    ],
+    "description": "三元里抗英的纪念地，馆内复原战役场景。免费开放，场地较小约半小时可逛完。",
+    "source_url": "https://www.gz.gov.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B00140UETI": {
+    "ticket_price": 0,
+    "hours": "06:30-21:30",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "拍照"
+    ],
+    "description": "黄花岗七十二烈士墓园所在公园，园区免费开放。黄花岗公园本身不收费，烈士墓区为纪念性场所。",
+    "source_url": "https://m.ctrip.com/webapp/you/gspoi/sight/152/0.html?poiId=14516",
+    "updated_at": "2026-10-12"
+  },
+  "B00140USZS": {
+    "ticket_price": 0,
+    "hours": "09:00-17:30",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "需预约"
+    ],
+    "description": "南越王墓原址与王宫区两处展馆，王宫展区免费但须实名预约。王墓展区另收 10 元，丝缕玉衣是镇馆之宝。",
+    "source_url": "https://www.gz.gov.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B00140T14E": {
+    "ticket_price": 10,
+    "hours": "09:00-17:30",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "拍照",
+      "室内"
+    ],
+    "description": "明代镇海楼，是五层楼实景的五层展馆，登楼可俯瞰越秀公园。成人 10 元，学生与老人半价。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/77/5142346.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00140T8O6": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "拍照"
+    ],
+    "description": "广州北肺，山顶公园与摩星岭可俯瞰全城。整山门票免费，鸣春谷等园中园与索道另收费，全天开放。",
+    "source_url": "https://you.ctrip.com/sight/guangzhou152/6766-dianping160898209.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00140BNNF": {
+    "ticket_price": 0,
+    "hours": "06:00-22:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "拍照"
+    ],
+    "description": "广州最大城市公园，五羊石像是城市标志。全园免费免预约，明代古城墙与中山纪念碑值得看，园内有观光车。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/chenzhou336/5142350.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00140UEO5": {
+    "ticket_price": 10,
+    "hours": "07:30-17:30",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "原华南植物园已升格为国家植物园。园区门票约 10 元，展览温室与室内展馆另收费，雨林区适合避暑。",
+    "source_url": "https://www.scbg.ac.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B00140UEO1": {
+    "ticket_price": 20,
+    "hours": "08:00-18:00",
+    "closed_days": [],
+    "tags": [
+      "亲子"
+    ],
+    "description": "市中心的动物园，与广州海洋馆北门相邻。成人 20 元、学生与老人 10 元，两园门票不通用需分别购票。",
+    "source_url": "https://www.gzzoo.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B00140UFB8": {
+    "ticket_price": 0,
+    "hours": "06:00-22:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "拍照"
+    ],
+    "description": "市区内的免费湖泊公园，湖景与亚热带风光为主。适合傍晚散步，与流花西苑相邻。",
+    "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=80&keyword=%E6%B5%81%E8%8A%B1%E6%B9%96%E5%85%AC%E5%9B%AD",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFGC3HM3": {
+    "ticket_price": 20,
+    "hours": "09:00-17:00",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "广州绿心，城市湿地与万亩果林相嵌。湿地一期二期成人 20 元，海珠湖片区免费开放，周一闭园需预约。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/baiyundistrict2015104/147531.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00140H3G8": {
+    "ticket_price": 0,
+    "hours": "08:00-18:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "亲子"
+    ],
+    "description": "番禺的丘陵森林公园，门票免费。山不高但适合亲子徒步，园内有聚秀湖等水面。",
+    "source_url": "https://m.gz.bendibao.com/tour/jingdianbangdan/2128.shtml",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFG2ZV0I": {
+    "ticket_price": 10,
+    "hours": "08:00-18:00",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "广州城区最高峰，海拔 535 米。成人 10 元，步行约三十分钟登顶可俯瞰广州北部全景。",
+    "source_url": "https://m.gz.bendibao.com/tour/jingdianbangdan/2128.shtml",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFGY9GBR": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "避暑",
+      "拍照"
+    ],
+    "description": "天河区的湿地公园，栈道湖泊与杉木芦苇景观。免费开放，适合清晨或傍晚散步。",
+    "source_url": "https://m.ctrip.com/webapp/you/gspoi/sight/152/0.html?poiId=14735",
+    "updated_at": "2026-10-12"
+  },
+  "B00140WBI1": {
+    "ticket_price": 150,
+    "hours": "09:30-22:30",
+    "closed_days": [],
+    "tags": [
+      "夜游",
+      "拍照",
+      "亲子"
+    ],
+    "description": "小蛮腰。433 米白云星空观光票 150 元，450 米户外观景 228 元，摩天轮套票 298 元。建议 16 点后入园一次看完日落与夜景。",
+    "source_url": "https://mallpc.cantontower.com/ticket",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFF4ST97": {
+    "ticket_price": 98,
+    "hours": "15:30-22:30",
+    "closed_days": [],
+    "tags": [
+      "夜游",
+      "拍照"
+    ],
+    "description": "广州羊城八景之一，多码头（天字大沙头西堤广州塔）发船。普通舱约 98 元、三楼露天约 138 元，务必提前订票。",
+    "source_url": "https://m.ctrip.com/webapp/you/gspoi/sight/152/0.html?poiId=111274",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFFAJYVI": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "百年前的英法租界，现存 150 余栋欧式建筑，全天免费开放。清晨或傍晚光线最佳，与十三行博物馆可一并逛。",
+    "source_url": "https://you.ctrip.com/sight/guangzhou152/11346/s3-d-p2.html",
+    "updated_at": "2026-10-12"
+  },
+  "B0IUPDSJHU": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "description": "西关骑楼改造的历史街区，街区全天免费。粤剧艺术博物馆与李小龙祖居在内，夜间餐饮热闹。",
+    "source_url": "https://travelnews.qunar.com/qa_strategy/guangzhou-citywalk-travel-accommodation-guide",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFGFTXT9": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游"
+    ],
+    "description": "西关最老的商业步行街，全天免费开放。荔湾湖公园与粤剧艺术博物馆就在附近，夜里灯笼亮起氛围最好。",
+    "source_url": "https://m.ctrip.com/webapp/community/detail?articleId=300266947",
+    "updated_at": "2026-10-12"
+  },
+  "B00141RH20": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游"
+    ],
+    "description": "两千余年历史的商业步行街，全天免费。南越国宫署遗址与药洲遗址都在沿线，美食集中。",
+    "source_url": "https://travelnews.qunar.com/qa_strategy/guangzhou-citywalk-travel-accommodation-guide",
+    "updated_at": "2026-10-12"
+  },
+  "B0MRHUDW6K": {
+    "ticket_price": null,
+    "hours": null,
+    "closed_days": [],
+    "tags": [],
+    "description": "广州的清代石牌坊遗存。高德未提供独立票价与开放时段，公开票务页也未查到，建议现场确认后再安排行程。",
+    "source_url": "https://www.gz.gov.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B00140UFJS": {
+    "ticket_price": 60,
+    "hours": "08:30-17:30",
+    "closed_days": [],
+    "tags": [
+      "避暑",
+      "拍照"
+    ],
+    "description": "增城北回归线上的峡谷瀑布景区。全票 60 元、线上特惠 56 元，学生老人半价，山泉水可泡脚避暑。",
+    "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=391&keyword=%E5%8A%A8%E7%89%A9%E5%9B%AD",
+    "updated_at": "2026-10-12"
+  },
+  "B00140UOK2": {
+    "ticket_price": 18,
+    "hours": "08:00-18:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "广东四大名园之一，岭南园林的精致代表。成人 18 元、学生老人半价，园区不大两小时可逛完。",
+    "source_url": "https://www.yuyinshanfang.com",
+    "updated_at": "2026-10-12"
+  },
+  "B00140UFBP": {
+    "ticket_price": 160,
+    "hours": "09:30-18:00",
+    "closed_days": [],
+    "tags": [
+      "室内",
+      "亲子"
+    ],
+    "description": "广州海洋馆在动物园内。发改委核定成人限价 240 元，现行下浮至 160 元；夜场票 86 元，全程室内适合雨天。",
+    "source_url": "https://fgw.gz.gov.cn/gkmlpt/content/10/10854/post_10854845.html",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFF04SV4": {
+    "ticket_price": 0,
+    "hours": null,
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "夜游",
+      "拍照"
+    ],
+    "description": "珠江新城中轴线的市民广场，音乐喷泉在固定时段开放。广场免费，夏季夜晚是市民纳凉首选。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/huangshan120061/143742532.html",
+    "updated_at": "2026-10-12"
+  },
+  "B0G2GDNHUB": {
+    "ticket_price": 0,
+    "hours": "09:00-21:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "室内",
+      "避暑"
+    ],
+    "description": "广东省立中山图书馆，场馆免费开放。晚间与雨天都可来自习或避暑，适合安排在行程中段补充。",
+    "source_url": "https://www.zslib.com.cn/",
+    "updated_at": "2026-10-12"
+  },
+  "B0FFKIQ1AR": {
+    "ticket_price": 0,
+    "hours": "09:00-17:30",
+    "closed_days": [
+      "周一"
+    ],
+    "tags": [
+      "免费",
+      "室内",
+      "亲子"
+    ],
+    "description": "广州塔南侧的近现代书画与雕塑博物馆。免费免预约，含儿童艺术体验区，周一闭馆，收费特展另购票。",
+    "source_url": "https://chinahora.com/zh-TW/best-museums-of-guangzhou-china/",
+    "updated_at": "2026-10-12"
+  },
+  "B00141S9R0": {
+    "ticket_price": 0,
+    "hours": "06:00-22:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照"
+    ],
+    "description": "越秀公园内的五羊石雕景区，园区免费。五羊仙迹是广州城市标志，与镇海楼、越秀山连成半日步行线。",
+    "source_url": "https://gs.ctrip.com/html5/you/sight/chenzhou336/5142350.html",
+    "updated_at": "2026-10-12"
+  },
+  "B00140UDHU": {
+    "ticket_price": 0,
+    "hours": "07:00-17:00",
+    "closed_days": [],
+    "tags": [
+      "免费",
+      "拍照",
+      "避暑"
+    ],
+    "description": "番禺的莲花山望海景区，门票免费。山上可远眺珠江口与虎门方向，山顶佛手石像是标志。",
+    "source_url": "https://m.gz.bendibao.com/tour/jingdianbangdan/2128.shtml",
+    "updated_at": "2026-10-12"
   }
 }

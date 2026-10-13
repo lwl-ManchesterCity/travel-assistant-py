@@ -20,12 +20,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.kb.keywords import HANGZHOU_KEYWORDS  # noqa: E402
+from scripts.kb.keywords import city_slug, known_cities, keywords_for  # noqa: E402
 from travel_assistant.clients.amap_http import build_candidate_urls, fetch_json  # noqa: E402
 from travel_assistant.config.settings import AmapSettings  # noqa: E402
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
-FIXTURE_PATH = FIXTURE_DIR / "amap_pois_hangzhou.json"
+
+
+def fixture_path_for(city: str) -> Path:
+    """按城市派生 fixture 路径。
+
+    **必须按城市分开存**，不能全塞进一个文件：用杭州的关键词去搜北京时，
+    已存在的 slug 会被当成「已存在」整条跳过，循环还会打印一串「已存在」，
+    输出看着一切正常，实际一条都没抓——这是静默失败，不是报错。
+    """
+    return FIXTURE_DIR / f"amap_pois_{city_slug(city)}.json"
 
 # 高德个人 key 的 QPS 很低（实测 10021 CUQPS），这里主动限速而不是靠重试兜。
 REQUEST_INTERVAL_SECONDS = 1.2
@@ -62,7 +71,7 @@ def fetch_one(amap: AmapSettings, keyword: str, city: str, page_size: int) -> di
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="拉取高德景点骨架并存成 fixture")
-    parser.add_argument("--city", default="杭州")
+    parser.add_argument("--city", default="杭州", help="城市名，不带「市」字；决定关键词表与 fixture 文件名")
     parser.add_argument("--page-size", type=int, default=10)
     parser.add_argument("--force", action="store_true", help="忽略已有 fixture，全量重拉")
     parser.add_argument("--only", default="", help="只拉指定关键词（逗号分隔）")
@@ -73,15 +82,22 @@ def main() -> int:
         print("AMAP_API_KEY 未配置，无法抓取", file=sys.stderr)
         return 1
 
-    keywords = (
-        [kw.strip() for kw in args.only.split(",") if kw.strip()]
-        if args.only
-        else list(HANGZHOU_KEYWORDS)
-    )
+    if args.only:
+        keywords = [kw.strip() for kw in args.only.split(",") if kw.strip()]
+    else:
+        keywords = list(keywords_for(args.city))
+        if not keywords:
+            print(
+                f"keywords.SPECS_BY_CITY 里没有「{args.city}」，先写规格表再抓。\n"
+                f"已配置的城：{'、'.join(known_cities())}",
+                file=sys.stderr,
+            )
+            return 1
 
+    fixture_path = fixture_path_for(args.city)
     stored: dict[str, dict] = {}
-    if FIXTURE_PATH.exists() and not args.force:
-        stored = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    if fixture_path.exists() and not args.force:
+        stored = json.loads(fixture_path.read_text(encoding="utf-8"))
         print(f"已有 fixture {len(stored)} 条，--force 可全量重拉")
     elif args.force:
         print("--force：忽略已有 fixture，全量重拉")
@@ -111,11 +127,11 @@ def main() -> int:
         if index < len(keywords):
             time.sleep(REQUEST_INTERVAL_SECONDS)
 
-    FIXTURE_PATH.write_text(
+    fixture_path.write_text(
         json.dumps(stored, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
-    print(f"\n已写入 {FIXTURE_PATH}（{len(stored)} 个关键词）")
+    print(f"\n已写入 {fixture_path}（{len(stored)} 个关键词）")
     if failures:
         print(f"失败 {len(failures)} 个：")
         for failure in failures:
