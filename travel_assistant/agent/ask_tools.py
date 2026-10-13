@@ -7,10 +7,11 @@
 - 联网的三个（`search_attractions` / `query_weather` / `recommend_hotels`）零参数，
   城市、日期、预算、住宿偏好一律从上下文里的原始请求取——这几个值让模型自己填就会被编造，
   与 agent/data_tools.py 里那三个取数工具是同一条约定；
-- 查本地库的一个（`search_attractions_by_tag`）**有意破例让模型填参数**：它只填 `tags`，
-  因为"筛哪个词"正是要模型做的判断，从上下文取不出来。护栏不是参数来源，是**词表**——
-  只能从 data/tags.json 那 10 个词里挑，挑不出来就别筛。城市仍从上下文取，不让模型填。
-  词表会变，所以写进工具说明时是现读的，不是抄一份常量。
+- 查本地库的一个（`search_attractions_by_tag`）**有意破例让模型填参数**：`tags` 与 `attraction_name`，
+  因为"筛哪个词""问的是哪个景点"正是要模型做的判断，从上下文取不出来。
+  两者都只当**检索条件**用，城市仍从上下文取，不让模型填。
+  护栏不是参数来源，是**词表**——`tags` 只能从 data/tags.json 那 10 个词里挑，
+  挑不出来就别筛。词表会变，所以写进工具说明时是现读的，不是抄一份常量。
 
 每次调用都往 AskContext 记一条 AgentTrace，成功失败都记。
 """
@@ -196,8 +197,10 @@ def build_ask_tools(attraction_agent: AttractionAgent,
 
     @tool
     def get_attraction_detail(attraction_name: str = "") -> str:
-        """按名字取方案里某个景点的明细：类别、地址、门票价、建议停留时长、有无坐标。
-        名字只要包含即可匹配；方案里没有这个名字时会回可选景点清单，不会去联网查。"""
+        """按名字取**本方案里**某个景点的明细：类别、地址、门票价、建议停留时长、有无坐标。
+        名字只要包含即可匹配；方案里没有这个名字时会回可选景点清单。
+        **它只读本方案**——要查方案外的景点（门票、开放时间、闭馆日、要不要预约），
+        改用 search_attractions_by_tag。"""
         context = current_ask_context()
         planned = [
             attraction
@@ -245,8 +248,13 @@ def build_ask_tools(attraction_agent: AttractionAgent,
     # JoinedStr 不行，__doc__ 会是 None），所以走 @tool(description=...)。
     # 词表现读不抄常量——抄一份就会在改词表时变成一句过期的话。
     @tool(description=(
-        "查**本地景点资料库**，按标签筛出一批候选景点。"
-        "回答「下雨天去哪」「有什么免费的」「哪里适合带孩子」这类**带条件**的景点问题用它。"
+        "查**本地景点资料库**。两种用法都走它："
+        "① 按标签筛出一批候选景点（「下雨天去哪」「有什么免费的」「哪里适合带孩子」）；"
+        "② 查**某一个具体景点**的门票、开放时间、闭馆日、要不要预约。"
+        "**② 不限于本方案里的景点**——方案里没有的照样能查（「广州塔门票多少钱」走这里），"
+        "这时**把景点名填进 attraction_name**（填「广州塔」，不是整句问话），不用传 tags。"
+        "名字是这条路上最确定的条件：整句送去检索会被问句里多出来的字稀释，"
+        "相似度掉到线下就查不到了。\n"
         "本地库与联网检索是两套数据，别混着说。\n"
         f"本地库目前只收录{'、'.join(KB_CITIES)}的景点，问别的城市这里答不了。\n"
         f"tags 只能从这几个词里挑，一个都不许自创：{describe_vocabulary()}。"
@@ -255,12 +263,20 @@ def build_ask_tools(attraction_agent: AttractionAgent,
         "（比如用户问爬山，返回的却全是溶洞、博物馆），就照实说库里没有，"
         "不要把沾边的说成是。"
     ))
-    def search_attractions_by_tag(tags: list[str] | None = None) -> str:
+    def search_attractions_by_tag(tags: list[str] | None = None,
+                                  attraction_name: str = "") -> str:
         """查本地景点资料库。"""
         context = current_ask_context()
         city = context.request.city or ""
         picked = [str(tag).strip() for tag in (tags or []) if tag and str(tag).strip()]
-        summary = f"城市={city}，标签={'、'.join(picked) or '无（纯向量）'}"
+        # 问「某一个具体景点」那条路上，模型会把名字填进来，检索词就用它——
+        # 整句去撞阈值会被问句里多出来的字稀释（陈家祠堂 0.585 → 「陈家祠堂 周一闭馆吗」<0.545）。
+        # 没填就退回整句：最坏情况等于没改，不会更差。
+        named = (attraction_name or "").strip()
+        summary = f"城市={city}"
+        if named:
+            summary += f"，景点名={named}"
+        summary += f"，标签={'、'.join(picked) or '无（纯向量）'}"
 
         def missed(text: str, status: str = "not_found") -> str:
             context.record("search_attractions_by_tag", "查本地景点库", summary, text, status=status)
@@ -284,7 +300,8 @@ def build_ask_tools(attraction_agent: AttractionAgent,
 
         try:
             rows = search_kb_attractions(
-                city=city or None, tags=picked or None, query=context.question
+                city=city or None, tags=picked or None,
+                query=named or context.question,
             )
         except Exception as exception:  # noqa: BLE001 - 检索失败要留在轨迹里，让模型改用方案内数据作答
             return missed(f"本地景点资料库检索失败：{exception}", "failed")
