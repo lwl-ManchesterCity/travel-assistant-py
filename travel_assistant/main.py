@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .api.ask_controller import router as ask_router
+from .api.auth_controller import router as auth_router
 from .api.error_handlers import register_exception_handlers
 from .api.map_controller import router as map_router
 from .api.trip_controller import router as trip_router
@@ -49,6 +50,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     register_exception_handlers(app)
+    app.include_router(auth_router)
     app.include_router(trip_router)
     app.include_router(ask_router)
     app.include_router(map_router)

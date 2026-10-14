@@ -14,6 +14,7 @@ from ..models.intercity_plan import InterCityPlan
 from ..models.planner_input import PlannerInput
 from ..models.planning_constraints import PlanningConstraints
 from ..models.trip_plan_request import TripPlanRequest
+from ..clients.preference_store import SOURCE_FORM
 from ..models.weather_query_result import WeatherQueryResult
 from .hotel_anchor_service import HotelAnchorService
 from .requirement_analysis_service import RequirementAnalysisService
@@ -26,14 +27,23 @@ class PlannerInputBuilder:
                  requirement_analysis_service: RequirementAnalysisService,
                  hotel_anchor_service: HotelAnchorService,
                  attraction_client=None,
-                 intercity_service=None):
+                 intercity_service=None,
+                 preference_service=None):
         self._planning_data_agent = planning_data_agent
         self._requirement_analysis_service = requirement_analysis_service
         self._hotel_anchor_service = hotel_anchor_service
         self._attraction_client = attraction_client
         self._intercity_service = intercity_service
+        # 不传就整条链不碰偏好（老的单测构造它时不带这个参数）。
+        self._preference_service = preference_service
 
-    def build(self, request: TripPlanRequest) -> PlannerInput:
+    def build(self, request: TripPlanRequest, user_id: int | None = None) -> PlannerInput:
+        """组装一次规划的全部输入。
+
+        `user_id` 是登录门禁认出来的人。**长期偏好只在这里进进出出**（§2.2.4）：
+        读出来注入需求理解、把抽取结果存回去，两个动作都在这一处，因为
+        规划与改方案两条路都经过这里（adjust_trip 最后也是 plan_trip）。
+        """
         context = PlanningContext(request=request)
         self._planning_data_agent.collect(context)
         raise_planning_errors(context)
@@ -41,10 +51,16 @@ class PlannerInputBuilder:
         attraction_result = context.attraction_result
         weather_result = context.weather_result
         hotel_result = context.hotel_result
-        constraints = self._requirement_analysis_service.analyze(request)
+        long_term = self._long_term_preferences(user_id)
+        constraints = self._requirement_analysis_service.analyze(request, long_term)
+        self._record_preferences(constraints, user_id)
         self._validate_planning_inputs(attraction_result, weather_result, hotel_result)
-        planning_notes = self._build_planning_notes(request, attraction_result, weather_result, hotel_result, constraints)
+        planning_notes = self._build_planning_notes(
+            request, attraction_result, weather_result, hotel_result, constraints, long_term)
         agent_traces = self._build_agent_traces(request, attraction_result, weather_result, hotel_result, constraints)
+        preference_trace = self._build_preference_trace(long_term, constraints)
+        if preference_trace is not None:
+            agent_traces.append(preference_trace)
         anchors = self._hotel_anchor_service.resolve(request)
         day_candidates = self._hotel_anchor_service.build_day_candidates(
             request, anchors, list(hotel_result.hotels or []))
@@ -80,6 +96,51 @@ class PlannerInputBuilder:
             intercity_estimated=bool(intercity.option and intercity.option.estimated),
             arrival_point=intercity.arrival_point,
             day_end_points=({last_day: intercity.departure_point} if intercity.departure_point else None),
+        )
+
+    def _long_term_preferences(self, user_id: int | None) -> list[str]:
+        """这个人的长期偏好原文。没接服务 / 没登录 / 读不出来 → 空列表，规划照跑。"""
+        if self._preference_service is None or user_id is None:
+            return []
+        try:
+            return self._preference_service.list_for_injection(user_id)
+        except Exception:  # noqa: BLE001 - 偏好读不出来不该让整次规划挂掉
+            return []
+
+    def _record_preferences(self, constraints: PlanningConstraints, user_id: int | None) -> None:
+        """把备注里抽出来的长期偏好落库。整段包在 try 里、失败即不记（§2.2.4）：
+        记偏好是搭便车的乘客，不能让它把车开翻——规划失败和偏好没记住，差着一个量级。"""
+        if self._preference_service is None or user_id is None:
+            return
+        try:
+            self._preference_service.record(
+                user_id, constraints.extracted_preferences, SOURCE_FORM)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _build_preference_trace(self, long_term: list[str],
+                                constraints: PlanningConstraints) -> AgentTrace | None:
+        """注入留痕。**一条偏好都没有、也没抽出来新的时不写**：默认链路的留痕要与
+        加这一档之前逐字一致，多一条都算差异（照 _build_anchor_trace 的规矩）。
+
+        「注入了 N 条」是本档唯一能自动化证明注入真的发生了的痕迹（§2.2.9 判据 7）——
+        不加这条，注入只能靠"答案看起来对"来判断，那不算判据。
+        """
+        extracted = list(constraints.extracted_preferences or [])
+        if not long_term and not extracted:
+            return None
+        input_summary = f"长期偏好：{len(long_term)} 条" + (
+            "（" + "、".join(long_term) + "）" if long_term else "")
+        if extracted:
+            output_summary = "本次新记下：" + "、".join(extracted)
+        else:
+            output_summary = "本次没有新的长期偏好"
+        return AgentTrace(
+            agent_name="PreferenceService",
+            action="注入并记录长期偏好",
+            input_summary=input_summary,
+            output_summary=output_summary,
+            status="success",
         )
 
     def _plan_intercity(self,
@@ -189,7 +250,11 @@ class PlannerInputBuilder:
                               attraction_result: AttractionSearchResult,
                               weather_result: WeatherQueryResult,
                               hotel_result: HotelSearchResult,
-                              constraints: PlanningConstraints) -> list[str]:
+                              constraints: PlanningConstraints,
+                              long_term: list[str] | None = None) -> list[str]:
+        """注意这里同时是**总览文案的输入**（planning_notes 会进 LlmNarrationService 的
+        总览 prompt），所以长期偏好写到这儿就够了，不用再往文案那一层单独穿一次 user_id。
+        """
         notes: list[str] = []
         notes.append(f"本次规划目的地为{request.city}，共{request.calculate_days()}天")
         notes.append(attraction_result.summary)
@@ -204,6 +269,10 @@ class PlannerInputBuilder:
             notes.append(f"额外要求：{request.extra_requirements}")
         if constraints.extracted_tags:
             notes.append("识别出的规划约束：" + "、".join(constraints.extracted_tags))
+        if long_term:
+            # 长期偏好进这里，规划器和总览文案都能看到。**一条都没有时不写**：
+            # 默认链路的备注要与加这一档之前逐字一致。
+            notes.append("这个人的长期偏好：" + "、".join(long_term))
         return notes
 
     def _build_agent_traces(self,

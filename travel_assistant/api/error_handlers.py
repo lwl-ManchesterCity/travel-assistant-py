@@ -8,7 +8,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic.alias_generators import to_camel
 
-from ..exceptions import TripPlanningException, is_quota_exhausted
+from ..exceptions import (
+    TripPlanningException,
+    UnauthorizedException,
+    UsernameTakenException,
+    is_quota_exhausted,
+)
 from ..models.api_error_response import ApiErrorResponse
 
 log = logging.getLogger(__name__)
@@ -55,6 +60,36 @@ def register_exception_handlers(app: FastAPI) -> None:
                 code="VALIDATION_ERROR",
                 message="请求参数校验失败",
                 details=details,
+                timestamp=datetime.now(),
+            ),
+        )
+
+    @app.exception_handler(UnauthorizedException)
+    async def handle_unauthorized(request: Request, exc: UnauthorizedException) -> JSONResponse:
+        # 故意不打 warning：没登录是最常见的正常情况（页面刚打开时探一下 /me 就是 401），
+        # 每次都记一条会把真该看的日志淹掉。
+        return _json_response(
+            401,
+            ApiErrorResponse(
+                code="UNAUTHORIZED",
+                message=str(exc),
+                details=[],
+                timestamp=datetime.now(),
+            ),
+        )
+
+    @app.exception_handler(UsernameTakenException)
+    async def handle_username_taken(request: Request, exc: UsernameTakenException) -> JSONResponse:
+        # details 的格式跟校验错误那条保持一致（`字段: 人话`），因为前端的错误提示优先读 details。
+        # 这里一度写的是 `f"username: {exc.username}"`——那等于把机器字段当人话显示，
+        # 用户会看到「username: amy」而不是「这个用户名已经被用了」。
+        taken = "这个用户名已经被用了"
+        return _json_response(
+            409,
+            ApiErrorResponse(
+                code="USERNAME_TAKEN",
+                message=taken,
+                details=[f"username: {taken}"],
                 timestamp=datetime.now(),
             ),
         )

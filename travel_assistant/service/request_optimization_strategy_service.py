@@ -10,6 +10,36 @@ from ..models.trip_plan import TripPlan
 from ..models.trip_plan_request import TripPlanRequest
 
 _CLAUSE_SPLIT_PATTERN = re.compile(r"[；;\n]")
+
+# 本服务往 extra_requirements 里追加的**系统自己生成的句子**。
+#
+# 为什么要单独收成一份：这些句子会跟着 `adjust_trip` → `plan_trip(decision.updated_request)`
+# → builder → RequirementAnalysisService.analyze 一路走，**必然出现在偏好抽取的输入里**。
+# 但它们是"这一次"的调节，不是"这个人"的偏好——照原样存下来，等于从此每一趟都强制
+# 压预算、每一趟都压缩路线，而用户根本不知道有这回事（§2.2.4）。
+#
+# 抽取那边按**子句精确匹配**剔掉：拼进去用的是 merge_extra_requirement 的 `；`，
+# 拆分用的是 _CLAUSE_SPLIT_PATTERN 的 `；;换行`，所以精确相等是成立的，不用模糊匹配。
+#
+# 每句都是一个具名常量，_apply_* 里引用的就是它——**同一份字面量只写一遍**，
+# 否则改了一处忘了另一处，那条就会变成一个人的永久偏好。
+REQ_REDUCE_BUDGET = "整体控制预算，优先保留高价值景点"
+REQ_FEWER_TICKETS = "减少高门票和远距离景点"
+REQ_COMPRESS_COMMUTE = "尽量压缩跨区通勤，优先安排同片区景点"
+REQ_FEWER_DETOURS = "减少折返路线"
+REQ_INDOOR_ON_RAIN = "如遇降雨优先安排室内备选景点"
+REQ_LOW_WEATHER_EXPOSURE = "优先博物馆、美术馆、商圈等低天气暴露景点"
+REQ_UPGRADE_QUALITY = "预算充足时优先提升体验质量和景点丰富度"
+
+SYSTEM_GENERATED_REQUIREMENTS = frozenset({
+    REQ_REDUCE_BUDGET,
+    REQ_FEWER_TICKETS,
+    REQ_COMPRESS_COMMUTE,
+    REQ_FEWER_DETOURS,
+    REQ_INDOOR_ON_RAIN,
+    REQ_LOW_WEATHER_EXPOSURE,
+    REQ_UPGRADE_QUALITY,
+})
 _ADJUSTMENT_KEYWORDS = (
     "预算",
     "交通",
@@ -35,6 +65,25 @@ _ADJUSTMENT_KEYWORDS = (
     "多一点",
     "少一点",
 )
+
+
+def split_extra_requirements(text: str | None) -> list[str]:
+    """按子句切开 extra_requirements。拼接用的是 `；`（merge_extra_requirement），
+    所以这里按 `；;换行` 切，切出来的每一段就是当初拼进去的那一段原文。"""
+    if text is None or not text.strip():
+        return []
+    return [clause.strip() for clause in _CLAUSE_SPLIT_PATTERN.split(text) if clause.strip()]
+
+
+def strip_system_requirements(text: str | None) -> str | None:
+    """去掉系统自己追加的那些句子，只留用户原话。**抽长期偏好之前必须过这一道**（§2.2.4）。
+
+    精确相等即可，不需要模糊匹配：两边用的是同一个分隔符，切出来的就是当初拼进去的原文。
+    全被剔光时返回 None——调用方按"没填备注"处理。
+    """
+    kept = [clause for clause in split_extra_requirements(text)
+            if clause not in SYSTEM_GENERATED_REQUIREMENTS]
+    return "；".join(kept) if kept else None
 
 
 class RequestOptimizationStrategyService:
@@ -118,19 +167,19 @@ class RequestOptimizationStrategyService:
         if updated_request.transportation != "公共交通":
             updated_request.transportation = "公共交通"
             change_notes.append("交通方式调整为公共交通")
-        self.merge_extra_requirement(updated_request, "整体控制预算，优先保留高价值景点")
-        self.merge_extra_requirement(updated_request, "减少高门票和远距离景点")
+        self.merge_extra_requirement(updated_request, REQ_REDUCE_BUDGET)
+        self.merge_extra_requirement(updated_request, REQ_FEWER_TICKETS)
         if plan is not None and plan.budget is not None and not plan.budget.within_budget:
             change_notes.append("已加入预算收紧约束")
 
     def _apply_compress_route(self, updated_request: TripPlanRequest, change_notes: list[str]) -> None:
-        self.merge_extra_requirement(updated_request, "尽量压缩跨区通勤，优先安排同片区景点")
-        self.merge_extra_requirement(updated_request, "减少折返路线")
+        self.merge_extra_requirement(updated_request, REQ_COMPRESS_COMMUTE)
+        self.merge_extra_requirement(updated_request, REQ_FEWER_DETOURS)
         change_notes.append("已加入压缩路线约束")
 
     def _apply_indoor_replacement(self, updated_request: TripPlanRequest, change_notes: list[str]) -> None:
-        self.merge_extra_requirement(updated_request, "如遇降雨优先安排室内备选景点")
-        self.merge_extra_requirement(updated_request, "优先博物馆、美术馆、商圈等低天气暴露景点")
+        self.merge_extra_requirement(updated_request, REQ_INDOOR_ON_RAIN)
+        self.merge_extra_requirement(updated_request, REQ_LOW_WEATHER_EXPOSURE)
         change_notes.append("已加入雨天室内备选约束")
 
     def _apply_upgrade_experience(self, updated_request: TripPlanRequest, change_notes: list[str]) -> None:
@@ -138,7 +187,7 @@ class RequestOptimizationStrategyService:
         if upgraded != updated_request.accommodation:
             updated_request.accommodation = upgraded
             change_notes.append(f"住宿偏好上调为 {upgraded}")
-        self.merge_extra_requirement(updated_request, "预算充足时优先提升体验质量和景点丰富度")
+        self.merge_extra_requirement(updated_request, REQ_UPGRADE_QUALITY)
         change_notes.append("已加入体验升级约束")
 
     def _sanitize_persisted_extra_requirements(self, extra_requirements: str | None) -> str | None:

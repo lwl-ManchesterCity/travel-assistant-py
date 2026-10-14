@@ -40,9 +40,11 @@ class LoopPlanningAgent:
         self._loop_decision_executor = loop_decision_executor
         self._travel_loop_properties = travel_loop_properties
 
-    def plan(self, original_request: TripPlanRequest) -> TripPlan:
+    def plan(self, original_request: TripPlanRequest, user_id: int | None = None) -> TripPlan:
+        """`user_id` 只往下传给 builder（长期偏好按它存取）。None 时行为与从前一字不差。"""
         if not self._travel_loop_properties.enabled:
-            trip_plan = self._planner_agent.build_plan(self._planner_input_builder.build(original_request))
+            trip_plan = self._planner_agent.build_plan(
+                self._planner_input_builder.build(original_request, user_id))
             self._append_loop_result(trip_plan, [], [], 1, "loop-disabled")
             return trip_plan
 
@@ -57,7 +59,8 @@ class LoopPlanningAgent:
         no_improvement_rounds = 0
 
         for round_number in range(1, max(1, self._travel_loop_properties.max_rounds) + 1):
-            candidate_plan = self._planner_agent.build_plan(self._planner_input_builder.build(working_request))
+            candidate_plan = self._planner_agent.build_plan(
+                self._planner_input_builder.build(working_request, user_id))
             loop_traces.append(AgentTrace(
                 agent_name="LoopPlanningAgent",
                 action=f"第 {round_number} 轮生成初稿",

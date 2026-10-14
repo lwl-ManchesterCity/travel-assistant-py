@@ -760,3 +760,63 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+
+/* ---------- 改方案输入弹窗 ----------
+ *
+ * 它替代的是 `window.prompt`。原生弹窗的字体、按钮、宽度**全归浏览器管**，
+ * CSS 碰不到；中文在 mac 上还会掉到宋体那一路，跟页面是两个世界。
+ * 自己画一个就跟着页面走了——这才是"换掉它"的真正理由，不只是好不好看。
+ *
+ * 遮罩与面板沿用 .trip-adjust-* 那套（同一个墨蓝遮罩 + 白卡 + shadow-pop）。
+ */
+
+.adjust-prompt-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(18, 48, 63, 0.45);
+}
+
+.adjust-prompt-panel {
+    width: min(520px, calc(100% - 32px));
+    padding: var(--sp-5);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    box-shadow: var(--shadow-pop);
+    /* textarea 与 button **不继承** body 的字体，原生控件有自己的默认值——
+     * 这正是原生弹窗字体不对的根子，所以这里逐个写明白。 */
+    font-family: inherit;
+}
+
+.adjust-prompt-title {
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-bold);
+    color: var(--ink);
+}
+
+.adjust-prompt-hint {
+    margin-top: var(--sp-2);
+    font-size: var(--fs-sm);
+    line-height: 1.7;
+    color: var(--muted);
+}
+
+.adjust-prompt-panel .textarea {
+    width: 100%;
+    min-height: 84px;
+    margin-top: var(--sp-4);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    line-height: 1.7;
+    resize: none;
+}
+
+.adjust-prompt-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+    margin-top: var(--sp-4);
+}

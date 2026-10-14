@@ -12,8 +12,13 @@
     const progressPercent = document.getElementById('progress-percent');
     const backHomeBtn = document.getElementById('back-home-btn');
     const editTripBtn = document.getElementById('edit-trip-btn');
-    const agentTraceToggle = document.getElementById('agent-trace-toggle');
-    const agentTraceList = document.getElementById('agent-trace-list');
+    // 旅行助手。它是 .result-layout 的第二列，与 main.dashboard-main 互斥显示——
+    // 左栏（aside.side-nav）全程在，切换只换右半边。见 docs/ASSISTANT_CHAT_DESIGN.md §八。
+    const assistantPanel = document.getElementById('assistant-panel');
+    const assistantEntry = document.getElementById('open-assistant');
+    const dashboardMain = resultPage.querySelector('.dashboard-main');
+    const assistantMessages = document.getElementById('assistant-messages');
+    const assistantEmpty = document.getElementById('assistant-empty');
     const tripAdjustOverlay = document.getElementById('trip-adjust-overlay');
     const preferenceGroup = document.getElementById('preference-group');
     const hiddenPreferences = document.getElementById('preferences');
@@ -21,10 +26,16 @@
     const endDateInput = document.getElementById('endDate');
     const daysDisplay = document.getElementById('daysDisplay');
     const navItems = document.querySelectorAll('.nav-item[data-target]');
+    const topActions = resultPage.querySelector('.top-actions');
+    const askQuestion = document.getElementById('ask-question');
 
     let progressTimer = null;
     let currentTripData = null;
     let currentPayload = null;
+    // 短期记忆：这趟会话里前几轮的问答，每轮 {role, content}。
+    // 与 currentTripData / currentPayload 一起进 sessionStorage，理由见
+    // docs/ASK_MULTITURN_MEMORY.md §3.1。关标签页就没了，与方案同生共死。
+    let chatHistory = [];
     let mapConfigCache = null;
     let amapSdkPromise = null;
     let amapMap = null;
@@ -47,11 +58,48 @@
     departureDateInput.addEventListener('change', syncDateRange);
     endDateInput.addEventListener('change', syncDateRange);
     backHomeBtn.addEventListener('click', () => {
+        // 回首页前把右半边还原成方案视图：不然下次进来还停在助手页上，
+        // 而那时 currentTripData 可能已经被换掉了。is-assistant 那道锁也得摘，
+        // 否则整个 #result-page 还是 100vh + overflow:hidden。
+        showPlanView();
         resultPage.classList.add('hidden');
         landingPage.classList.remove('hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     editTripBtn.addEventListener('click', adjustCurrentTrip);
+    // 侧栏那个「旅行助手」不是页内一节，是换右半边——所以它没有 data-target，不进 navItems。
+    assistantEntry.addEventListener('click', openAssistant);
+    // 窄屏专用（宽屏上它 display:none，点不到）
+    document.getElementById('assistant-back-btn').addEventListener('click', closeAssistant);
+
+    // Enter 发送，Shift+Enter 换行——聊天框的通行做法，不然每次都要把手挪到鼠标上。
+    askQuestion.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' || event.shiftKey) {
+            return;
+        }
+        // **组字期间必须放行**：中文输入法用 Enter 上屏，那一下是"确认候选词"，
+        // 不是"发送"。拦了的话打完拼音一按回车就把半截问题发出去了。
+        // isComposing 是标准信号，keyCode 229 是部分 IME / 老浏览器的老写法，两个都看。
+        if (event.isComposing || event.keyCode === 229) {
+            return;
+        }
+        event.preventDefault();
+        if (!askQuestion.value.trim()) {
+            return;   // 空着按 Enter 什么也不做，不弹提示（手滑比手快常见）
+        }
+        askAboutCurrentTrip();
+    });
+
+    // 空态那几个示例问题。**事件委托到消息区**，不绑在按钮本身上：
+    // 空态节点会被 resetAssistant 摘下来再挂回去，绑在它内部就得跟着搬。
+    assistantMessages.addEventListener('click', (event) => {
+        const sample = event.target.closest('.assistant-sample');
+        if (!sample) {
+            return;
+        }
+        askQuestion.value = sample.textContent.trim();
+        askAboutCurrentTrip();
+    });
     // 滚动联动高亮。**原来只在点击时切**，所以往下滑的时候左边一直停在原地。
     //
     // 位置用"文档绝对坐标"（累加 offsetTop）而不是 `getBoundingClientRect().top`：
@@ -90,7 +138,9 @@
         // 按**文档顺序**排，不是导航里的顺序——这两个不一样（「景点地图」在导航里排第三，
         // 但它在右边栏，文档里排在天气之后）。照导航顺序取"最后一个过线的"会指错节。
         spots.sort((first, second) => first.top - second.top);
-        // 滚到底就直接认最后一节：否则「方案追问」够不到激活线，高亮会退回上一节
+        // 滚到底就直接认最后一节。「方案追问」还在这一页时，这条是专为它写的（它在文档最末，
+        // 够不到激活线）。它走之后最后一节变成「每日行程」——它是长是短取决于行程天数，
+        // 短行程同样够不到线，所以这条留着。
         if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
             setActiveNav(spots[spots.length - 1].id);
             return;
@@ -105,22 +155,29 @@
 
     navItems.forEach(item => {
         item.addEventListener('click', () => {
+            // 在助手页点导航项 = "我要回去看那一节"。得先切回方案视图再滚，
+            // 否则滚的是被 .hidden 藏起来的节点——那些节点没有布局盒，滚了等于没反应。
+            showPlanView();
             setActiveNav(item.dataset.target);
             holdNavDuringClick();
-            if (item.dataset.target === 'agent-trace-section') {
-                toggleAgentTraceSection(true);
-            }
             document.getElementById(item.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     });
+    // 顶栏那三个按钮是常驻的（`返回首页` 是离开结果页的唯一出口，
+    // 页面四五屏长，滚下去就找不着了）。底色只在真的滚起来之后才加——
+    // 一进页面挂在蓝天顶上会显出一条浅横带。见 result.css 的 .is-stuck。
+    function syncTopActionsBacking() {
+        topActions.classList.toggle('is-stuck', window.scrollY > 8);
+    }
+
     window.addEventListener('scroll', () => {
+        syncTopActionsBacking();
         if (navClickLocked) {
             holdNavDuringClick();   // 还在滚，接着续期
             return;
         }
         syncNavToScroll();
     }, { passive: true });
-    agentTraceToggle.addEventListener('click', () => toggleAgentTraceSection());
     document.getElementById('ask-submit').addEventListener('click', askAboutCurrentTrip);
     document.getElementById('ask-confirm-yes').addEventListener('click', confirmAskChange);
     document.getElementById('ask-confirm-no').addEventListener('click', hideAskConfirmation);
@@ -172,6 +229,7 @@
 
             const data = await response.json();
             completeProgress();
+            resetAssistant();
             renderResult(data, payload);
             setTimeout(() => {
                 landingPage.classList.add('hidden');
@@ -695,15 +753,6 @@
         errorToast.textContent = '';
     }
 
-    function toggleAgentTraceSection(forceOpen = null) {
-        const explicitOpen = typeof forceOpen === 'boolean' ? forceOpen : null;
-        const shouldOpen = explicitOpen === null
-            ? agentTraceList.classList.contains('hidden')
-            : explicitOpen;
-        agentTraceList.classList.toggle('hidden', !shouldOpen);
-        agentTraceToggle.textContent = shouldOpen ? '收起详情' : '展开详情';
-    }
-
     function renderResult(data, payload) {
         currentTripData = data;
         currentPayload = payload;
@@ -714,19 +763,501 @@
         renderPlanningNotes(data, payload);
         renderBudget(data, payload);
         renderWeather(data, payload);
-        renderAgentTraces(data);
         renderDays(data, payload);
         renderMapTabs(data);
         renderMap(data, payload, 0);
         renderExtraRequirements(payload);
         setActiveNav('overview-section');
+        // 方案一落定就写盘。这里是**唯一**的落点：新方案（走 resetAssistant 清了对话）
+        // 与 /adjust 改完（对话留着）都从这里过。
+        persistSession();
+    }
+
+    /* ---------- 旅行助手页 ----------
+     *
+     * 原本挂在结果页底部的「方案追问」抽出来，变成这一屏对话。
+     * **不落库、不引入路由**：进来时直接读内存里的 currentTripData / currentPayload
+     * （同文档切视图，这两个变量还在）。所以刷新即失效，与抽出来之前一致。
+     *
+     * **消息堆在屏幕上，但模型看不到历史**——每次请求只带当前这一句
+     * （后端 ask_agent.py 也是单条 HumanMessage、没接 checkpointer）。
+     * 这是"聊天样子的单轮"，是有意为之，不是漏。
+     */
+
+    // 进助手前结果页滚到哪了。回来时还原——用户是从某一节跳去问问题的，
+    // 回来把他扔回页顶等于把上下文弄丢。
+    // 「方案」与「助手」互斥占右半边。**#result-page 一直不藏**，所以左栏天然留着。
+    function showAssistantView() {
+        dashboardMain.classList.add('hidden');
+        assistantPanel.classList.remove('hidden');
+        // 锁页高 + 藏页脚风景带/坐标读数，见 assistant.css 那一段
+        resultPage.classList.add('is-assistant');
+        assistantEntry.classList.add('is-active');
+        // 左栏那五个高亮的是"方案里的哪一节"，助手页上它们都不该亮
+        setActiveNav('');
+    }
+
+    function showPlanView() {
+        assistantPanel.classList.add('hidden');
+        dashboardMain.classList.remove('hidden');
+        resultPage.classList.remove('is-assistant');
+        assistantEntry.classList.remove('is-active');
+    }
+
+    function openAssistant() {
+        if (!currentTripData || !currentPayload) {
+            showError('请先生成一次旅行计划，再使用旅行助手');
+            return;
+        }
+        showAssistantView();
+        document.getElementById('ask-question').focus();
+    }
+
+    // 宽屏上助手页没有「← 返回方案」：左栏一直在，点上面任一导航项就回去了
+    // （见 navItems 的 click 处理）。窄屏（≤1100px）左栏收起了，这个按钮才露面，
+    // 所以这条绑定只为窄屏服务。
+    function closeAssistant() {
+        showPlanView();
+        syncNavToScroll();
+    }
+
+    /* 自动滚到底只在**用户本来就贴着底部**的时候做。
+     *
+     * 原来是无条件滚，而打字机每 16ms 调一次、工具条目每来一条调一次——
+     * 用户在流跑完之前想往上翻旧消息，会被一帧一帧地拽回底部，翻不动。
+     * "跟随最新内容"变成"锁死在底部"，这是 bug 不是缺功能。
+     *
+     * 状态由消息区自己的 scroll 事件维护，而不是每次现算：现算的话，
+     * 新内容一 append 上去 scrollHeight 就变高了，"离底多远"立刻失真，
+     * 明明没动过的用户会被判成"已经翻上去了"。
+     */
+    const ASSISTANT_STICK_SLACK = 40;   // 差一点点也算贴着底，别要求像素级精确
+
+    let assistantStick = true;
+
+    function isAssistantAtBottom() {
+        return assistantMessages.scrollHeight - assistantMessages.scrollTop
+            - assistantMessages.clientHeight <= ASSISTANT_STICK_SLACK;
+    }
+
+    assistantMessages.addEventListener('scroll', () => {
+        assistantStick = isAssistantAtBottom();
+    }, { passive: true });
+
+    // force 只给"轮次边界"用（用户刚发了一句、或刚重置），那时他要看的是新一轮的内容。
+    function scrollAssistantToBottom(force = false) {
+        if (!force && !assistantStick) {
+            return;
+        }
+        assistantMessages.scrollTop = assistantMessages.scrollHeight;
+    }
+
+    // 空态提示只在"一条消息都没有"时出现，第一条进来就撤掉。
+    function clearAssistantEmpty() {
+        if (assistantEmpty.parentNode) {
+            assistantEmpty.remove();
+        }
+    }
+
+    // 返回气泡本身，后续（工具条目、打字机）要往里追加子节点。
+    function appendMessage(role, text = '') {
+        const bubble = document.createElement('div');
+        bubble.className = `msg msg-${role}`;
+        if (text) {
+            bubble.textContent = text;
+        }
+        clearAssistantEmpty();
+        assistantMessages.appendChild(bubble);
+        // 强制：appendMessage 只在轮次边界被调用（用户刚发问、建待答气泡、报错），
+        // 那时用户要看的就是这一条，不管他之前翻到哪了。
+        scrollAssistantToBottom(true);
+        return bubble;
+    }
+
+    /* 「已记住：不能吃辣」。**只报本次真的新存进去的**（后端算好的），
+     * 重复说的不报——每次都弹会变成噪音，用户会开始无视它，那比不显示更糟。
+     *
+     * 挂在回答气泡里面、跟着打字机一起出现：它是这条回答的附注。
+     * 用 textContent 而不是拼 HTML：偏好原文来自用户自己说的话，直接插进
+     * innerHTML 就等于开了个注入口。 */
+    function appendMemoryNote(bubble, items) {
+        const note = document.createElement('div');
+        note.className = 'msg-note';
+        note.textContent = `已记住：${items.join('、')}`;
+        bubble.appendChild(note);
+    }
+
+    // 换一份新方案 = 换一趟旅行，旧对话说的都是别的行程，留着只会误导。
+    // （方案被 /adjust 改掉时**不**清——那种情况用户自己知道刚改过什么。）
+    function resetAssistant() {
+        // 卡片容器住在消息区里，清空时会被一起冲掉——它的 DOM 是 index.html 的固定节点，
+        // 没了 getElementById 就返回 null，后面 show/hide 全会崩。所以要捡回来。
+        assistantMessages.innerHTML = '';
+        assistantMessages.append(assistantEmpty, askCards);
+        assistantStick = true;   // 清空了就是空的，谈不上"用户翻到上面去了"
+        // 短期记忆跟着 DOM 一起清：屏幕上没有了，模型眼里也不该还留着。
+        chatHistory = [];
+        document.getElementById('ask-question').value = '';
+        document.getElementById('ask-status').textContent = '';
+        hideAskConfirmation();
+        persistSession();
+    }
+
+    /* ---------- 短期记忆的落盘：sessionStorage ----------
+     *
+     * 存的是**三样一起**：方案、原始请求、对话（docs/ASK_MULTITURN_MEMORY.md §2.1）。
+     * 只存对话是没用的——每轮追问都要带 tripPlan，刷新后方案没了，对话留着也接不上。
+     *
+     * 为什么是 sessionStorage 而不是 localStorage：助手的定位是"方案生成之后的下一轮"
+     * （见 ASK_SCOPE_OPENING.md §三），**关掉标签页 = 方案没了 = 对话也没用了**，
+     * 持久化对话本来就没意义。顺带还不留陈旧数据、多标签页不打架。
+     * 哪天助手能脱离方案单独用，这里换一个词就行。
+     */
+
+    const SESSION_KEY = 'travel-assistant.session';
+    // 结构一改就作废旧数据。不加的话，布局变过之后老结构会被当成新结构去渲染，
+    // 报出来的是一个跟真实原因无关的错。
+    const SESSION_VERSION = 1;
+    // 发给模型的历史窗口。与后端 _HISTORY_MAX_TURNS 同一个数——前端截是"别发没用的东西"，
+    // 后端也必须截（不能信任客户端），两处都要有。
+    const HISTORY_SEND_TURNS = 6;
+
+    function persistSession() {
+        if (!currentTripData || !currentPayload) {
+            return;
+        }
+        try {
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+                version: SESSION_VERSION,
+                tripPlan: currentTripData,
+                request: currentPayload,
+                history: chatHistory
+            }));
+        } catch (error) {
+            // 配额满、隐私模式禁写：追问本身还能用，别为存不下来把主流程搞挂。
+            console.warn('会话落盘失败（不影响本轮追问）:', error);
+        }
+    }
+
+    function clearSession() {
+        try {
+            sessionStorage.removeItem(SESSION_KEY);
+        } catch (error) {
+            console.warn('会话清理失败:', error);
+        }
+    }
+
+    function readSession() {
+        let raw = null;
+        try {
+            raw = sessionStorage.getItem(SESSION_KEY);
+        } catch (error) {
+            console.warn('会话读取失败:', error);
+            return null;
+        }
+        if (!raw) {
+            return null;
+        }
+        let stored = null;
+        try {
+            stored = JSON.parse(raw);
+        } catch (error) {
+            clearSession();     // 半截 JSON 留着也没用，下次还会再解析失败一遍
+            return null;
+        }
+        if (!stored || stored.version !== SESSION_VERSION
+            || !stored.tripPlan || !stored.request) {
+            clearSession();
+            return null;
+        }
+        return stored;
+    }
+
+    // 只发最近几轮。前端截是省流量，**后端也截**——不能信任客户端，
+    // 构造一个一万轮的历史就能把 prompt 打爆（那份文档的判据 7）。
+    function historyForRequest() {
+        return chatHistory.slice(-HISTORY_SEND_TURNS * 2);
+    }
+
+    // 刷新后把对话重建回屏幕上。刻意不走 appendMessage：那个每次都会
+    // 强制滚到底，而这里是在页面加载时一次性铺完，应该停在顶部。
+    function restoreConversation() {
+        if (!chatHistory.length) {
+            return;
+        }
+        clearAssistantEmpty();
+        for (const turn of chatHistory) {
+            const bubble = document.createElement('div');
+            bubble.className = `msg msg-${turn.role === 'user' ? 'user' : 'assistant'}`;
+            bubble.textContent = turn.content;
+            assistantMessages.appendChild(bubble);
+        }
+        assistantStick = true;
+    }
+
+    // 首页表单要跟着恢复出来的请求走。不回填的话，刷新后点「返回首页」看到的是
+    // 默认日期和空目的地，而方案页上明明摆着一份杭州的行程——两处对不上，
+    // 用户照着改一改再提交，出来的是另一趟旅行。
+    function applyRequestToForm(payload) {
+        const setValue = (id, value) => {
+            const el = document.getElementById(id);
+            if (el && value !== undefined && value !== null) {
+                el.value = value;
+            }
+        };
+        setValue('origin', payload.originCity);
+        setValue('destination', payload.city);
+        setValue('departureDate', payload.startDate);
+        setValue('endDate', payload.endDate);
+        setValue('budget', payload.budget);
+        setValue('transportation', payload.transportation);
+        setValue('accommodation', payload.accommodation);
+        setValue('extraRequirements', payload.extraRequirements);
+        setValue('hotelAnchor', payload.hotelAnchor);
+        setValue('hotelContinuity', payload.hotelContinuity);
+        const wanted = new Set(payload.preferences || []);
+        preferenceGroup.querySelectorAll('input[type="checkbox"]').forEach(box => {
+            box.checked = wanted.has(box.value);
+        });
+        syncPreferenceValues();
+        syncDateRange();
+        updateLandingPreview();
+    }
+
+    // 刷新后把这一趟接回来：方案、原始请求、对话三样一起（§2.1 的三层漏斗）。
+    // 走 renderResult 而不是另写一套渲染——它是方案落屏的唯一入口。
+    function restoreSession() {
+        const stored = readSession();
+        if (!stored) {
+            return;
+        }
+        // 落盘的东西也要过一遍形状检查：sessionStorage 是用户能改的，
+        // 半条没答案的记录会让后端的成对截断把整段历史丢掉。
+        chatHistory = (Array.isArray(stored.history) ? stored.history : []).filter(
+            turn => turn && typeof turn.content === 'string'
+                && (turn.role === 'user' || turn.role === 'assistant'));
+        applyRequestToForm(stored.request);
+        renderResult(stored.tripPlan, stored.request);
+        restoreConversation();
+        landingPage.classList.add('hidden');
+        resultPage.classList.remove('hidden');
+    }
+
+
+    /* ---------- 流式追问（SSE） ----------
+     *
+     * 后端 `POST /api/trips/ask/stream` 推三种事件：`trace`（每调一次工具一条）、
+     * `answer`（完整答案，一条）、`error`。协议见 docs/ASSISTANT_CHAT_DESIGN.md §3.4。
+     *
+     * **这里不能用 `EventSource`**：它只支持 GET，而方案必须走 POST body
+     * （整份 tripPlan 都在 body 里）。所以自己拿 `response.body.getReader()` 读字节流、
+     * 按 SSE 规范切帧。
+     */
+
+    // 助手气泡的固定骨架：上面挂工具条目，下面写答案。两者要能随后续事件分头往里塞。
+    function appendPendingBubble() {
+        const bubble = appendMessage('assistant');
+        const tools = document.createElement('div');
+        tools.className = 'msg-tools';
+        const text = document.createElement('div');
+        text.className = 'msg-text';
+        bubble.append(tools, text);
+        const pending = { bubble, tools, text, count: 0, running: null };
+        // 一开始还没有任何工具条目，先只有这颗呼吸的点——聊天气泡里的"正在输入"。
+        pending.running = document.createElement('div');
+        pending.running.className = 'msg-tool is-running';
+        pending.running.textContent = '正在思考…';
+        tools.appendChild(pending.running);
+        return pending;
+    }
+
+    // 那颗呼吸的点**不是**某一次工具调用，是"这轮还在跑"本身。
+    // 每来一条真的工具条目就把它挪到末尾，让完成的条目按时间从上往下排。
+    function moveRunningEntry(pending) {
+        if (pending.count > 0) {
+            pending.running.textContent = '正在继续…';
+        }
+        pending.tools.appendChild(pending.running);
+    }
+
+    function toolEntryText(trace) {
+        const action = trace.action || trace.agentName || '调用工具';
+        const input = (trace.inputSummary || '').trim();
+        return input ? `${action} · ${input}` : action;
+    }
+
+    // 答案到手 = 这一轮的工具阶段结束，那颗呼吸的点该撤了。
+    // 不撤的话它会一直转下去，看起来像还在跑——而这一轮其实已经结束了。
+    function finishPendingBubble(pending) {
+        if (pending.running && pending.running.parentNode) {
+            pending.running.remove();
+        }
+    }
+
+    function appendToolEntry(pending, trace) {
+        const entry = document.createElement('div');
+        entry.className = 'msg-tool';
+        // 只把"这次没取到数"标红（检索失败、模型输出解析不了）。
+        // not_found 不标——"库里没有"是一个正常结论，不是故障。
+        if (trace.status === 'failed' || trace.status === 'fallback') {
+            entry.classList.add('is-failed');
+        }
+        entry.textContent = toolEntryText(trace);
+        // 工具带回来的原文收在悬停提示里：行内铺开会把聊天流冲散，
+        // 但"答案是根据什么说的"要能查到。
+        if (trace.outputSummary) {
+            entry.title = trace.outputSummary;
+        }
+        pending.tools.insertBefore(entry, pending.running);
+        pending.count += 1;
+        moveRunningEntry(pending);
+        scrollAssistantToBottom();
+    }
+
+    // 切一帧 SSE。`raw` 是两条空行之间的那一段，形如 `event: trace\ndata: {...}`。
+    function parseSseFrame(raw) {
+        let event = 'message';
+        const dataLines = [];
+        for (const line of raw.split(/\r?\n/)) {
+            if (!line || line.startsWith(':')) {
+                continue;   // 空行与注释行（含心跳）都跳过
+            }
+            const colon = line.indexOf(':');
+            const field = colon === -1 ? line : line.slice(0, colon);
+            let value = colon === -1 ? '' : line.slice(colon + 1);
+            if (value.startsWith(' ')) {
+                value = value.slice(1);   // 规范：冒号后紧跟的一个空格是分隔符，不算数据
+            }
+            if (field === 'event') {
+                event = value;
+            } else if (field === 'data') {
+                dataLines.push(value);
+            }
+        }
+        if (!dataLines.length) {
+            return null;
+        }
+        try {
+            return { event, data: JSON.parse(dataLines.join('\n')) };
+        } catch (error) {
+            console.error('Unparsable SSE frame:', raw, error);
+            return null;
+        }
+    }
+
+    // 读完一整条流，边读边把工具条目渲染出来。返回 answer 帧的载荷（没收到就是 null）。
+    async function readAskStream(response, pending) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let answer = null;
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) {
+                break;
+            }
+            buffer += decoder.decode(value, { stream: true });
+            // 帧以空行分隔。最后一段常常被网络切在半路，pop 出来留到下一轮再拼——
+            // 直接对整段 split 会把半截 JSON 当帧解析，报一堆解析错。
+            const frames = buffer.split(/\r?\n\r?\n/);
+            buffer = frames.pop();
+            for (const raw of frames) {
+                const frame = parseSseFrame(raw);
+                if (!frame) {
+                    continue;
+                }
+                if (frame.event === 'trace') {
+                    appendToolEntry(pending, frame.data);
+                } else if (frame.event === 'answer') {
+                    answer = frame.data;
+                } else if (frame.event === 'error') {
+                    throw new Error(frame.data.message || '追问失败');
+                }
+            }
+        }
+        return answer;
+    }
+
+    /* ---------- 假流式打字机 ----------
+     *
+     * 答案**不是**逐 token 从模型流过来的：模型最后一轮吐的是规则 9 约定的 JSON 信封，
+     * 边生成边推会让用户先看到 `{"intent":"answer","answer":"` 这堆脚手架。
+     * 所以服务端等它整条生成完一次性推来，这里在本地把它"播"一遍。理由见设计文档 §3.4。
+     */
+    /* ---------- 改方案确认卡：消息流里的一条 ----------
+     *
+     * 卡片 DOM（#ask-confirm / #ask-hotel-move）是 index.html 里的固定节点，
+     * ID 与事件绑定一律没动；这里只做一件事——每轮把它**挪到消息流最末尾**，
+     * 让"这张卡接在哪句答案后面"看得出来。见设计文档 §3.5。
+     */
+
+    const askCards = document.getElementById('ask-cards');
+
+    // 卡片要等答案打完再显形。答案还在逐字写的时候就弹"要按这句话重新生成吗"，
+    // 用户还没读完就被催着做决定。
+    // askTurnId 用来作废过期的显形：用户等不及先问了下一句，上一句挂的回调就不该再弹卡。
+    let askTurnId = 0;
+
+    function moveAskCardsToEnd() {
+        clearAssistantEmpty();
+        assistantMessages.appendChild(askCards);
+        scrollAssistantToBottom();
+    }
+
+    function revealAskCards() {
+        askCards.classList.remove('hidden');
+        scrollAssistantToBottom();
+    }
+
+    const TYPEWRITER_TICK_MS = 16;      // ≈ 60fps
+    const TYPEWRITER_MS_PER_CHAR = 18;
+    const TYPEWRITER_MIN_MS = 700;      // 短答案也播这么久，不然"唰"一下什么都看不清
+    const TYPEWRITER_MAX_MS = 2600;     // 长答案到此为止，不能让用户等打字
+
+    const PREFERS_REDUCED_MOTION = window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function playTypewriter(element, text, onDone) {
+        // 关了动效就直出。打字机是纯装饰，对这部分用户它只是"答案迟迟不出现"。
+        if (PREFERS_REDUCED_MOTION) {
+            element.textContent = text;
+            if (onDone) {
+                onDone();
+            }
+            return;
+        }
+        // 按码点切，别把 emoji / 代理对劈成两半（那样会渲染出半个乱码方块）。
+        const chars = Array.from(text);
+        const duration = Math.min(TYPEWRITER_MAX_MS,
+            Math.max(TYPEWRITER_MIN_MS, chars.length * TYPEWRITER_MS_PER_CHAR));
+        const step = Math.max(1, Math.round(chars.length / (duration / TYPEWRITER_TICK_MS)));
+        let shown = 0;
+        element.textContent = '';
+        element.classList.add('is-typing');
+        const timer = setInterval(() => {
+            shown = Math.min(chars.length, shown + step);
+            element.textContent = chars.slice(0, shown).join('');
+            scrollAssistantToBottom();
+            if (shown >= chars.length) {
+                clearInterval(timer);
+                element.classList.remove('is-typing');
+                if (onDone) {
+                    onDone();
+                }
+            }
+        }, TYPEWRITER_TICK_MS);
     }
 
     async function askAboutCurrentTrip() {
-        const question = document.getElementById('ask-question').value.trim();
+        const input = document.getElementById('ask-question');
+        const question = input.value.trim();
         const status = document.getElementById('ask-status');
-        const answerBox = document.getElementById('ask-answer');
         const button = document.getElementById('ask-submit');
+        // 上一轮还在跑就别再发。点按钮那条路走不到这儿（disabled 的按钮不触发 click），
+        // 但 Enter 是直接调本函数的，绕过了按钮的 disabled。
+        if (button.disabled) {
+            return;
+        }
         if (!question) {
             showError('请先输入想追问的内容');
             return;
@@ -736,13 +1267,16 @@
             return;
         }
 
+        // 不再写 button.textContent：它现在是个圆形图标钮，写字会把里面的箭头 SVG 冲掉。
+        // "在跑"由左边的状态行 + 钮变灰呼吸表达。
         button.disabled = true;
-        button.textContent = '追问中...';
         hideAskConfirmation();
         status.textContent = '正在读方案并查数据，约需几秒';
-        answerBox.innerHTML = '<div class="ask-loading"><span class="ask-loading-spinner"></span>正在思考...</div>';
+        input.value = '';
+        appendMessage('user', question);
+        const pending = appendPendingBubble();
         try {
-            const response = await fetch('/api/trips/ask', {
+            const response = await fetch('/api/trips/ask/stream', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -750,27 +1284,58 @@
                 body: JSON.stringify({
                     question: question,
                     tripPlan: currentTripData,
-                    request: currentPayload
+                    request: currentPayload,
+                    // 当前这句**不在** history 里（后端会单独拼 Human），
+                    // 所以这里发的是"这句之前"的对话。
+                    history: historyForRequest()
                 })
             });
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
+                const data = await response.json().catch(() => null);
                 console.error('Trip ask request failed:', data);
                 throw new Error(formatErrorMessage(data) || '追问失败');
             }
-            answerBox.textContent = data.answer || '未返回回答';
-            renderAgentTraces({agentTraces: data.traces || []});
-            toggleAgentTraceSection(true);
+            const data = await readAskStream(response, pending);
+            if (!data) {
+                // 流正常结束但没给 answer 帧——留个空壳气泡比报错更让人摸不着头脑。
+                throw new Error('追问没有返回结果');
+            }
             status.textContent = '';
-            showAskConfirmation(data);
+            finishPendingBubble(pending);
+            // 成功之后才记进历史，而且**一问一答一起记**。
+            // 失败的那一轮用户重问一次就行；只记 Human 不记 AI 更糟——后端是从末尾
+            // 往回配对的，末尾那条配不上会把**整段**历史一起丢掉。
+            // 存的是 data.answer（解析后的答案），不是模型吐出的 JSON 信封原文，见 §3.2。
+            if (data.answer) {
+                chatHistory.push({ role: 'user', content: question },
+                    { role: 'assistant', content: data.answer });
+                persistSession();
+            }
+            const change = showAskConfirmation(data);
+            // 先把 turnId 记下来，再开打字机。hideAskConfirmation（下一句、或点了确认/算了）
+            // 会把它 +1，于是这条过期回调自己就失效了，不会把旧卡弹到新答案下面。
+            const turnId = ++askTurnId;
+            // 这次新记下的长期偏好。**排在打字机之后**出现：它说的是"我刚记下了"，
+            // 得等用户看完回答才轮得到它。
+            const remembered = Array.isArray(data.recordedPreferences)
+                ? data.recordedPreferences : [];
+            playTypewriter(pending.text, data.answer || '未返回回答', () => {
+                if (remembered.length) {
+                    appendMemoryNote(pending.bubble, remembered);
+                }
+                if (change && turnId === askTurnId) {
+                    revealAskCards();
+                }
+            });
         } catch (error) {
-            answerBox.innerHTML = '';
+            pending.bubble.remove();
             status.textContent = '';
             hideAskConfirmation();
-            showError(error.message);
+            // 不在聊天里同时弹 toast：气泡本身就是错误展示，两个一起出太吵。
+            appendMessage('error', error.message);
         } finally {
             button.disabled = false;
-            button.textContent = '追问这份方案';
+            scrollAssistantToBottom();
         }
     }
 
@@ -784,10 +1349,11 @@
         return single ? [single] : [];
     }
 
+    // 返回建好的 change（没卡就是 null）——调用方拿它判断要不要在打字机收尾时显形。
     function showAskConfirmation(data) {
         if (data.intent !== 'need_change' || !data.adjustmentPrompt) {
             hideAskConfirmation();
-            return;
+            return null;
         }
         pendingAskChange = {
             adjustmentPrompt: data.adjustmentPrompt,
@@ -797,12 +1363,14 @@
             pinDay: Number.isInteger(data.pinDay) ? data.pinDay : null,
             moveHotel: null
         };
+        moveAskCardsToEnd();
         // 指定了必去景点、又没提酒店 → 先问一句要不要把酒店也挪过去（多一张卡，仍在同一次提交内）
         if (pendingAskChange.pinHints.length && !pendingAskChange.anchorHint) {
             showHotelMoveCard();
-            return;
+            return pendingAskChange;
         }
         showFinalAskConfirm();
+        return pendingAskChange;
     }
 
     function showHotelMoveCard() {
@@ -843,6 +1411,9 @@
 
     function hideAskConfirmation() {
         pendingAskChange = null;
+        // 作废还挂着的显形回调：这张卡这次不弹了，过了这一轮也不该再弹。
+        askTurnId += 1;
+        askCards.classList.add('hidden');
         document.getElementById('ask-confirm').classList.add('hidden');
         document.getElementById('ask-hotel-move').classList.add('hidden');
     }
@@ -858,23 +1429,84 @@
             change.pinHints, change.pinDay, change.moveHotel === true);
     }
 
+    /* ---------- 改方案输入弹窗 ----------
+     *
+     * 替代 `window.prompt`。原生那个的字体、按钮、宽度**全归浏览器管**，CSS 碰不到，
+     * 中文在 mac 上还会掉到宋体那一路——跟页面是两个世界。自己画一个就跟着页面走了。
+     *
+     * 它不是一段同步代码，所以包成 Promise：调用方 await 一句，
+     * 回来的是用户输入的那句，或者 null（取消 / Esc / 点遮罩外面）。
+     */
+
+    const adjustPromptOverlay = document.getElementById('adjust-prompt-overlay');
+    const adjustPromptInput = document.getElementById('adjust-prompt-input');
+    let adjustPromptResolve = null;
+
+    function closeAdjustPrompt(value) {
+        adjustPromptOverlay.classList.add('hidden');
+        adjustPromptInput.value = '';
+        // 先取出来再清空：resolve 里可能又开一次弹窗（比如校验没过），
+        // 后赋的值不能被这一句顺手清掉。
+        const resolve = adjustPromptResolve;
+        adjustPromptResolve = null;
+        if (resolve) {
+            resolve(value);
+        }
+    }
+
+    function askAdjustmentPrompt() {
+        adjustPromptOverlay.classList.remove('hidden');
+        adjustPromptInput.focus();   // 摘掉 hidden 就是可见了，这一步不用等下一帧
+        return new Promise(resolve => {
+            adjustPromptResolve = resolve;
+        });
+    }
+
+    document.getElementById('adjust-prompt-cancel').addEventListener('click', () => closeAdjustPrompt(null));
+    document.getElementById('adjust-prompt-ok').addEventListener('click', () => {
+        const value = adjustPromptInput.value.trim();
+        if (!value) {
+            showError('改计划要求不能为空');
+            return;   // 不关窗：让用户接着改，而不是把输入框连同内容一起收掉
+        }
+        closeAdjustPrompt(value);
+    });
+    // 点遮罩本身才算取消。用 mousedown 而不是 click：click 的 target 是
+    // 按下与抬起**共同**的祖先，从面板里按下、拖到遮罩上抬起会误判成点了遮罩。
+    adjustPromptOverlay.addEventListener('mousedown', (event) => {
+        if (event.target === adjustPromptOverlay) {
+            closeAdjustPrompt(null);
+        }
+    });
+    // 挂在遮罩上而不是 document 上：事件从 textarea 冒泡上来，够用，
+    // 又不会在弹窗关着的时候跟别处的 Enter/Esc 抢。
+    adjustPromptOverlay.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeAdjustPrompt(null);
+            return;
+        }
+        if (event.key !== 'Enter' || event.shiftKey) {
+            return;
+        }
+        // 中文输入法选词的那个回车不算发送，否则半句话就出去了
+        if (event.isComposing || event.keyCode === 229) {
+            return;
+        }
+        event.preventDefault();
+        document.getElementById('adjust-prompt-ok').click();
+    });
+
     async function adjustCurrentTrip() {
         if (!currentTripData || !currentPayload) {
             showError('请先生成一次旅行计划，再进行修改');
             return;
         }
 
-        const adjustmentPrompt = window.prompt(
-            '输入你想怎么改，比如：预算改成 2500、节奏轻松一点、酒店换成经济型、不要美食多一点自然风景'
-        );
+        const adjustmentPrompt = await askAdjustmentPrompt();
         if (adjustmentPrompt === null) {
-            return;
+            return;   // 取消
         }
-        if (!adjustmentPrompt.trim()) {
-            showError('改计划要求不能为空');
-            return;
-        }
-        await runTripAdjustment(adjustmentPrompt.trim());
+        await runTripAdjustment(adjustmentPrompt);
     }
 
     async function runTripAdjustment(adjustmentPrompt, anchorHint, anchorDay, pinHints, pinDay, moveHotel) {
@@ -1250,82 +1882,6 @@
             <li>${payload.city}出行期间建议预留弹性时间, 便于按天气微调路线。</li>
             ${tips.map(item => `<li>${item}</li>`).join('')}
         `;
-    }
-
-    function renderAgentTraces(data) {
-        const traces = data.agentTraces || [];
-        const loopSummary = data.loopSummary;
-        const loopIterations = data.loopIterations || [];
-        if (!traces.length && !loopIterations.length) {
-            agentTraceList.innerHTML = `
-                <div class="agent-trace-item">
-                    <div class="agent-trace-agent">AgentTrace</div>
-                    <div>
-                        <div class="agent-trace-action">暂无执行轨迹</div>
-                        <div class="agent-trace-meta">当前结果未返回智能体轨迹，可能是旧版本接口响应。</div>
-                    </div>
-                </div>
-            `;
-            toggleAgentTraceSection(false);
-            return;
-        }
-
-        const loopSummaryHtml = loopSummary?.enabled ? `
-            <div class="agent-loop-summary">
-                <strong>Loop Planning 已启用</strong>
-                <span>执行轮次：${loopSummary.roundsExecuted || loopIterations.length || 1}</span>
-                <span>最终采用：第${(loopSummary.selectedRound || 1)}轮方案</span>
-                <span>停止原因：${loopSummary.stopReason || '已达到当前可接受结果'}</span>
-            </div>
-        ` : '';
-
-        const loopIterationsHtml = loopIterations.length ? `
-            <div class="loop-grid">
-                ${loopIterations.map(item => `
-                    <details class="loop-item ${item.selectedAsBest ? 'best' : ''}">
-                        <summary class="agent-collapse-summary loop-item-top">
-                            <div class="loop-item-title">第${item.round || 1}轮循环</div>
-                            <div class="loop-badge-row">
-                                ${item.selectedAsBest ? '<span class="loop-badge best">最终采用</span>' : ''}
-                                <span class="loop-badge">${item.critiqueAction || 'KEEP_CURRENT_PLAN'}</span>
-                            </div>
-                        </summary>
-                        <div class="loop-detail-body">
-                            <div class="loop-score">
-                                <span class="loop-badge">总分 ${item.reflectionScore ?? '--'}</span>
-                                <span class="loop-badge">预算 ${item.budgetSeverity ?? 0}</span>
-                                <span class="loop-badge">路线 ${item.routeSeverity ?? 0}</span>
-                                <span class="loop-badge">天气 ${item.weatherSeverity ?? 0}</span>
-                                <span class="loop-badge">体验 ${item.experienceSeverity ?? 0}</span>
-                            </div>
-                            <div class="agent-trace-meta"><strong>系统动作:</strong> ${item.critiqueReason || '按当前方向继续规划'}</div>
-                            <div class="agent-trace-meta"><strong>执行改动:</strong> ${(item.appliedChanges || []).length ? item.appliedChanges.join('；') : '本轮未做显式条件改写'}</div>
-                        </div>
-                    </details>
-                `).join('')}
-            </div>
-        ` : '';
-
-        agentTraceList.innerHTML = `
-            ${loopSummaryHtml}
-            ${loopIterationsHtml}
-            ${traces.map((trace, index) => `
-            <details class="agent-trace-item">
-                <summary class="agent-collapse-summary">
-                    <div>
-                        <div class="agent-trace-agent">${index + 1}. ${trace.agentName || 'Agent'}</div>
-                        <div class="agent-trace-status">${trace.status || 'done'}</div>
-                    </div>
-                    <div class="agent-trace-action">${trace.action || '执行任务'}</div>
-                </summary>
-                <div class="agent-detail-body">
-                    <div class="agent-trace-meta"><strong>输入:</strong> ${trace.inputSummary || '无'}</div>
-                    <div class="agent-trace-meta"><strong>输出:</strong> ${trace.outputSummary || '无'}</div>
-                </div>
-            </details>
-            `).join('')}
-        `;
-        toggleAgentTraceSection(false);
     }
 
     // 线路色：与 tokens.css「线路色」小节一一对应。JS 读不到 CSS 自定义属性在
@@ -2035,3 +2591,23 @@
         }
         return errorData.message || '';
     }
+
+    /* 刷新后把上一趟接回来，必须放在**整个脚本的最末尾**。
+     *
+     * 它在函数定义处调用看起来更顺眼，但那里会踩暂时性死区：restoreSession 会走到
+     * renderResult，而 renderResult 下面的 renderDays 用了一个 1823 行的
+     * `const lineColor`——那时它还没初始化，抛 "Cannot access 'lineColor' before
+     * initialization"，页面停在首页、方案压根没渲染出来。
+     * 这类错在别处的初始化（250 行那几行）里碰不到，是因为它们不走渲染。
+     *
+     * 还要**等门禁判完**（auth.js 的 boot()）。直接调的话，未登录时会先闪一下
+     * 上一个人的方案、再被挡到登录页——那正是 §2.1.7 不许出现的一幕。
+     * 而且没认出来就绝不能 restoreSession：它会 un-hide 结果页、
+     * 把一份方案渲染到登录页底下。auth.js 哪天没加载，退回原来的行为。
+     */
+    (window.travelAuthReady || Promise.resolve(true)).then(function (authenticated) {
+        if (authenticated === false) {
+            return;
+        }
+        restoreSession();
+    });

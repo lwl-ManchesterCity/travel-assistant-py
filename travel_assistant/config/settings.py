@@ -129,6 +129,22 @@ class AnchorSettings(TravelDefaults, BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
 
+class DbSettings(TravelDefaults, BaseSettings):
+    """长期记忆的用户库，对应 docs/ASK_LONGTERM_MEMORY.md §2.1.1。
+
+    默认 DSN 是 `postgresql:///travel_assistant`：三段分别是「空 host = 走 unix socket /
+    空 user = 当前系统用户 / 库名」，所以**本机不需要用户名密码**。
+    换机器、换库、上线上密码，都只改 TRAVEL_DB_DSN 这一个环境变量。
+    """
+
+    dsn: str = Field(default="postgresql:///travel_assistant", validation_alias="TRAVEL_DB_DSN")
+    # 会话有效期。30 天是"常用的机器不用反复登"与"丢了手机也能等到它过期"之间的折中；
+    # 真要立刻失效，有登出（删库里的那一行）。
+    session_days: int = Field(default=30, validation_alias="TRAVEL_DB_SESSION_DAYS")
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+
+
 class Settings(BaseSettings):
     """对应 application.yml 顶层：server.port + travel.loop + travel.llm + travel.providers。"""
 
@@ -137,6 +153,7 @@ class Settings(BaseSettings):
     llm: LlmSettings = Field(default_factory=LlmSettings)
     providers: ProviderSettings = Field(default_factory=ProviderSettings)
     anchor: AnchorSettings = Field(default_factory=AnchorSettings)
+    db: DbSettings = Field(default_factory=DbSettings)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 

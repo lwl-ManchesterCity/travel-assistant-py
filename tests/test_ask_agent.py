@@ -11,10 +11,12 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from travel_assistant.agent.ask_agent import AskAgent
+from travel_assistant.api.auth_dependency import require_current_user
 from travel_assistant.config.container import get_ask_agent
 from travel_assistant.exceptions import TripPlanningException
 from travel_assistant.main import app
-from travel_assistant.models.ask_request import AskRequest
+from travel_assistant.models.ask_request import AskRequest, AskTurn
+from travel_assistant.models.auth import AuthUser
 from travel_assistant.models.attraction import Attraction
 from travel_assistant.models.budget import Budget
 from travel_assistant.models.day_plan import DayPlan
@@ -27,6 +29,15 @@ from travel_assistant.models.trip_plan_request import TripPlanRequest
 from travel_assistant.models.weather_info import WeatherInfo
 
 _LOCATION = Location(latitude=30.25, longitude=120.15)
+
+
+@pytest.fixture(autouse=True)
+def _without_login_gate(without_login_gate):
+    """本文件里那几条走 HTTP 的用例测的是**追问信封**，不是登录，
+    所以把门禁摘掉，免得每条都先注册一个用户。门禁本身由
+    tests/test_auth_controller.py 守——这个 autouse 只作用于本文件。
+    """
+    yield
 
 
 def _trip_plan() -> TripPlan:
@@ -288,7 +299,7 @@ def test_shouldNotTouchAnyPlanningCodeWhenProposingAChange():
     assert response.intent == "need_change"
     assert set(response.model_dump(by_alias=True)) == {
         "answer", "intent", "adjustmentPrompt", "anchorHint", "anchorDay",
-        "pinHints", "pinDay", "traces"}
+        "pinHints", "pinDay", "recordedPreferences", "traces"}
     assert all(tool.name in {"get_plan_overview", "get_day_plan", "get_attraction_detail",
                              "search_attractions", "search_attractions_by_tag",
                              "query_weather", "recommend_hotels"}
@@ -319,7 +330,7 @@ def test_shouldExposeTheNewAskFieldsInCamelCaseOverHttp():
     from travel_assistant.models.ask_response import AskResponse
 
     class _Proposer:
-        def ask(self, request):
+        def ask(self, request, user_id=None):
             return AskResponse(answer="确认后再重排", intent="need_change",
                                adjustment_prompt="第二天住得离西湖近一点",
                                anchor_hint="西湖", anchor_day=1, traces=[])
@@ -342,7 +353,7 @@ def test_shouldReturnValidationErrorWhenQuestionIsBlank():
     payload["question"] = "   "
 
     class _NeverAsk:
-        def ask(self, request):
+        def ask(self, request, user_id=None):
             raise AssertionError("校验未通过时不应进入追问逻辑")
 
     app.dependency_overrides[get_ask_agent] = lambda: _NeverAsk()
@@ -359,7 +370,7 @@ def test_shouldReturnValidationErrorWhenQuestionIsBlank():
 
 def test_shouldRejectEmptyBodyWithValidationErrors():
     class _NeverAsk:
-        def ask(self, request):
+        def ask(self, request, user_id=None):
             raise AssertionError("空请求体应在校验层就被挡掉")
 
     app.dependency_overrides[get_ask_agent] = lambda: _NeverAsk()
@@ -494,3 +505,470 @@ def test_shouldKeepTheLocalToolApartFromTheOnlineOne():
     assert "search_attractions" in names
     assert "search_attractions_by_tag" in names
     assert len(names) == len(set(names))
+
+
+# ---------- 多轮：历史对话进上下文 ----------
+#
+# 守的是 docs/ASK_MULTITURN_MEMORY.md。三个要点：历史拼在当前这句**前面**、
+# 窗口与字符两道闸门、以及**不传 history 时一字不变**。
+
+class _RecordingGraph(_ScriptedGraph):
+    """多记一笔：把 invoke 收到的 messages 原样留下来给断言看。"""
+
+    def __init__(self, tools, script, answer):
+        super().__init__(tools, script, answer)
+        self.seen = []
+
+    def invoke(self, state):
+        self.seen = list(state["messages"])
+        return super().invoke(state)
+
+
+def _history_agent(answer=None):
+    agent = AskAgent(_StubLlmClient(True), _StubAttractionAgent(),
+                     _StubWeatherAgent(), _StubHotelAgent())
+    graph = _RecordingGraph(agent._tools, [], answer or _answer_json("答。"))
+    agent._get_agent = lambda: graph
+    return agent, graph
+
+
+def _turn_pairs(count, human_prefix="问", assistant_prefix="答"):
+    """造 count 轮成对的历史。"""
+    turns = []
+    for index in range(count):
+        turns.append(AskTurn(role="user", content=f"{human_prefix}{index}"))
+        turns.append(AskTurn(role="assistant", content=f"{assistant_prefix}{index}"))
+    return turns
+
+
+def test_shouldPutHistoryBeforeTheCurrentQuestion():
+    """历史在前、当前这句在后——模型的 messages 列表就是这个形状。"""
+    agent, graph = _history_agent()
+    request = _ask_request("那它几点关门")
+    request.history = [AskTurn(role="user", content="西溪湿地要门票吗"),
+                       AskTurn(role="assistant", content="西溪湿地门票 80 元，开放 07:30-17:30")]
+
+    agent.ask(request)
+
+    assert [(type(m).__name__, m.content) for m in graph.seen] == [
+        ("HumanMessage", "西溪湿地要门票吗"),
+        ("AIMessage", "西溪湿地门票 80 元，开放 07:30-17:30"),
+        ("HumanMessage", "那它几点关门"),
+    ]
+
+
+def test_shouldKeepSingleTurnBehaviourWhenHistoryIsAbsent():
+    """判据 3：不传 history 就是今天的样子——一条 HumanMessage，不多不少。"""
+    agent, graph = _history_agent()
+
+    agent.ask(_ask_request("第二天为什么这么赶"))
+
+    assert [(type(m).__name__, m.content) for m in graph.seen] == [
+        ("HumanMessage", "第二天为什么这么赶"),
+    ]
+
+
+def test_shouldKeepOnlyTheMostRecentSixTurns():
+    """判据 4：十轮历史只取最近六轮，且**成对**——不出现孤立的 Human 或 AI。"""
+    agent, graph = _history_agent()
+    request = _ask_request()
+    request.history = _turn_pairs(10)
+
+    agent.ask(request)
+
+    roles = [type(m).__name__ for m in graph.seen]
+    assert roles == ["HumanMessage", "AIMessage"] * 6 + ["HumanMessage"]
+    assert graph.seen[0].content == "问4", "取的该是最近六轮：问4 到 问9"
+    assert graph.seen[11].content == "答9"
+
+
+def test_shouldDropTheTrailingUserTurnThatHasNoAnswer():
+    """末尾孤立的 Human 先摘掉。留着它，从末尾配对第一步就配不上，**整段**历史会一起丢。"""
+    agent, graph = _history_agent()
+    request = _ask_request()
+    request.history = _turn_pairs(2) + [AskTurn(role="user", content="还没答完的那句")]
+
+    agent.ask(request)
+
+    assert [m.content for m in graph.seen] == ["问0", "答0", "问1", "答1", "第二天为什么这么赶"]
+
+
+def test_shouldDropALeadingAssistantTurnThatHasNoQuestion():
+    """开头的孤立 AI 同理，它是配对剩下的边角料。"""
+    agent, graph = _history_agent()
+    request = _ask_request()
+    request.history = [AskTurn(role="assistant", content="没头没脑的一句")] + _turn_pairs(1)
+
+    agent.ask(request)
+
+    assert [m.content for m in graph.seen] == ["问0", "答0", "第二天为什么这么赶"]
+
+
+def test_shouldTrimHistoryByCharacterBudget():
+    """判据 4 的另一半：8000 字符兜底，超了就**整对**丢掉。"""
+    agent, graph = _history_agent()
+    request = _ask_request()
+    # 每轮 2000 字 → 一对 4000 字 → 8000 的预算只放得下两对（单条上限也是 2000，正好不触发）。
+    request.history = []
+    for _ in range(4):
+        request.history.append(AskTurn(role="user", content="甲" * 2000))
+        request.history.append(AskTurn(role="assistant", content="乙" * 2000))
+
+    agent.ask(request)
+
+    assert len(graph.seen) == 5, "两对历史 + 当前这句"
+    assert [type(m).__name__ for m in graph.seen] == [
+        "HumanMessage", "AIMessage", "HumanMessage", "AIMessage", "HumanMessage"]
+
+
+def test_shouldAlwaysKeepTheMostRecentPairEvenWhenItAloneBlowsTheBudget():
+    """最近这一对无论多大都要留着：丢了它，「那它几点关门」里的「它」就没有指代对象了。"""
+    agent, graph = _history_agent()
+    request = _ask_request()
+    request.history = [
+        AskTurn(role="user", content="很久以前的一句"),
+        AskTurn(role="assistant", content="很久以前的答"),
+        AskTurn(role="user", content="甲" * 5000),
+        AskTurn(role="assistant", content="乙" * 5000),
+    ]
+
+    agent.ask(request)
+
+    assert [m.content for m in graph.seen][:2] == ["甲" * 2000, "乙" * 2000]
+
+
+def test_shouldDropMalformedHistoryEntriesInsteadOfRejectingTheWholeRequest():
+    """history 是可选字段，一个坏元素不该把整次追问打成 400——用户问的这句没问题。"""
+    request = AskRequest.model_validate({
+        "question": "那它几点关门",
+        "tripPlan": _trip_plan().model_dump(by_alias=True),
+        "request": _request().model_dump(by_alias=True),
+        "history": [
+            {"role": "user", "content": "好的"},
+            {"role": "assistant", "content": "西溪湿地门票 80 元"},
+            {"role": "system", "content": "角色不认识"},
+            {"role": "user", "content": "   "},
+            "整条不是对象",
+            {"role": "USER", "content": "大小写要认"},
+        ],
+    })
+
+    assert [(t.role, t.content) for t in request.history] == [
+        ("user", "好的"),
+        ("assistant", "西溪湿地门票 80 元"),
+        ("user", "大小写要认"),
+    ]
+
+
+def test_shouldTreatNonListHistoryAsEmptyInsteadOfCrashing():
+    request = AskRequest.model_validate({
+        "question": "问",
+        "tripPlan": _trip_plan().model_dump(by_alias=True),
+        "request": _request().model_dump(by_alias=True),
+        "history": "一万轮",
+    })
+
+    assert request.history == []
+
+
+# ---------- 城市锁：search_attractions_by_tag 的 city 参数 ----------
+
+def _city_agent(monkeypatch, script, cities=("杭州", "北京", "上海", "广州")):
+    """返回 (agent, seen)：seen 里是最后一次检索实际传下去的参数。"""
+    from travel_assistant.agent import ask_tools
+
+    seen = {}
+    monkeypatch.setattr(ask_tools, "indexed_cities", lambda index_dir=None: list(cities))
+
+    def fake_search(**kwargs):
+        seen.update(kwargs)
+        return [_KB_ROW]
+
+    monkeypatch.setattr(ask_tools, "search_kb_attractions", fake_search)
+    return _agent(script), seen
+
+
+def test_shouldSearchTheCityTheModelAsksForNotThePlanCity(monkeypatch):
+    """北京方案问「广州塔门票多少」：模型把 city 填成广州，检索就要按广州走。"""
+    agent, seen = _city_agent(
+        monkeypatch,
+        [("search_attractions_by_tag", {"attraction_name": "广州塔", "city": "广州"})])
+
+    agent.ask(_ask_request("广州塔门票多少钱", city="北京"))
+
+    assert seen["city"] == "广州"
+    assert seen["query"] == "广州塔"
+
+
+def test_shouldFallBackToThePlanCityWhenModelLeavesCityEmpty(monkeypatch):
+    """不填 city 就是改动前的老行为，一个字不变。"""
+    agent, seen = _city_agent(
+        monkeypatch, [("search_attractions_by_tag", {"tags": ["室内"]})])
+
+    agent.ask(_ask_request("杭州下雨天去哪", city="杭州"))
+
+    assert seen["city"] == "杭州"
+
+
+def test_shouldSayTheLibraryHasNoSuchCityWhenModelAsksForOneWeDoNotHave(monkeypatch):
+    """填了一个库里没有的城市：照实说查不了，不许把杭州的景点当巴黎的答出去。"""
+    agent, seen = _city_agent(
+        monkeypatch,
+        [("search_attractions_by_tag", {"attraction_name": "埃菲尔铁塔", "city": "巴黎"})],
+        cities=("杭州",))
+
+    trace = _kb_trace(agent.ask(_ask_request("埃菲尔铁塔门票多少", city="杭州")))
+
+    assert trace.status == "not_found"
+    assert "巴黎" in trace.output_summary
+    assert "浙江省博物馆" not in trace.output_summary
+    assert seen == {}, "城市就不在库里，不该往下走去检索"
+
+
+def test_shouldCarryHistoryFromTheRequestBodyIntoTheAgent():
+    """前端发的是驼峰 history，字段名与元素形状要一字不差地到 agent 手里。"""
+    from travel_assistant.models.ask_response import AskResponse
+
+    captured = {}
+
+    class _Capture:
+        def ask(self, request, user_id=None):
+            captured["history"] = request.history
+            return AskResponse(answer="答。", intent="answer", traces=[])
+
+    app.dependency_overrides[get_ask_agent] = lambda: _Capture()
+    try:
+        payload = _ask_request().model_dump(by_alias=True)
+        payload["history"] = [
+            {"role": "user", "content": "西溪湿地要门票吗"},
+            {"role": "assistant", "content": "80 元"},
+        ]
+        response = TestClient(app).post("/api/trips/ask", json=payload)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert [(turn.role, turn.content) for turn in captured["history"]] == [
+        ("user", "西溪湿地要门票吗"), ("assistant", "80 元")]
+
+
+def test_shouldStillAcceptARequestWithoutHistory():
+    """判据 3 的接口面：history 不传，老前端一行不改也照跑。"""
+    from travel_assistant.models.ask_response import AskResponse
+
+    captured = {}
+
+    class _Capture:
+        def ask(self, request, user_id=None):
+            captured["history"] = request.history
+            return AskResponse(answer="答。", intent="answer", traces=[])
+
+    app.dependency_overrides[get_ask_agent] = lambda: _Capture()
+    try:
+        response = TestClient(app).post("/api/trips/ask",
+                                        json=_ask_request().model_dump(by_alias=True))
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured["history"] is None
+
+
+# ---------- 第二档：记偏好与注入（docs/ASK_LONGTERM_MEMORY.md §2.2）----------
+#
+# 守两件事：信封里那一格 preferences 进不进库、以及偏好有没有真的顶到提示词最前。
+# 判据 1/2/3/4 的单元面在这里，端到端那面归 /tmp/preference_probe.py。
+
+def _preference_agent(store, preferences, script=None, answer=None):
+    """带长期记忆的 agent。偏好从 store 里读，记也记回同一个 store。"""
+    from travel_assistant.service.preference_service import PreferenceService
+
+    service = PreferenceService(store)
+    agent = AskAgent(_StubLlmClient(True), _StubAttractionAgent(),
+                     _StubWeatherAgent(), _StubHotelAgent(), service)
+    graph = _RecordingGraph(agent._tools, script or [], answer or _answer_json("答。"))
+    agent._get_agent = lambda: graph
+    return agent, graph
+
+
+def _answer_with_preferences(preferences):
+    import json
+    return json.dumps({"intent": "answer", "answer": "好。", "preferences": preferences},
+                      ensure_ascii=False)
+
+
+def test_shouldRecordThePreferencesFromTheEnvelope():
+    """判据 1 的单元面：信封里给了就落库，来源是 chat。"""
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    agent, _ = _preference_agent(store, [], answer=_answer_with_preferences(["不能吃辣"]))
+
+    response = agent.ask(_ask_request(), user_id=7)
+
+    assert response.recorded_preferences == ["不能吃辣"]
+    assert [(row.content, row.source) for row in store.list_for_user(7)] == [
+        ("不能吃辣", "chat")]
+
+
+def test_shouldRecordNothingWhenTheEnvelopeSaysSo():
+    """判据 2/3 的单元面：「想去看升旗」「你好」都该是空数组，库里一条不多。"""
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    agent, _ = _preference_agent(store, [], answer=_answer_with_preferences([]))
+
+    response = agent.ask(_ask_request(question="你好"), user_id=7)
+
+    assert response.recorded_preferences is None
+    assert store.list_for_user(7) == []
+
+
+def test_shouldNotReportTheSamePreferenceTwice():
+    """判据 4：再说一遍，库里仍然一条，且**不再弹**「已记住」。
+
+    每次都弹会变成噪音，用户会开始无视它——那比不显示更糟（§2.2.7）。
+    """
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    agent, _ = _preference_agent(store, [], answer=_answer_with_preferences(["不能吃辣"]))
+    agent.ask(_ask_request(), user_id=7)
+
+    second = agent.ask(_ask_request(), user_id=7)
+
+    assert second.recorded_preferences is None
+    assert len(store.list_for_user(7)) == 1
+
+
+def test_shouldTakeAtMostFivePreferencesFromOneAnswer():
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    agent, _ = _preference_agent(
+        store, [], answer=_answer_with_preferences([f"偏好{i}" for i in range(6)]))
+
+    response = agent.ask(_ask_request(), user_id=7)
+
+    assert len(response.recorded_preferences) == 5
+    assert len(store.list_for_user(7)) == 5
+
+
+def test_shouldNotRecordAnythingWithoutAUserId():
+    """没登录 / 没认出来人时不写。这条链不该凭一个空 id 往库里塞东西。"""
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    agent, _ = _preference_agent(store, [], answer=_answer_with_preferences(["不能吃辣"]))
+
+    response = agent.ask(_ask_request())
+
+    assert response.recorded_preferences is None
+    assert store.list_for_user(7) == []
+
+
+def test_shouldStillWorkWhenThereIsNoPreferenceServiceAtAll():
+    """老构造方式（四个参数）行为不变：不记也不注入。"""
+    agent = _agent([], answer=_answer_with_preferences(["不能吃辣"]))
+
+    response = agent.ask(_ask_request(), user_id=7)
+
+    assert response.recorded_preferences is None
+    assert response.answer == "好。"
+
+
+# ---------- 注入 ----------
+
+
+def test_shouldPutTheLongTermPreferencesAtTheVeryFrontAsASystemMessage():
+    """§2.2.5 判据：偏好是一条 SystemMessage **顶在最前**。
+
+    不塞历史（历史可以被忽略、而且有窗口会被裁掉）、也不改 create_agent 的
+    system_prompt（那是固化的，按请求重建 agent 等于每轮重编译一遍图）。
+    """
+    from langchain_core.messages import SystemMessage
+
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    store.add(7, "不能吃辣", "chat")
+    agent, graph = _preference_agent(store, [])
+
+    agent.ask(_ask_request(), user_id=7)
+
+    assert isinstance(graph.seen[0], SystemMessage)
+    assert "不能吃辣" in graph.seen[0].content
+    # 顶在最前，历史与当前这句都排在它后面。
+    assert isinstance(graph.seen[-1], HumanMessage)
+    assert graph.seen[-1].content == "第二天为什么这么赶"
+
+
+def test_shouldNotInjectAnythingForANewUser():
+    """一条偏好都没有时不加那条系统消息——默认链路的输入要与从前逐字一致。"""
+    from langchain_core.messages import SystemMessage
+
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    agent, graph = _preference_agent(InMemoryPreferenceStore(), [])
+
+    agent.ask(_ask_request(), user_id=7)
+
+    assert not any(isinstance(message, SystemMessage) for message in graph.seen)
+    assert len(graph.seen) == 1
+
+
+def test_shouldNotInjectWhenThereIsNoUserId():
+    from langchain_core.messages import SystemMessage
+
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    store.add(7, "不能吃辣", "chat")
+    agent, graph = _preference_agent(store, [])
+
+    agent.ask(_ask_request())
+
+    assert not any(isinstance(message, SystemMessage) for message in graph.seen)
+
+
+def test_shouldKeepTheInjectedBlockAheadOfTheHistory():
+    """有历史时，偏好仍在历史之前——它不能跟着历史一起被窗口裁掉。"""
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    store.add(7, "不能吃辣", "chat")
+    agent, graph = _preference_agent(store, [])
+
+    # history 给 **dict**（线上那种形状）。给 AskTurn 对象的话会被
+    # _drop_malformed_turns 静默丢掉——它只认 dict，而丢掉的代价就是"少一点上下文"，
+    # 测试里表现为"历史压根没进来"，很难看出是构造方式的问题。
+    history = [{"role": turn.role, "content": turn.content} for turn in _turn_pairs(2)]
+    agent.ask(AskRequest(question="那它几点关门", trip_plan=_trip_plan(),
+                         request=_request(), history=history), user_id=7)
+
+    assert "不能吃辣" in graph.seen[0].content
+    assert isinstance(graph.seen[1], HumanMessage)
+    assert graph.seen[1].content == "问0"
+
+
+def test_shouldKeepWorkingWhenThePreferenceStoreBlowsUp():
+    """读偏好炸了不该让整轮追问挂掉：记偏好是搭便车的乘客（§2.2.4）。"""
+
+    class _BrokenStore:
+        def list_for_user(self, user_id):
+            raise RuntimeError("库连不上")
+
+        def add(self, user_id, content, source):
+            raise RuntimeError("库连不上")
+
+    from travel_assistant.service.preference_service import PreferenceService
+
+    agent = AskAgent(_StubLlmClient(True), _StubAttractionAgent(),
+                     _StubWeatherAgent(), _StubHotelAgent(), PreferenceService(_BrokenStore()))
+    agent._get_agent = lambda: _ScriptedGraph(
+        agent._tools, [], _answer_with_preferences(["不能吃辣"]))
+
+    response = agent.ask(_ask_request(), user_id=7)
+
+    assert response.answer == "好。"
+    assert response.recorded_preferences is None

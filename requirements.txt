@@ -13,6 +13,13 @@ langchain-core==1.6.3
 langchain-openai==1.6.2
 pytest==9.1.1
 
+# 长期记忆（用户库）专用。整条规划链路一个字节都不碰它们。
+#   psycopg[binary,pool] —— Postgres 驱动 + 连接池（对应 Java 侧 HikariCP 的角色）。
+#     端点全是同步 def（FastAPI 自动丢线程池），所以用同步驱动，不上 asyncpg。
+#   bcrypt —— 密码哈希。不用 passlib：它已停更，且与新 bcrypt 有兼容告警。
+psycopg[binary,pool]==3.3.6
+bcrypt==5.0.0
+
 # 探针专用（scripts/visual_acceptance.py、scripts/motion_evidence.py），不参与运行时而未固定。
 # 装完还要 `playwright install chromium`（浏览器二进制默认落在 ~/Library/Caches/ms-playwright）。
 #   uv pip install -p .venv/bin/python --index-url https://mirrors.aliyun.com/pypi/simple/ playwright

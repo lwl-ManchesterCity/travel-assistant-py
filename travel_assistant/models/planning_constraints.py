@@ -9,6 +9,9 @@ class PlanningConstraints(CamelModel):
     wants_landmark_ceremony: bool = False
     prefers_indoor_backup: bool = False
     extracted_tags: Optional[list[str]] = None
+    # 这一趟的额外要求里露出的**长期偏好原文**（第二档，§2.2.4）。它不是规划用的约束，
+    # 是给 PreferenceService 落库的原料——所以**不参与** planner 的任何判断。
+    extracted_preferences: Optional[list[str]] = None
     analysis_source: Optional[str] = None
 
     def __init__(self, **data) -> None:

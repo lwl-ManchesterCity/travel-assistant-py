@@ -286,7 +286,7 @@ class _StubLoopPlanningAgent:
     def __init__(self):
         self.calls: list[TripPlanRequest] = []
 
-    def plan(self, request: TripPlanRequest) -> TripPlan:
+    def plan(self, request: TripPlanRequest, user_id: int | None = None) -> TripPlan:
         self.calls.append(request)
         return TripPlan(city=request.city, planning_notes=["LoopPlanningAgent 已完成生成-评估-反思-修正闭环"])
 

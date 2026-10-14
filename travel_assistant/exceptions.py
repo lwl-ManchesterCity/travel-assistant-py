@@ -17,6 +17,25 @@ class TripPlanningException(Exception):
         super().__init__(message)
 
 
+class UnauthorizedException(Exception):
+    """没登录，或会话已过期/无效。
+
+    API 层把它翻成 401 + 项目统一的 ApiErrorResponse 信封，而不是直接用 FastAPI 的
+    HTTPException——后者回的是 `{"detail": ...}`，和这里别处的错误长得不一样，前端要写两套解析。
+    """
+
+    def __init__(self, message: str = "请先登录"):
+        super().__init__(message)
+
+
+class UsernameTakenException(Exception):
+    """注册时用户名已存在。"""
+
+    def __init__(self, username: str):
+        super().__init__(username)
+        self.username = username
+
+
 def is_quota_exhausted(error: object) -> bool:
     """判断这个异常是不是高德的配额/频率类失败。
 

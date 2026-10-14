@@ -1,0 +1,496 @@
+/* 旅行助手。
+ *
+ * **它是 .result-layout 的第二列，不是顶层视图**：左栏（aside.side-nav）全程在，
+ * 只有右半边在「方案」与「助手」之间切换。所以这里没有自己的整屏外壳，
+ * 宽度由 `.result-layout` 的 220px 1fr 那一格给。
+ *
+ * 布局是"整屏对话"——消息区自己滚，输入区钉在底部。这跟 .result-page 让**整个文档滚**
+ * 是矛盾的，靠 `.result-page.is-assistant`（本文件末尾）把页面锁成 100vh 解决。
+ */
+
+.assistant-panel {
+    /* 内容列宽。720 是"一行中文放得下三十来字"的量级，
+     * 再宽眼睛就要来回扫了——这也是 DeepSeek 那类对话页的常见取值。 */
+    --assistant-col: 720px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    /* 高度吃满 .result-layout 那一格（那边靠 align-items:stretch 撑开）。
+     * 没有 min-height:0 的话，flex 子项默认 min-height:auto，
+     * 消息区会被内容撑高、把输入区顶出视口，滚动条跑到整个页面上。 */
+    min-height: 0;
+    /* 这是它自己的滚动口，不是文档的 */
+    overflow: hidden;
+    /* 与 .side-nav / .card 同一套卡片皮。这一页上别的块都是白卡，
+     * 只有它直接浮在天空渐变上，看着像没做完。 */
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: var(--sp-5);
+}
+
+/* ---------- 锁页高（助手打开时给 #result-page 加的类）----------
+ *
+ * 助手要求"消息区自己滚 + 输入框钉在视口底"，而 .result-page 是
+ * `min-height:100vh` + 整个文档滚。两者不能共存，所以助手一打开就把页面锁成视口高。
+ *
+ * 本文件在 index.html 里排在 result.css **之后**，所以这几条压得住那边的默认值。
+ */
+
+.result-page.is-assistant {
+    height: 100vh;
+    overflow: hidden;
+    /* 海岸线那层是 `background-position: bottom center`，给四五千像素的长文档垫底的。
+     * 页一锁成视口高，它就被顶到视口中间、卡在输入框后面，山脊还从按钮边上支出来。
+     * 理由与下面藏 .result-scene 是同一个：页脚风景属于"方案"那份文档，不属于对话。 */
+    background-image: none;
+}
+
+/* 页脚风景带那 230px 不藏掉，输入框就钉不到视口底 */
+.result-page.is-assistant .result-scene {
+    display: none;
+}
+
+/* 右下角坐标读数是**方案自己**的角注，助手页上没意义。
+ * （上一版就是漏了这类"结果页固定元素"才让 #geo-corner 穿到助手页上过。） */
+.result-page.is-assistant .geo-corner {
+    display: none;
+}
+
+/* 高度要从 .result-page 一路传到助手那一格，中间断一节就白搭：
+ * .result-page(100vh) → .result-shell(flex 列, height:100%) → .result-layout(flex:1)
+ * → .assistant-panel(align-items:stretch 撑满那一行)。
+ * 之所以不写 height:100%，是因为 .result-shell 的高度是 auto，
+ * 百分比在 auto 上解析不出来——必须靠 flex 把它拉满。 */
+.result-page.is-assistant .result-shell {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.result-page.is-assistant .result-layout {
+    flex: 1;
+    /* 没有 min-height:0，flex 子项的 min-height:auto 会让它被内容顶着长高，
+     * 助手那一格就超出了视口，输入框跑到底下去。 */
+    min-height: 0;
+    /* 默认 align-items:start，那一格不会撑满，助手的消息区就没有高度可谈 */
+    align-items: stretch;
+}
+
+/* .side-nav 是 position:sticky。在 overflow:hidden 的容器里 sticky 会失效——
+ * 但那时**内容本来就不滚**，左栏自然贴顶，正是想要的。这里只是把话说清楚。 */
+
+/* ---------- 窄屏：左栏让位给对话 ----------
+ *
+ * ≤1100px 时 .result-layout 变成单列、.side-nav 从"左边一栏"变成"上面一坨"
+ * （result.css 的同名断点）。实测 375px 下它吃掉 330px，助手只剩 48px 的消息区——
+ * 那样对话根本没法看，是坏的。
+ *
+ * 所以「左栏一直在」这条**只在真的有左栏的时候成立**：宽屏保留，
+ * 窄屏收起左栏、把整屏还给对话，同时把「← 返回方案」还回来（宽屏上它是多余的）。
+ * 这也是上一版整屏助手在手机上本来就好用的原因。
+ */
+
+.assistant-back {
+    display: none;
+}
+
+@media (max-width: 1100px) {
+    .result-page.is-assistant .side-nav {
+        display: none;
+    }
+
+    .assistant-back {
+        display: inline-flex;
+    }
+}
+
+/* ---------- 左栏底部的「旅行助手」入口 ----------
+ *
+ * 它跟上面五个导航项**不是一类**：那几个是"滚到哪一节"，这个换掉右半边。
+ * 所以从 .nav-list 里拿出来、用一条分隔线隔开，并用主色实底把它顶出来。
+ */
+
+.side-nav-action {
+    border-top: 1px solid var(--line);
+    padding: var(--sp-3);
+}
+
+.assistant-entry {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: var(--sp-3) var(--sp-4);
+    border: 0;
+    /* 与 .side-nav 的内圆角错开，免得贴在卡角上显得被切掉一块 */
+    border-radius: var(--radius);
+    background: var(--sea);
+    color: #FFFFFF;
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+    cursor: pointer;
+    transition: background 0.16s ease;
+}
+
+.assistant-entry:hover {
+    background: var(--sea-dark);
+}
+
+.assistant-entry:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+/* 助手打开时切到选中态：实底保持，加一条向内的白竖条，
+ * 与 .nav-item.active 那条 --sea 竖条同一个语汇（只是底色反过来了）。 */
+.assistant-entry.is-active {
+    box-shadow: inset 3px 0 0 #FFFFFF;
+}
+
+/* ---------- 内容列 ----------
+ *
+ * 面板是全宽的一格，1280 的版心里它能到一千多像素。一行文字横跨那么宽没法读，
+ * 消息气泡也会被拉到很扁。所以顶栏、消息区、输入区统一限宽居中——
+ * 就是 DeepSeek 那种两侧留白。空态提示与打字机都在这条中线里。
+ */
+
+.assistant-messages,
+.assistant-composer {
+    width: 100%;
+    max-width: var(--assistant-col);
+    margin-inline: auto;
+}
+
+/* 标题栏**不吃**这条限宽。它是卡片自己的头，不是对话内容——
+ * 跟着 720 走的话，宽屏上标题离卡片左边缘两百多像素，看着像缩进错位。 */
+.assistant-top {
+    width: 100%;
+}
+
+/* ---------- 顶栏 ---------- */
+
+.assistant-top {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    flex-wrap: wrap;
+    /* 上面那排操作按钮是 54px 的常驻条，这里再顶格就挤了 */
+    padding-top: var(--sp-1);
+    /* 一条分隔线，把"这是谁"和"下面在聊什么"分开。
+     * 画在 .assistant-top 上而不是消息区上：消息区是滚的，线挂在它上面会跟着滚走。
+     * 宽度用整张卡的——.assistant-top 刻意不吃 --assistant-col 那条限宽，
+     * 线跟着它才顶到卡片两侧，不然会在两边各留一段空白。 */
+    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--line);
+}
+
+.assistant-title {
+    font-family: var(--font-title);
+    /* 原为 --fs-xl(24px)。整页就它一个 24px，压得对话本身抬不起头，
+     * 收到 18px 与左栏的 .nav-head 一个量级。 */
+    font-size: var(--fs-lg);
+    color: var(--ink);
+}
+
+/* ---------- 消息区 ---------- */
+
+.assistant-messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding-right: var(--sp-2);
+    /* 滚到两端时不把首尾消息贴死在边上 */
+    scroll-padding-block: var(--sp-2);
+}
+
+.assistant-empty {
+    margin: auto;
+    max-width: 460px;
+    text-align: center;
+    font-size: var(--fs-sm);
+    line-height: 1.7;
+    color: var(--muted);
+}
+
+.assistant-empty-lead {
+    margin: 0 0 var(--sp-3);
+}
+
+/* 示例问题。做成胶囊，与输入框、发送钮同一套圆角语汇。 */
+.assistant-samples {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--sp-2);
+}
+
+.assistant-sample {
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    background: var(--card);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    line-height: 1.5;
+    cursor: pointer;
+    transition: border-color 0.16s var(--ease-out), background-color 0.16s var(--ease-out);
+}
+
+.assistant-sample:hover {
+    border-color: var(--sea);
+    background: var(--sea-tint);
+}
+
+.assistant-sample:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.msg {
+    max-width: 88%;
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--radius);
+    /* 原为 --fs-md(16px)。对话是"读一段接一段"，比正文再小一档更耐看，
+     * 也让一屏能多放两轮。 */
+    font-size: var(--fs-sm);
+    line-height: 1.75;
+    /* 长 URL、长景点名不许把气泡撑破容器 */
+    overflow-wrap: anywhere;
+}
+
+.msg-user {
+    align-self: flex-end;
+    background: var(--sea);
+    color: #FFFFFF;
+    border-bottom-right-radius: var(--radius-sm);
+}
+
+.msg-assistant {
+    align-self: flex-start;
+    /* 用 --paper 而不是 --card：面板自己已经是白卡了，气泡再白一层就分不出边界。
+     * --paper 比卡面深一两档，气泡才浮得出来。 */
+    background: var(--paper);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-bottom-left-radius: var(--radius-sm);
+}
+
+.msg-error {
+    align-self: flex-start;
+    background: var(--coral-tint);
+    color: var(--coral-ink);
+    border: 1px solid var(--coral);
+}
+
+/* 「已记住：不能吃辣」——回答下面那一行小字（docs/ASK_LONGTERM_MEMORY.md §2.2.7）。
+ *
+ * 挂在气泡**里面**，不作为独立一条消息：它是这条回答的附注，不是新的一轮对话。
+ * 做成独立 msg 的话，下一轮历史里会多出一条"系统说的话"，用户也会以为
+ * 助手又说了句话在等他回。
+ *
+ * 从属感靠**分隔线和字色**做，不靠缩小字号：这一档存在的全部意义就是
+ * "记的那一刻看得见"，用户没看见等于没做。12px 的灰字在这个页面上
+ * 已经被判定为"看不清"过一次了。 */
+.msg-note {
+    margin-top: var(--sp-2);
+    padding-top: var(--sp-1);
+    border-top: 1px dashed var(--line);
+    font-size: var(--fs-sm);
+    line-height: 1.6;
+    color: var(--muted);
+}
+
+/* 打字机播放中的光标。挂在 ::after 上而不是塞进 textContent，
+ * 那样读文本内容时不会多出一个方块字符。 */
+.msg-text.is-typing::after {
+    content: "▍";
+    margin-left: 2px;
+    opacity: 0.5;
+    animation: msg-tool-pulse 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .msg-text.is-typing::after {
+        animation: none;
+    }
+}
+
+/* ---------- 工具调用条目 ---------- */
+
+.msg-tools {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    margin-bottom: var(--sp-2);
+}
+
+.msg-tool {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+    font-size: var(--fs-xs);
+    color: var(--muted);
+}
+
+/* 小圆点：调完是实心，进行中是呼吸。用 currentColor 让状态色只写一处。 */
+.msg-tool::before {
+    content: "";
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-pill);
+    background: currentColor;
+    opacity: 0.5;
+}
+
+.msg-tool.is-running::before {
+    opacity: 1;
+    animation: msg-tool-pulse 1s ease-in-out infinite;
+}
+
+.msg-tool.is-failed {
+    color: var(--coral-ink);
+}
+
+@keyframes msg-tool-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .msg-tool.is-running::before {
+        animation: none;
+    }
+}
+
+/* ---------- 改方案确认卡（消息流里的一条） ---------- */
+
+.ask-cards {
+    /* 与助手气泡同一条左边线，读起来才像"接在这句答案后面"。
+     * 卡片自己带边框和浅底，再套一层白色气泡会糊成两层。 */
+    align-self: flex-start;
+    width: min(100%, 620px);
+    flex: none;
+}
+
+/* 这个 margin-top 是给"输入区上方"那个旧位置留的，进了消息流由 gap 负责间距。 */
+.ask-cards .ask-confirm {
+    margin-top: 0;
+}
+
+/* ---------- 输入区 ---------- */
+
+/* 输入框做成一个整体盒子：textarea 去掉自己的描边，由外层统一画，
+ * 发送钮坐在盒子里的右下角。这样它读起来是"一个输入框"，
+ * 而不是"一个文本框 + 一个占满整行的大按钮"（DeepSeek 那种做法）。 */
+.assistant-composer {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    transition: border-color 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out);
+}
+
+.assistant-composer:focus-within {
+    border-color: var(--sea);
+    box-shadow: var(--focus-ring);
+}
+
+/* 内层的 textarea 让位：描边与底色归外层盒子，焦点环也只画一圈 */
+.assistant-composer .textarea {
+    width: 100%;
+    min-height: 52px;
+    padding: var(--sp-2) 0;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    resize: none;
+}
+
+/* controls.css 里的 hover 规则是 `.textarea:hover:not(:disabled):not(:focus)`（0,3,1），
+ * 直接用 `.assistant-composer .textarea:hover`（0,2,1）压不住它，会被改回灰描边。
+ * 照着它的形状写到更高一档。 */
+.assistant-composer .textarea:hover:not(:disabled):not(:focus),
+.assistant-composer .textarea:focus {
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.assistant-composer-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+}
+
+/* 状态行（"正在读方案并查数据…"）挤在发送钮左边，不要它自带的 margin-top */
+.assistant-composer .ask-status {
+    margin-top: 0;
+    flex: 1;
+}
+
+/* 圆形发送钮，坐在输入框右下角 */
+.assistant-send {
+    flex: none;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--sea);
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.16s var(--ease-out);
+}
+
+.assistant-send:hover:not(:disabled) {
+    background: var(--sea-dark);
+}
+
+.assistant-send:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+/* 追问中：变灰 + 呼吸。文案由左边的状态行负责，钮上不再写字
+ * （写字会把里面的箭头 SVG 冲掉）。 */
+.assistant-send:disabled {
+    background: var(--line-strong);
+    cursor: default;
+    animation: msg-tool-pulse 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .assistant-send:disabled {
+        animation: none;
+    }
+}
+
+.assistant-send svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+@media (max-width: 640px) {
+    .assistant-panel {
+        gap: var(--sp-3);
+    }
+
+    .msg {
+        max-width: 92%;
+    }
+}

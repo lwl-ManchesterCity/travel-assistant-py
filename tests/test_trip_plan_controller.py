@@ -53,7 +53,8 @@ VALID_ADJUST_REQUEST = {
 class StubTripPlanningService:
     """对应 @MockBean TripPlanningService。"""
 
-    def adjust_trip(self, request: TripAdjustmentRequest) -> TripAdjustmentResponse:
+    def adjust_trip(self, request: TripAdjustmentRequest,
+                    user_id: int | None = None) -> TripAdjustmentResponse:
         return TripAdjustmentResponse(
             trip_plan=self.plan_trip(request.original_request),
             updated_request=request.original_request.model_copy(update={
@@ -63,7 +64,7 @@ class StubTripPlanningService:
             applied_changes=["已将预算调整为 5000 元", "已切换为经济型酒店偏好"],
         )
 
-    def plan_trip(self, request: TripPlanRequest) -> TripPlan:
+    def plan_trip(self, request: TripPlanRequest, user_id: int | None = None) -> TripPlan:
         return TripPlan(
             city="杭州",
             start_date="2026-07-01",
@@ -116,7 +117,9 @@ class StubTripPlanningService:
 
 
 @pytest.fixture
-def client():
+def client(without_login_gate):
+    # 本文件测的是"规划服务怎么被端点调用"，不是登录，所以挂 without_login_gate
+    # 把门禁摘掉（见 tests/conftest.py）。登出/401 那些由 test_auth_controller.py 守。
     app.dependency_overrides[get_trip_planning_service] = StubTripPlanningService
     try:
         yield TestClient(app)

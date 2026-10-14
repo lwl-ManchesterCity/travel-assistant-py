@@ -1,0 +1,145 @@
+"""PostgresPreferenceStore 的真 SQL。**连不上库就整份 skip**，不拖累默认的 pytest。
+
+分工：单元测试跑 InMemoryPreferenceStore（test_preference_service.py），这里专门验真
+SQL 对不对——`on conflict (user_id, content) do nothing` 到底认不认这个唯一键、
+级联删除、order by id 是不是写入顺序，这些内存实现里没有对应物。
+
+它往真库里写 users / preferences，所以用户名统一带前缀，且**前后各清一次**
+（前清是防上一次跑挂了留下脏数据把主键撞掉）。表由 db.get_pool() 幂等建出来，
+不用先跑迁移。
+"""
+
+import itertools
+
+import pytest
+
+from travel_assistant import db
+from travel_assistant.clients.postgres_preference_store import PostgresPreferenceStore
+from travel_assistant.clients.preference_store import SOURCE_CHAT, SOURCE_FORM
+
+_PREFIX = "pytest_pref_"
+
+# 用户名要每条用例各不相同。**别用 id(object())**：CPython 会复用刚释放的地址，
+# 前一条用例的对象回收后，后一条拿到的 id 可能一模一样（撞过一次）。
+_SEQ = itertools.count()
+
+
+def _purge() -> None:
+    with db.connection() as conn:
+        # preferences 不在名单里：users 上的 on delete cascade 会把它们一起带走。
+        conn.execute("delete from users where username like %s", (_PREFIX + "%",))
+
+
+@pytest.fixture(scope="module")
+def store():
+    try:
+        db.get_pool()
+    except Exception as error:
+        # psycopg 连不上时的异常有好几种（OperationalError / PoolTimeout …），
+        # 这里一律当"库不在"，不做类型区分。
+        pytest.skip(f"连不上 Postgres，跳过真 SQL 用例：{type(error).__name__}")
+    _purge()
+    yield PostgresPreferenceStore()
+    _purge()
+
+
+@pytest.fixture()
+def user_id(store):
+    """每条用例一个新用户：偏好是按 user 隔离的，共用一个会互相看见对方的行。"""
+    with db.connection() as conn:
+        row = conn.execute(
+            "insert into users (username, password_hash) values (%s, %s) returning id",
+            (f"{_PREFIX}{next(_SEQ)}", "x" * 60),
+        ).fetchone()
+    return row[0]
+
+
+# ---------- add ----------
+
+
+def test_shouldInsertAndReadItBack(store, user_id):
+    assert store.add(user_id, "不能吃辣", SOURCE_CHAT) is True
+
+    rows = store.list_for_user(user_id)
+    assert [(row.content, row.source) for row in rows] == [("不能吃辣", SOURCE_CHAT)]
+    assert rows[0].created_at is not None
+
+
+def test_shouldReportFalseWhenTheSameContentComesAgain(store, user_id):
+    """判据 4 的 SQL 面：靠 unique (user_id, content) 去重，第二次一行都不返回。"""
+    assert store.add(user_id, "不能吃辣", SOURCE_CHAT) is True
+    assert store.add(user_id, "不能吃辣", SOURCE_FORM) is False
+
+    assert len(store.list_for_user(user_id)) == 1
+
+
+def test_shouldTreatDifferentUsersAsDifferentRows(store):
+    """唯一键是 (user_id, content)，不是 content——两个人说同一句话各存各的。"""
+    with db.connection() as conn:
+        ids = [conn.execute(
+            "insert into users (username, password_hash) values (%s, %s) returning id",
+            (f"{_PREFIX}{next(_SEQ)}", "x" * 60),
+        ).fetchone()[0] for _ in range(2)]
+
+    assert store.add(ids[0], "不能吃辣", SOURCE_CHAT) is True
+    assert store.add(ids[1], "不能吃辣", SOURCE_CHAT) is True
+
+    assert len(store.list_for_user(ids[0])) == 1
+    assert len(store.list_for_user(ids[1])) == 1
+
+
+def test_shouldDistinguishByUserEvenWithinTheSameContent(store, user_id):
+    """不相关的人读不到彼此的行。"""
+    store.add(user_id, "不能吃辣", SOURCE_CHAT)
+
+    with db.connection() as conn:
+        other = conn.execute(
+            "insert into users (username, password_hash) values (%s, %s) returning id",
+            (f"{_PREFIX}{next(_SEQ)}", "x" * 60),
+        ).fetchone()[0]
+
+    assert store.list_for_user(other) == []
+
+
+# ---------- list_for_user ----------
+
+
+def test_shouldReturnAnEmptyListRatherThanNone(store, user_id):
+    assert store.list_for_user(user_id) == []
+
+
+def test_shouldKeepInsertionOrder(store, user_id):
+    """按 id 排，不按 created_at：同一毫秒内写的两条靠时间戳分不出先后，
+    而这两条的**顺序会进提示词**，顺序一变模型看到的东西就变了。"""
+    for content in ["第一句", "第二句", "第三句"]:
+        store.add(user_id, content, SOURCE_CHAT)
+
+    assert [row.content for row in store.list_for_user(user_id)] == ["第一句", "第二句", "第三句"]
+
+
+# ---------- 级联删除 ----------
+
+
+def test_shouldDeletePreferencesWhenTheUserIsGone(store):
+    """on delete cascade：注销账号不该留下孤儿偏好，否则下次有人拿到同一个 id 就看见了。"""
+    with db.connection() as conn:
+        victim = conn.execute(
+            "insert into users (username, password_hash) values (%s, %s) returning id",
+            (f"{_PREFIX}{next(_SEQ)}", "x" * 60),
+        ).fetchone()[0]
+    store.add(victim, "不能吃辣", SOURCE_CHAT)
+
+    with db.connection() as conn:
+        conn.execute("delete from users where id = %s", (victim,))
+        left = conn.execute(
+            "select count(*) from preferences where user_id = %s", (victim,)).fetchone()[0]
+
+    assert left == 0
+
+
+def test_shouldSurviveContentWithPunctuationAndNewlines(store, user_id):
+    """偏好原文进的是 text 而不是变长字符串，标点不该被拦。"""
+    content = "不吃辣（微辣也不行）"
+    assert store.add(user_id, content, SOURCE_CHAT) is True
+
+    assert store.list_for_user(user_id)[0].content == content

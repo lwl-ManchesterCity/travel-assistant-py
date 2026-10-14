@@ -67,12 +67,40 @@
     pointer-events: none;
 }
 
+/* 这一行的三个按钮里「返回首页」是**离开本页的唯一出口**。原来它跟着文档滚走，
+ * 结果页四五屏长，滚到下半段就找不着了，只能一路滚回顶部。
+ * 所以整行钉住——和左栏 sticky 是同一个道理，只是它在横向铺满的那一层。
+ *
+ * 高度写进变量：下面 .side-nav 的 sticky 偏移要正好让开它，
+ * 否则两个 sticky 元素会在视口顶端叠在一起。 */
+.result-page {
+    --top-actions-h: 54px;
+}
+
 .top-actions {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--sp-4);
+    position: sticky;
+    top: 0;
+    /* 压过左栏（同为 sticky）与 .geo-corner（z-index:1），内容从它底下穿过去 */
+    z-index: 5;
+    /* 必须是 min-height 不是 height：≤720px 时下面那条媒体查询会把这三个按钮
+     * 竖着排，写死 54px 会让它们溢出到下面的内容上（实测过，压住了助手的头）。
+     * 变量只用来给 .side-nav 算让位距离，而那一档左栏本来就是收起的。 */
+    min-height: var(--top-actions-h);
     margin-bottom: var(--sp-4);
+    transition: background-color 0.16s var(--ease-out);
+}
+
+/* 底色**只在滚下去之后**才加（app.js 的 syncTopActionsBacking 切这个类）。
+ * 一进页面它是普通一行，加了底色反而在蓝天顶上显出一条浅横带。
+ * 滚起来才有内容从底下穿过，那时才需要这层底。
+ * 取 --sky-low 是因为 body 那条天空渐变往下就收到这个值，越往下越融得进去。 */
+.top-actions.is-stuck {
+    background: rgba(251, 251, 248, 0.86);
+    backdrop-filter: blur(10px);
 }
 
 .top-actions-right {
@@ -92,7 +120,8 @@
 .side-nav {
     align-self: start;
     position: sticky;
-    top: var(--sp-4);
+    /* 让开上面那条常驻的 .top-actions，否则两个 sticky 元素在视口顶端叠住 */
+    top: calc(var(--sp-3) + var(--top-actions-h));
     overflow: hidden;
     background: var(--card);
     border: 1px solid var(--line);

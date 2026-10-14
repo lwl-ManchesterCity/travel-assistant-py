@@ -7,13 +7,78 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='8' width='28' height='16' rx='3' fill='%230B6BA8'/%3E%3Cline x1='21' y1='8' x2='21' y2='24' stroke='%23FFFFFF' stroke-width='1.6' stroke-dasharray='2 2'/%3E%3C/svg%3E">
     <link rel="stylesheet" href="/css/tokens.css?v=20261012j">
     <link rel="stylesheet" href="/css/base.css?v=20261012j">
-    <link rel="stylesheet" href="/css/controls.css?v=20261012j">
+    <link rel="stylesheet" href="/css/controls.css?v=20261014a">
     <link rel="stylesheet" href="/css/landing.css?v=20261012j">
-    <link rel="stylesheet" href="/css/result.css?v=20261012j">
+    <link rel="stylesheet" href="/css/result.css?v=20261013c">
+    <link rel="stylesheet" href="/css/assistant.css?v=20261014c">
+    <link rel="stylesheet" href="/css/login.css?v=20261014d">
 </head>
 <body>
-<section id="landing-page" class="landing-page">
+<!-- 登录页。**它挡在最前面**（docs/ASK_LONGTERM_MEMORY.md §一 第 1 条）：
+     未登录时下面两个 section 都带 hidden，屏上只有它。
+     默认也是 hidden——显示哪一屏由 auth.js 打完 GET /api/auth/me 再决定，
+     否则未登录的人会先看到一眼规划表单再被挡走。 -->
+<section id="login-page" class="login-page hidden">
+    <div class="login-shell">
+        <!-- 品牌名**在卡片外面、上面**：它说的是"这是哪个产品"，
+             卡片里那行标题说的是"这是哪一屏"，两件事分开站。
+             原来品牌被压成卡内的一行 14px 小字——得意黑这种标题体在 14px 下挤成一团、
+             又是斜的，既看不清也压不住场。现在按落地页 .doc-title 的规格来（同一个字体、
+             同一个 32px），登录页和产品共用一张脸。 -->
+        <p class="login-brand">智能旅行助手</p>
+        <div class="login-card">
+            <h1 id="login-mode-title" class="login-mode-title">登录</h1>
+            <!-- 说明那行按屏给：登录屏**不给**（"已有账号？填用户名和密码继续"是废话，用户既然
+                 站在登录屏就说明他有账号），注册屏给（那里要交代用户名与密码的规矩）。
+                 空文本时整行收起，不留一道空白。 -->
+            <p id="login-mode-hint" class="login-subtitle hidden"></p>
+            <form id="login-form" class="login-form">
+                <div class="field">
+                    <label for="login-username">用户名</label>
+                    <input id="login-username" name="username" class="input" type="text"
+                           autocomplete="username" placeholder="2-32 个字符，不含空格" required>
+                </div>
+                <div class="field">
+                    <label for="login-password">密码</label>
+                    <div class="password-wrap">
+                        <input id="login-password" name="password" class="input" type="password"
+                               autocomplete="current-password" placeholder="至少 6 位" required>
+                        <!-- 小眼睛：密码打错了只能靠重打一遍，这是登录页最常见的一次挫败。
+                             收起时是"眼睛"（点一下看得见），露出时加一道斜杠（点一下收回去）。 -->
+                        <button id="login-password-toggle" class="password-toggle" type="button"
+                                aria-label="显示密码" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+                                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                                 stroke-linejoin="round" aria-hidden="true">
+                                <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/>
+                                <circle cx="12" cy="12" r="3.2"/>
+                                <line class="password-toggle-slash" x1="4.5" y1="20" x2="19.5" y2="4"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <p id="login-error" class="login-error hidden" role="alert"></p>
+                <button id="login-submit" class="primary-button login-submit" type="submit">登录</button>
+            </form>
+            <!-- 登录 / 注册互相切换。做成底部一行链接而不是并排两个按钮：
+                 并排两个钮是**同一组输入框的两种用法**，摆在一起像两个并列的主操作，
+                 真正该说的"我在哪一屏"反而被藏起来了。 -->
+            <p class="login-switch-row">
+                <span id="login-switch-hint">还没有账号？</span>
+                <button id="login-switch" class="login-switch" type="button">注册一个</button>
+            </p>
+        </div>
+    </div>
+</section>
+
+<section id="landing-page" class="landing-page hidden">
     <div class="planner-shell">
+        <!-- 账号区。不塞进下面的 .doc-head：那是个 justify-content:space-between 的
+             两子项 flex（标题 + 热气球），插第三个进去会把热气球挤到中间。 -->
+        <div class="account-row">
+            <span class="account-name"></span>
+            <button class="logout-btn ghost-button" type="button">登出</button>
+        </div>
         <header class="doc-head">
             <div class="doc-head-main">
                 <h1 class="doc-title">智能旅行助手</h1>
@@ -197,6 +262,8 @@
         <div class="top-actions">
             <button id="back-home-btn" class="ghost-button">← 返回首页</button>
             <div class="top-actions-right">
+                <span class="account-name"></span>
+                <button class="logout-btn ghost-button" type="button">登出</button>
                 <button id="edit-trip-btn" class="ghost-button">编辑行程</button>
                 <button class="ghost-button">导出行程</button>
             </div>
@@ -211,8 +278,15 @@
                     <div class="nav-item" data-target="map-section">景点地图</div>
                     <div class="nav-item" data-target="days-section">每日行程</div>
                     <div class="nav-item" data-target="weather-section">天气信息</div>
-                    <div class="nav-item" data-target="agent-trace-section">Agent 轨迹</div>
-                    <div class="nav-item" data-target="ask-section">方案追问</div>
+                </div>
+                <!-- 旅行助手。**它不是页内一节，是切右半边的视图**，所以：
+                     ① 放在 .nav-list **外面**——上面五个是"滚到哪一节"，
+                        它跟它们不是一类；混在一起会把 nav-list 的语义搅浑。
+                     ② 没有 data-target —— app.js 按 .nav-item[data-target] 取 navItems，
+                        少了这个属性就不进，scroll-spy 不会把它当成一节。
+                     ③ 主色实底白字，与上面几个白底导航项明显区分。 -->
+                <div class="side-nav-action">
+                    <button id="open-assistant" class="assistant-entry" type="button">旅行助手</button>
                 </div>
             </aside>
 
@@ -346,31 +420,42 @@
                         </div>
                     </div>
                 </div>
+            </main>
 
-                <div id="agent-trace-section" class="card console-section">
-                    <div class="card-head">
-                        <div class="card-head-row">
-                            <span>智能体执行轨迹</span>
-                            <button id="agent-trace-toggle" class="collapse-button" type="button">展开详情</button>
-                        </div>
-                    </div>
-                    <div id="agent-trace-list" class="card-body agent-trace-list hidden"></div>
+            <!-- 旅行助手。**它是 `.result-layout` 的第二列，不是另一个页面**——
+                 左栏（aside.side-nav）全程在，只有右半边在「方案」与「助手」之间切换。
+                 所以它跟 main.dashboard-main 互斥显示，切换就是互相加/去 .hidden。
+                 **方案不落库**：直接用内存里的 currentTripData / currentPayload，
+                 同文档切视图这两个变量还在，刷新即失效——与抽出来之前一致。 -->
+            <section id="assistant-panel" class="assistant-panel hidden">
+                <div class="assistant-top">
+                    <!-- 只在窄屏露面（assistant.css 里的媒体查询）。宽屏左栏一直在，
+                         点任一导航项就回去了，这个按钮纯属多余。 -->
+                    <button id="assistant-back-btn" class="ghost-button assistant-back" type="button">← 返回方案</button>
+                    <span class="assistant-title">旅行助手</span>
                 </div>
 
-                <div id="ask-section" class="card console-section">
-                    <div class="card-head">
-                        <div class="card-head-row">
-                            <span>方案追问</span>
-                            <span class="map-side-meta">只读；判成要改会先请你确认</span>
+                <!-- 消息按时间往下堆。**但模型看不到历史**（每次请求只带当前这一句），
+                     所以它是"聊天样子的单轮"——这一层是有意为之，不是漏。 -->
+                <div id="assistant-messages" class="assistant-messages">
+                    <!-- 空态。示例问题做成可点的 chip——光看一句说明，用户未必知道
+                         能问到什么颗粒度；点一下直接看到答案，比读提示快。
+                         文案刻意不写死城市名：这份方案的方案可能在任何城市。 -->
+                    <div id="assistant-empty" class="assistant-empty">
+                        <p class="assistant-empty-lead">问我这份方案的事，比如：</p>
+                        <div class="assistant-samples">
+                            <button class="assistant-sample" type="button">第二天为什么这么赶？</button>
+                            <button class="assistant-sample" type="button">这趟有哪些景点要门票？</button>
+                            <button class="assistant-sample" type="button">预算还剩多少？</button>
                         </div>
                     </div>
-                    <div class="card-body">
-                        <textarea id="ask-question" class="textarea" rows="2" placeholder="例如：第二天为什么这么赶？西溪湿地要门票吗？预算还剩多少？"></textarea>
-                        <div class="action-wrap">
-                            <button id="ask-submit" class="primary-button" type="button">追问这份方案</button>
-                            <div id="ask-status" class="ask-status"></div>
-                        </div>
-                        <div id="ask-answer" class="agent-trace-meta"></div>
+
+                    <!-- 改方案的确认卡。它**是消息流里的一条**，不是输入区上方的固定块：
+                         每轮追问把它挪到最末尾（app.js moveAskCardsToEnd），用户往上翻时
+                         能看出这张卡是接在哪一句答案后面的。
+                         两张卡都藏起来时整个容器也藏起来，否则它作为 flex 子项会白占一个 gap。
+                         （resetAssistant 清空消息区后要把它捡回来，别连着 innerHTML 一起冲掉。） -->
+                    <div id="ask-cards" class="ask-cards hidden">
                         <div id="ask-hotel-move" class="ask-confirm hidden">
                             <span id="ask-hotel-move-text" class="ask-confirm-text"></span>
                             <button id="ask-hotel-move-yes" class="primary-button" type="button">把酒店挪过去</button>
@@ -383,7 +468,23 @@
                         </div>
                     </div>
                 </div>
-            </main>
+
+                <div class="assistant-composer">
+                    <textarea id="ask-question" class="textarea" rows="2" placeholder="例如：第二天为什么这么赶？西溪湿地要门票吗？预算还剩多少？"></textarea>
+                    <div class="assistant-composer-actions">
+                        <div id="ask-status" class="ask-status"></div>
+                        <!-- 圆形箭头钮，坐在输入框右下角。文案交给左边的状态行显示，
+                             所以钮里只有图标——aria-label 补上无障碍名。 -->
+                        <button id="ask-submit" class="assistant-send" type="button" aria-label="发送">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <line x1="12" y1="19" x2="12" y2="5"></line>
+                                <polyline points="6 11 12 5 18 11"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
         </div>
 
     </div>
@@ -398,6 +499,7 @@
     <div id="geo-corner" class="geo-corner hidden" aria-hidden="true"></div>
 </section>
 
+
 <div id="trip-adjust-overlay" class="trip-adjust-overlay hidden">
     <div class="trip-adjust-panel">
         <div class="trip-adjust-spinner"></div>
@@ -406,8 +508,28 @@
     </div>
 </div>
 
+<!-- 改方案输入弹窗。原来是 window.prompt，字体由浏览器定、改不了，
+     中文还会掉到宋体那一路，跟页面两个世界。见 controls.css 那一段。 -->
+<div id="adjust-prompt-overlay" class="adjust-prompt-overlay hidden">
+    <div class="adjust-prompt-panel" role="dialog" aria-modal="true" aria-labelledby="adjust-prompt-title">
+        <div class="adjust-prompt-title" id="adjust-prompt-title">想怎么改？</div>
+        <div class="adjust-prompt-hint">
+            比如：预算改成 2500、节奏轻松一点、酒店换成经济型、不要美食多一点自然风景
+        </div>
+        <textarea id="adjust-prompt-input" class="textarea" rows="3"
+                  placeholder="说说你想改什么…"></textarea>
+        <div class="adjust-prompt-actions">
+            <button id="adjust-prompt-cancel" class="ghost-button" type="button">取消</button>
+            <button id="adjust-prompt-ok" class="primary-button" type="button">确定</button>
+        </div>
+    </div>
+</div>
+
 <div id="error-toast" class="error-toast hidden"></div>
 
-    <script src="/js/app.js?v=20261012j"></script>
+    <!-- auth.js 必须在 app.js **之前**：门先于内容。
+         app.js 末尾的入口要等 window.travelAuthReady，见那个文件末尾的注释。 -->
+    <script src="/js/auth.js?v=20261014d"></script>
+    <script src="/js/app.js?v=20261014d"></script>
 </body>
 </html>

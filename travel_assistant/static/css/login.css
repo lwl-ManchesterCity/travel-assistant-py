@@ -1,0 +1,235 @@
+/* 登录页与账号区。设计见 docs/ASK_LONGTERM_MEMORY.md §2.1.7。
+ *
+ * 本文件在 index.html 里排在 controls.css 之后，所以能压住那边的按钮/输入框默认值。
+ */
+
+/* ---------- 登录页 ----------
+ *
+ * **整屏**，不像助手面板那样是某一格的第二列：它挡在所有东西前面
+ * （§一 第 1 条），未登录时 landing-page / result-page 都带 hidden，屏上只有它。
+ */
+
+.login-page {
+    /* 视口高而不是 min-height:100vh 那种"至少一屏"：内容只有一张卡，
+     * 用 flex 居中要的是"正好一屏"。 */
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-5) var(--sp-4);
+}
+
+/* 品牌名 + 卡片的竖列。宽度定在这里而不是卡片上：品牌要跟卡片**同宽对齐**，
+ * 各写各的 max-width 迟早会对不齐。 */
+.login-shell {
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-4);
+}
+
+.login-card {
+    width: 100%;
+    /* 380 是"一行放得下一个输入框"的最窄舒适宽度。再宽，输入框和按钮的留白就散了。 */
+    max-width: 380px;
+    padding: var(--sp-5);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    /* 整卡居中：品牌名、标题、说明、**两个字段标签**都跟着这条走。
+     * 底下那行 .login-form .input 把输入框里的字拉回左边——打用户名时字跟着居中
+     * 会左右晃，一个字一个字挪位置，看着像在抖。 */
+    text-align: center;
+}
+
+/* 品牌名。**在卡片外面、上面**，规格照抄落地页的 .doc-title（同字体、同 32px、同字重）：
+ * 得意黑是标题体，只有到这个尺寸才立得住——之前压在卡内当 14px 小字，
+ * 斜的、挤成一团，既看不清也压不住场。同一个产品两张脸最容易露怯。 */
+.login-brand {
+    margin: 0;
+    font-family: var(--font-title);
+    font-size: var(--fs-2xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: -0.02em;
+    color: var(--ink);
+}
+
+/* 模式标题：登录 / 注册新账号。它回答的是"我点完那个按钮进了哪一屏"，
+ * 得一眼看到——所以是卡内最大的一行，并且用海蓝跟上面那个墨色品牌名分开：
+ * 上面说"这是哪个产品"，这里说"这是哪一屏"。 */
+.login-mode-title {
+    margin: 0 0 var(--sp-2);
+    font-family: var(--font-title);
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.01em;
+    color: var(--sea);
+}
+
+.login-subtitle {
+    margin: 0 0 var(--sp-5);
+    font-size: var(--fs-sm);
+    line-height: 1.6;
+    color: var(--muted);
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+}
+
+/* 标签居中（继承卡片那条），但**框里的字留在左边**。 */
+.login-form .input {
+    text-align: left;
+}
+
+/* ---------- 密码框里的小眼睛 ---------- */
+
+.password-wrap {
+    position: relative;
+}
+
+/* 给眼睛让出位置。这个 padding 是给小眼睛用的，不是给浏览器的钥匙图标用的——
+ * Chrome 自己那个"密码管理器"钥匙不受这里影响（见 §2.1.7 那一档的实测）。 */
+.password-wrap .input {
+    padding-right: 46px;
+}
+
+.password-toggle {
+    position: absolute;
+    top: 50%;
+    right: var(--sp-1);
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.16s var(--ease-out);
+}
+
+.password-toggle:hover {
+    color: var(--ink);
+}
+
+.password-toggle:focus-visible {
+    outline: none;
+    color: var(--sea);
+    box-shadow: var(--focus-ring);
+}
+
+/* 斜杠只在**已经露出**的时候画出来：收起时是"眼睛"（点一下看得见），
+ * 露出时是"划掉的眼睛"（点一下收回去）。 */
+.password-toggle-slash {
+    opacity: 0;
+    transition: opacity 0.16s var(--ease-out);
+}
+
+.password-toggle.is-revealed .password-toggle-slash {
+    opacity: 1;
+}
+
+/* 主按钮吃满一行：这一屏只有**一个**主操作（要么登录要么注册），
+ * 它就该独占一行、别跟别人分宽度。 */
+.login-submit {
+    width: 100%;
+}
+
+/* ---------- 登录 / 注册 互相切换 ---------- */
+
+.login-switch-row {
+    margin: var(--sp-4) 0 0;
+    text-align: center;
+    font-size: var(--fs-sm);
+    color: var(--muted);
+}
+
+/* 做成"链接"而不是按钮：它是**换一屏**，不是提交。
+ * 让它保持文字的样子，主按钮才不会被抢走注意力。 */
+.login-switch {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--sea);
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: var(--fw-medium);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.login-switch:hover {
+    color: var(--sea-dark);
+}
+
+.login-switch:focus-visible {
+    outline: none;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--focus-ring);
+}
+
+.login-switch:disabled {
+    color: var(--muted);
+    cursor: default;
+}
+
+.login-error {
+    margin: 0;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--coral);
+    border-radius: var(--radius);
+    background: var(--coral-tint);
+    color: var(--coral-ink);
+    font-size: var(--fs-sm);
+    line-height: 1.6;
+}
+
+/* ---------- 账号区 ----------
+ *
+ * 两处：落地页页头**上面**单独一行、方案页右上角那条操作条里。
+ * 落地页那处之所以不塞进 .doc-head：那是个 justify-content:space-between 的两子项
+ * flex（标题 + 热气球），插第三个进去会把热气球挤到中间。
+ */
+
+.account-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-3);
+}
+
+/* 用户名是页头上唯一回答"我现在是谁"的东西，之前是 14px 的灰字，
+ * 和旁边的备注文案一个分量，扫过去看不见（用户反馈）。给到正文级字号 + 墨色 + 中等字重。 */
+.account-name {
+    font-size: var(--fs-md);
+    font-weight: var(--fw-medium);
+    color: var(--ink);
+    /* 用户名可能很长，别把旁边的钮顶出卡片 */
+    overflow-wrap: anywhere;
+}
+
+/* 原来是比 .ghost-button 再小一档的 12px 小钮。跟着用户名一起提上来：
+ * 一行的两件东西差两级，看起来像是没对齐。
+ * 单类选择器与 .ghost-button 同档，靠本文件排在 controls.css 之后取胜。 */
+.logout-btn {
+    flex: none;
+    padding: var(--sp-1) var(--sp-3);
+    font-size: var(--fs-sm);
+}
+
+@media (max-width: 640px) {
+    .login-card {
+        padding: var(--sp-4);
+    }
+}

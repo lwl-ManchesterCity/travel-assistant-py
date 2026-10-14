@@ -24,4 +24,8 @@ class AskResponse(CamelModel):
     # 模型从原话里摘出的"某天必去景点名（可多个）"与天数（从 0 起）。同 anchor 一样是意图不是事实。
     pin_hints: Optional[list[str]] = None
     pin_day: Optional[int] = None
+    # **本次真的新存进去的**长期偏好。前端在答案下面回一行「已记住：不能吃辣」。
+    # 重复说的不进这里——每次都弹会变成噪音，用户会开始无视它，那比不显示更糟。
+    # 没接长期记忆（未登录 / 服务没装配）时是 None。
+    recorded_preferences: Optional[list[str]] = None
     traces: Optional[list[AgentTrace]] = None

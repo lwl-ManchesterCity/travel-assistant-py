@@ -25,7 +25,7 @@ def _override_js_key(web_js_key: str, security_js_code: str = ""):
 
 
 @pytest.fixture
-def client():
+def client(without_login_gate):
     try:
         yield TestClient(app)
     finally:

@@ -7,9 +7,10 @@
 - 联网的三个（`search_attractions` / `query_weather` / `recommend_hotels`）零参数，
   城市、日期、预算、住宿偏好一律从上下文里的原始请求取——这几个值让模型自己填就会被编造，
   与 agent/data_tools.py 里那三个取数工具是同一条约定；
-- 查本地库的一个（`search_attractions_by_tag`）**有意破例让模型填参数**：`tags` 与 `attraction_name`，
-  因为"筛哪个词""问的是哪个景点"正是要模型做的判断，从上下文取不出来。
-  两者都只当**检索条件**用，城市仍从上下文取，不让模型填。
+- 查本地库的一个（`search_attractions_by_tag`）**有意破例让模型填参数**：`tags`、`attraction_name`
+  与 `city`，因为"筛哪个词""问的是哪个景点""问的是哪个城市"正是要模型做的判断，从上下文取不出来。
+  `city` 不填就退回方案城市（老行为一字不变）——**它是"查别的城市的景点"那条路的口子**，
+  后三个工具的城市仍然锁死在本次行程上，那不是限制，是它们的定义。
   护栏不是参数来源，是**词表**——`tags` 只能从 data/tags.json 那 10 个词里挑，
   挑不出来就别筛。词表会变，所以写进工具说明时是现读的，不是抄一份常量。
 
@@ -126,9 +127,12 @@ def _kb_price_text(price) -> str:
 
 def _kb_attractions_text(rows: list[dict], city: str, tags: list[str]) -> str:
     condition = f"筛「{'、'.join(tags)}」" if tags else "没加筛选条件"
+    # city 现在可能是空串（原始请求里没城市、模型也没指定），那就别提城市，
+    # 否则会拼出一句"本地景点库（…）"，读起来像少了半句。
+    scope = f"{city}本地景点库" if city else "本地景点库"
     if not rows:
-        return f"{city}本地景点库（{condition}）没有命中的景点"
-    lines = [f"{city}本地景点库（{condition}）命中 {len(rows)} 条："]
+        return f"{scope}（{condition}）没有命中的景点"
+    lines = [f"{scope}（{condition}）命中 {len(rows)} 条："]
     for row in rows:
         lines.append(
             f"{row.get('name')}"
@@ -256,7 +260,10 @@ def build_ask_tools(attraction_agent: AttractionAgent,
         "名字是这条路上最确定的条件：整句送去检索会被问句里多出来的字稀释，"
         "相似度掉到线下就查不到了。\n"
         "本地库与联网检索是两套数据，别混着说。\n"
-        f"本地库目前只收录{'、'.join(KB_CITIES)}的景点，问别的城市这里答不了。\n"
+        f"本地库目前收录{'、'.join(KB_CITIES)}的景点。\n"
+        "**查哪个城市由 city 参数定**：不填就是本次行程的城市（大多数提问都是这样）；"
+        "用户问的是**别的城市**的景点（「广州塔门票多少」），把城市名填进 city（填「广州」）。"
+        "只有问景点时才填——问天气、酒店、候选景点不填。\n"
         f"tags 只能从这几个词里挑，一个都不许自创：{describe_vocabulary()}。"
         "挑不出来就别传 tags，那样会走纯向量。\n"
         "**不许硬凑**：命中的景点里如果没有一条真的对得上用户问的类别"
@@ -264,10 +271,13 @@ def build_ask_tools(attraction_agent: AttractionAgent,
         "不要把沾边的说成是。"
     ))
     def search_attractions_by_tag(tags: list[str] | None = None,
-                                  attraction_name: str = "") -> str:
+                                  attraction_name: str = "",
+                                  city: str = "") -> str:
         """查本地景点资料库。"""
         context = current_ask_context()
-        city = context.request.city or ""
+        # 模型没指定就用方案城市——这是改动前的老行为，一个字没变。
+        # 指定了就用它，这是"问别的城市"那条路（见 docs/ASK_SCOPE_OPENING.md §2.1）。
+        city = (city or "").strip() or (context.request.city or "")
         picked = [str(tag).strip() for tag in (tags or []) if tag and str(tag).strip()]
         # 问「某一个具体景点」那条路上，模型会把名字填进来，检索词就用它——
         # 整句去撞阈值会被问句里多出来的字稀释（陈家祠堂 0.585 → 「陈家祠堂 周一闭馆吗」<0.545）。

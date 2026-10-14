@@ -30,7 +30,7 @@ _LOOP_DONE_NOTE = "LoopPlanningAgent 已完成生成-评估-反思-修正闭环"
 class _StubPlannerInputBuilder:
     """只占住 LoopPlanningAgent 的取数入口位置，本测试关心的是闭环而不是取数。"""
 
-    def build(self, request: TripPlanRequest) -> TripPlanRequest:
+    def build(self, request: TripPlanRequest, user_id: int | None = None) -> TripPlanRequest:
         return request
 
 

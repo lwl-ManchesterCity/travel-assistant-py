@@ -26,6 +26,8 @@ from ..clients.amap_weather import AmapWeatherClient
 from ..clients.knowledge_base import TravelKnowledgeService
 from ..clients.llm import LlmClient, OpenAiCompatibleLlmClient
 from ..clients.local_attraction import InMemoryAttractionClient
+from ..clients.postgres_auth_store import PostgresAuthStore
+from ..clients.postgres_preference_store import PostgresPreferenceStore
 from ..clients.rule_hotel import RuleBasedHotelClient
 from ..clients.rule_route import RuleBasedRouteClient
 from ..clients.rule_weather import RuleBasedWeatherClient
@@ -39,10 +41,12 @@ from ..evaluator.budget_evaluator import BudgetEvaluator
 from ..evaluator.daily_plan_evaluator import DailyPlanEvaluator
 from ..evaluator.route_evaluator import RouteEvaluator
 from ..evaluator.weather_evaluator import WeatherEvaluator
+from ..service.auth_service import AuthService
 from ..service.llm_narration_service import LlmNarrationService
 from ..service.hotel_anchor_service import HotelAnchorService
 from ..service.intercity_service import IntercityService
 from ..service.planner_input_builder import PlannerInputBuilder
+from ..service.preference_service import PreferenceService
 from ..service.request_optimization_strategy_service import RequestOptimizationStrategyService
 from ..service.requirement_analysis_service import RequirementAnalysisService
 from ..service.trip_planning_service import TripPlanningService
@@ -55,6 +59,8 @@ class Container:
     llm_client: LlmClient
     trip_planning_service: TripPlanningService
     ask_agent: AskAgent
+    auth_service: AuthService
+    preference_service: PreferenceService
 
 
 def build_container(settings: Settings | None = None) -> Container:
@@ -94,6 +100,11 @@ def build_container(settings: Settings | None = None) -> Container:
         BudgetEvaluator(), RouteEvaluator(), WeatherEvaluator()
     )
 
+    # 长期偏好（docs/ASK_LONGTERM_MEMORY.md 第二档）。**规划链路也不碰它**——
+    # 装配它不会去连库，池子是第一次用到才连（见 db.py）。
+    # 两个写入点（追问链 / 需求理解）与两处注入共用**同一个** service 实例。
+    preference_service = PreferenceService(PostgresPreferenceStore())
+
     requirement_analysis_service = RequirementAnalysisService(llm_client)
     llm_narration_service = LlmNarrationService(llm_client)
     planner_agent = PlannerAgent(route_agent, daily_plan_evaluator, llm_narration_service, settings.anchor)
@@ -105,7 +116,8 @@ def build_container(settings: Settings | None = None) -> Container:
         planning_data_agent, requirement_analysis_service,
         HotelAnchorService(amap, amap_hotel_client, settings.anchor),
         attraction_client,
-        IntercityService(amap, route_client))
+        IntercityService(amap, route_client),
+        preference_service)
 
     # Loop 闭环（Java agent/LoopPlanningAgent.java 及其三个协作者）
     request_optimization_strategy_service = RequestOptimizationStrategyService()
@@ -125,13 +137,18 @@ def build_container(settings: Settings | None = None) -> Container:
     trip_adjustment_agent = TripAdjustmentAgent(llm_client, request_optimization_strategy_service)
 
     # 方案 A 的追问 agent（移植基线之外的扩展，复用上面那三个数据 Agent）
-    ask_agent = AskAgent(llm_client, attraction_agent, weather_agent, hotel_agent)
+    ask_agent = AskAgent(llm_client, attraction_agent, weather_agent, hotel_agent,
+                         preference_service)
+
+    auth_service = AuthService(PostgresAuthStore(), settings.db.session_days)
 
     return Container(
         settings=settings,
         llm_client=llm_client,
         trip_planning_service=TripPlanningService(trip_adjustment_agent, loop_planning_agent),
         ask_agent=ask_agent,
+        auth_service=auth_service,
+        preference_service=preference_service,
     )
 
 
@@ -163,3 +180,13 @@ def get_amap_settings() -> AmapSettings:
 def get_ask_agent() -> AskAgent:
     """方案 A 的追问端点按类型注入 AskAgent。"""
     return get_container().ask_agent
+
+
+def get_auth_service() -> AuthService:
+    """登录相关端点按类型注入 AuthService。"""
+    return get_container().auth_service
+
+
+def get_preference_service() -> PreferenceService:
+    """规划端点按类型注入 PreferenceService（第二档起，按 user_id 读写长期偏好）。"""
+    return get_container().preference_service
