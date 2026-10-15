@@ -39,6 +39,17 @@ class PostgresPreferenceStore:
             ).fetchall()
         return [_to_record(row) for row in rows]
 
+    def delete(self, user_id: int, preference_id: int) -> bool:
+        # **`and user_id = %s` 不能少**（§2.3.3）：id 是连续 bigserial，只按 id 删的话
+        # 任何一个登录用户能删光全站的偏好。用 `returning id` 而不是 rowcount：
+        # 删到 0 行时 fetchone() 拿到 None，就是"不是他的 / 已经不存在了"。
+        with connection() as conn:
+            row = conn.execute(
+                "delete from preferences where id = %s and user_id = %s returning id",
+                (preference_id, user_id),
+            ).fetchone()
+        return row is not None
+
 
 def _to_record(row: tuple) -> PreferenceRecord:
     return PreferenceRecord(

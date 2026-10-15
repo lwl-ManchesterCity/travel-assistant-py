@@ -433,6 +433,11 @@
                          点任一导航项就回去了，这个按钮纯属多余。 -->
                     <button id="assistant-back-btn" class="ghost-button assistant-back" type="button">← 返回方案</button>
                     <span class="assistant-title">旅行助手</span>
+                    <!-- 「我的偏好」入口（docs/ASK_LONGTERM_MEMORY.md §2.3.4）。顶栏**靠右**：
+                         左边是窄屏的返回钮、中间是标题，三个东西各占一块，不挤。
+                         为什么放在助手页、不在结果页顶栏——偏好就是在这儿聊出来的，
+                         核对它的地方该是产生它的地方。 -->
+                    <button id="open-preferences" class="ghost-button preferences-entry" type="button">我的偏好</button>
                 </div>
 
                 <!-- 消息按时间往下堆。**但模型看不到历史**（每次请求只带当前这一句），
@@ -510,6 +515,31 @@
 
 <!-- 改方案输入弹窗。原来是 window.prompt，字体由浏览器定、改不了，
      中文还会掉到宋体那一路，跟页面两个世界。见 controls.css 那一段。 -->
+<!-- 「我的偏好」弹层（docs/ASK_LONGTERM_MEMORY.md §2.3.4）。
+     遮罩、白卡、标题、按钮行**全部沿用 .adjust-prompt-* 那一套**——页面上只该有
+     一种"弹出来"的长相；新弹层长得不一样，用户就得重新认一遍。
+     Esc 关、点遮罩关，与旁边那个弹窗一字不差。 -->
+<div id="preferences-overlay" class="adjust-prompt-overlay hidden">
+    <div class="adjust-prompt-panel preferences-panel" role="dialog" aria-modal="true"
+         aria-labelledby="preferences-title">
+        <div class="adjust-prompt-title" id="preferences-title">我的偏好</div>
+        <div class="adjust-prompt-hint">
+            这些是你以前说过的，以后的每一趟都会带上
+        </div>
+        <!-- 列表由 app.js 填。每条：内容（正文级）+ 来源小字 + 删除钮。 -->
+        <div id="preferences-list" class="preferences-list"></div>
+        <!-- 空态。**这是本档最常见的第一次打开**——弹层打开是空的，
+             用户得知道自己没找错地方，而不是怀疑没加载出来。 -->
+        <div id="preferences-empty" class="preferences-empty hidden">
+            <p class="preferences-empty-lead">还没有记住任何偏好</p>
+            <p>在聊天里说一句「我不能吃辣」，或者填在备注里。</p>
+        </div>
+        <div class="adjust-prompt-actions">
+            <button id="preferences-close" class="ghost-button" type="button">关闭</button>
+        </div>
+    </div>
+</div>
+
 <div id="adjust-prompt-overlay" class="adjust-prompt-overlay hidden">
     <div class="adjust-prompt-panel" role="dialog" aria-modal="true" aria-labelledby="adjust-prompt-title">
         <div class="adjust-prompt-title" id="adjust-prompt-title">想怎么改？</div>

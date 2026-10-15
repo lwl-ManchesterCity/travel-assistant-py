@@ -58,8 +58,18 @@ class PreferenceRecord:
         return render_preference(self.subject, self.content)
 
     def to_payload(self) -> dict:
-        """过 API 的那一份。带 source 是给第三档的列表用的，前端现在只读 content。"""
-        return {"content": self.content, "source": self.source, "subject": self.subject}
+        """过 API 的那一份（第三档的列表用，见 §2.3.2）。
+
+        - **带 `id`**：删除按它删，**不按 `content`**。两个都能唯一定位，但 content 是
+          给人看的那一份、经过模型规范化与清洗，而 id 是主键——按它删没有
+          "前端显示的那串跟库里那串是否逐字相同"这个隐忧。
+        - **带 `source`**：用户判断哪条记错了，第一个线索就是"这条哪来的"。
+        - **带 `subject`**：不回的话，同行的人那条在界面上跟本人的长得一样，会删错。
+        - **不带 `created_at`**：界面上不显示，服务端也没有要它对齐的场景——
+          给前端没人用的字段等于多一个将来要维护的兼容面。
+        """
+        return {"id": self.id, "content": self.content, "source": self.source,
+                "subject": self.subject}
 
 
 class PreferenceStore(Protocol):
@@ -78,6 +88,16 @@ class PreferenceStore(Protocol):
 
         注入时按这个顺序拼进提示词，所以顺序要稳定——它进的是 prompt，
         顺序一变，同样两条偏好会让模型看到不同的东西。
+        """
+        ...
+
+    def delete(self, user_id: int, preference_id: int) -> bool:
+        """删一条，删掉了返回 True（§2.3.3）。
+
+        **`user_id` 是这个方法存在的理由**：`id` 是连续 bigserial，只按 id 删的话，
+        任何一个登录用户能删光**全站**的偏好，而且界面上看不出来（他只是在删自己的）。
+        删别人的 / 已经不存在的一律回 False，调用方据此回 `deleted: false`——
+        **两种情形不许区分**，否则就是一个"这个 id 存在"的探针。
         """
         ...
 
@@ -103,3 +123,13 @@ class InMemoryPreferenceStore:
 
     def list_for_user(self, user_id: int) -> list[PreferenceRecord]:
         return list(self._rows.get(user_id, []))
+
+    def delete(self, user_id: int, preference_id: int) -> bool:
+        rows = self._rows.get(user_id)
+        if not rows:
+            return False
+        for index, row in enumerate(rows):
+            if row.id == preference_id:
+                del rows[index]
+                return True
+        return False

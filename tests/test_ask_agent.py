@@ -777,7 +777,7 @@ def test_shouldStillAcceptARequestWithoutHistory():
 # ---------- 第二档：记偏好与注入（docs/ASK_LONGTERM_MEMORY.md §2.2）----------
 #
 # 守两件事：信封里那一格 preferences 进不进库、以及偏好有没有真的顶到提示词最前。
-# 判据 1/2/3/4 的单元面在这里，端到端那面归 /tmp/preference_probe.py。
+# 判据 1/2/3/4 的单元面在这里，端到端那面归 scripts/preference_probe.py。
 
 def _preference_agent(store, preferences, script=None, answer=None):
     """带长期记忆的 agent。偏好从 store 里读，记也记回同一个 store。"""

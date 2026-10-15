@@ -337,3 +337,72 @@ def test_shouldReturnAnEmptyBlockWhenThereIsOnlyAnEmptyCompanionList():
 
     assert build_injection_block([], []) == ""
     assert build_injection_block(None, None) == ""
+
+
+# ---------- 第三档：删除（docs/ASK_LONGTERM_MEMORY.md §2.3.3）----------
+
+
+def test_shouldForgetOnlyThisUsersRow():
+    service = _service()
+    service.record(1, ["不吃辣"], SOURCE_CHAT)
+    service.record(2, ["不吃辣"], SOURCE_CHAT)
+    mine = service.list_for_user(1)[0].id
+
+    assert service.forget(1, mine) is True
+    assert service.list_for_user(1) == []
+    assert service.list_belonging(2) == ["不吃辣"]        # 别人的那条没动
+
+
+def test_shouldNotForgetAnotherUsersRow():
+    """**这一档唯一的安全面**：拿别人的 id 删，回 False，且库里的**原样**。"""
+    service = _service()
+    service.record(2, ["不吃辣"], SOURCE_CHAT)
+    someone_elses = service.list_for_user(2)[0].id
+
+    assert service.forget(1, someone_elses) is False
+    assert service.list_belonging(2) == ["不吃辣"]
+
+
+def test_shouldReportFalseForAnIdThatIsNotThere():
+    service = _service()
+    service.record(1, ["不吃辣"], SOURCE_CHAT)
+
+    assert service.forget(1, 999999) is False
+    assert service.list_belonging(1) == ["不吃辣"]
+
+
+def test_shouldReportFalseWithoutAUserOrAnId():
+    """没登录 / 没给 id 时**不许**把 None 当条件拼进 SQL 里（那会删掉一片）。"""
+    service = _service()
+    service.record(1, ["不吃辣"], SOURCE_CHAT)
+
+    assert service.forget(None, 1) is False
+    assert service.forget(1, None) is False
+    assert service.list_belonging(1) == ["不吃辣"]
+
+
+def test_shouldKeepTheListOrderAfterForgettingOne():
+    """删中间那条，剩下的顺序不乱——顺序会进提示词（§2.2.2）。"""
+    service = _service()
+    service.record(1, ["第一条", "第二条", "第三条"], SOURCE_CHAT)
+    middle = service.list_for_user(1)[1].id
+
+    service.forget(1, middle)
+
+    assert service.list_belonging(1) == ["第一条", "第三条"]
+
+
+def test_shouldLetTheSameWordsComeBackAfterForgetting():
+    """**§2.3.5 点名的"最容易漏"**：删干净了才能重记。
+
+    删不干净（软删、或唯一键还占着位置）时界面看起来完全正常——
+    代价是这个人**再也记不上这一条**了。
+    """
+    service = _service()
+    service.record(1, ["不吃辣"], SOURCE_CHAT)
+    service.forget(1, service.list_for_user(1)[0].id)
+
+    again = service.record(1, ["不吃辣"], SOURCE_CHAT)
+
+    assert again.added == ["不吃辣"]
+    assert service.list_belonging(1) == ["不吃辣"]

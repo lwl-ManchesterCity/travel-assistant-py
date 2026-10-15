@@ -30,6 +30,15 @@ def _purge() -> None:
         conn.execute("delete from users where username like %s", (_PREFIX + "%",))
 
 
+def _other_user() -> int:
+    """另造一个用户——测"删不掉别人的"那条要用两个身份。"""
+    with db.connection() as conn:
+        return conn.execute(
+            "insert into users (username, password_hash) values (%s, %s) returning id",
+            (f"{_PREFIX}{next(_SEQ)}", "x" * 60),
+        ).fetchone()[0]
+
+
 @pytest.fixture(scope="module")
 def store():
     try:
@@ -191,3 +200,40 @@ def test_shouldKeepOldRowsOnTheDefaultSubject(store, user_id):
             (user_id, "改列前就有的", SOURCE_CHAT))
 
     assert store.list_for_user(user_id)[0].subject == "本人"
+
+
+# ---------- 第三档：删除的真 SQL（docs/ASK_LONGTERM_MEMORY.md §2.3.3）----------
+
+
+def test_shouldDeleteOnlyThisUsersRow(store, user_id):
+    """`where id = %s and user_id = %s` 那句的 SQL 面。
+
+    **user_id 必须进 where**：id 是连续 bigserial，漏掉之后任何一个登录用户
+    能删光全站的偏好——而且界面上看不出来（他只是在删自己的）。
+    """
+    other = _other_user()
+    store.add(user_id, "我的", SOURCE_CHAT)
+    store.add(other, "别人的", SOURCE_CHAT)
+    someone_elses = store.list_for_user(other)[0].id
+
+    assert store.delete(user_id, someone_elses) is False
+    assert len(store.list_for_user(other)) == 1          # 别人的那条还在
+
+
+def test_shouldReportFalseForAnAbsentId(store, user_id):
+    assert store.delete(user_id, 999999999) is False
+
+
+def test_shouldDeleteAndFreeTheUniqueKey(store, user_id):
+    """删干净了，同一句话**能再记上**（§2.3.5 那条最容易漏的判据）。
+
+    真删（`delete`）而不是软删，所以唯一键那一格也跟着空出来——
+    这是内存实现里看不出来的：内存实现压根没有唯一键。
+    """
+    store.add(user_id, "不吃辣", SOURCE_CHAT)
+    target = store.list_for_user(user_id)[0].id
+
+    assert store.delete(user_id, target) is True
+    assert store.list_for_user(user_id) == []
+    assert store.add(user_id, "不吃辣", SOURCE_CHAT) is True       # 又记上了
+    assert len(store.list_for_user(user_id)) == 1

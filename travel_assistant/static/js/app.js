@@ -1496,6 +1496,121 @@
         document.getElementById('adjust-prompt-ok').click();
     });
 
+    /* ---------- 我的偏好（docs/ASK_LONGTERM_MEMORY.md §2.3）----------
+     *
+     * 列出这个人已经记住的偏好，逐条能删。**只做列表与删除**：编辑不做（§2.2.2 定了
+     * 偏好没有"修改"这个动作——要改就删掉、再说一条新的），清空/分页/搜索也不做。
+     */
+    const preferencesOverlay = document.getElementById('preferences-overlay');
+    const preferencesList = document.getElementById('preferences-list');
+    const preferencesEmpty = document.getElementById('preferences-empty');
+
+    // 来源那行小字：回答"这条哪来的"（§2.3.2）。用户判断哪条记错了，第一个线索就是它。
+    const PREFERENCE_SOURCE_TEXT = { chat: '来自聊天', form: '来自表单备注' };
+
+    function openPreferences() {
+        preferencesOverlay.classList.remove('hidden');
+        // 焦点放进弹层里：一是键盘用户落点正确，二是**Esc 才收得到**——
+        // keydown 挂在遮罩上，焦点不在里面就冒泡不上来（旁边那个弹窗靠输入框拿焦点）。
+        document.getElementById('preferences-close').focus();
+        loadPreferences();
+    }
+
+    function closePreferences() {
+        preferencesOverlay.classList.add('hidden');
+    }
+
+    async function loadPreferences() {
+        let items = [];
+        try {
+            const response = await fetch('/api/preferences');
+            if (!response.ok) {
+                throw new Error('读不到偏好');
+            }
+            items = (await response.json()).items || [];
+        } catch (error) {
+            showError('读不到偏好，请稍后重试');
+            closePreferences();
+            return;
+        }
+        renderPreferences(items);
+    }
+
+    function renderPreferences(items) {
+        preferencesList.innerHTML = '';
+        // 删掉最后一条**回到空态**，而不是留一个空列表（§2.3.4）。
+        preferencesEmpty.classList.toggle('hidden', items.length > 0);
+        items.forEach((item) => preferencesList.appendChild(preferenceRow(item)));
+    }
+
+    function preferenceRow(item) {
+        const row = document.createElement('div');
+        row.className = 'preference-row';
+
+        const body = document.createElement('div');
+        body.className = 'preference-body';
+        const text = document.createElement('div');
+        text.className = 'preference-text';
+        // **同行的人那条带上是谁**：只写内容的话，用户会以为那是自己的、然后删错——
+        // 与接口回 subject（§2.3.2）是同一个理由，这里是它的另一半。
+        text.textContent = item.subject && item.subject !== '本人'
+            ? item.subject + '：' + item.content
+            : item.content;
+        const source = document.createElement('div');
+        source.className = 'preference-source';
+        source.textContent = PREFERENCE_SOURCE_TEXT[item.source] || item.source;
+        body.appendChild(text);
+        body.appendChild(source);
+
+        const remove = document.createElement('button');
+        remove.className = 'ghost-button preference-delete';
+        remove.type = 'button';
+        remove.textContent = '删除';
+        remove.addEventListener('click', () => deletePreference(item, row));
+
+        row.appendChild(body);
+        row.appendChild(remove);
+        return row;
+    }
+
+    async function deletePreference(item, row) {
+        let deleted = false;
+        try {
+            const response = await fetch('/api/preferences/' + item.id, { method: 'DELETE' });
+            deleted = (await response.json()).deleted === true;
+        } catch (error) {
+            showError('删除失败，请稍后重试');
+            return;
+        }
+        if (!deleted) {
+            // 删别人的 / 已经不在了——**不当成成功**（那是后端回 false 的两种情况，
+            // 前端分不出来，也不该分）。重拉一遍看真实状态。
+            showError('这条没能删掉，可能已经不在了');
+            loadPreferences();
+            return;
+        }
+        // **当场生效**：从列表里摘掉那一行，不等刷新（§2.3.4）。
+        row.remove();
+        if (!preferencesList.children.length) {
+            preferencesEmpty.classList.remove('hidden');
+        }
+    }
+
+    document.getElementById('open-preferences').addEventListener('click', openPreferences);
+    document.getElementById('preferences-close').addEventListener('click', closePreferences);
+    // 点遮罩本身才算关。用 mousedown 而不是 click：click 的 target 是按下与抬起
+    // **共同**的祖先，从面板里按下、拖到遮罩上抬起会误判成点了遮罩（与旁边那个同款）。
+    preferencesOverlay.addEventListener('mousedown', (event) => {
+        if (event.target === preferencesOverlay) {
+            closePreferences();
+        }
+    });
+    preferencesOverlay.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closePreferences();
+        }
+    });
+
     async function adjustCurrentTrip() {
         if (!currentTripData || !currentPayload) {
             showError('请先生成一次旅行计划，再进行修改');

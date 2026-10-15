@@ -820,3 +820,71 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     gap: var(--sp-2);
     margin-top: var(--sp-4);
 }
+
+/* ---------- 「我的偏好」弹层里的列表 ----------
+ *
+ * 对应 docs/ASK_LONGTERM_MEMORY.md §2.3.4。遮罩与白卡沿用上面 .adjust-prompt-*
+ * 那一套，这里只加它自己的那几样：列表、每行、空态。
+ */
+
+.preferences-panel {
+    /* 比"想怎么改？"那个宽一点：一行里要放下内容 + 来源 + 删除钮。 */
+    width: min(560px, calc(100% - 32px));
+}
+
+.preferences-list {
+    margin-top: var(--sp-4);
+    /* 上限就 50 条（§2.2.2），滚一下就到底——不做分页。 */
+    max-height: min(50vh, 420px);
+    overflow-y: auto;
+    /* 面板整体是 text-align: center 的（沿用那套），列表里必须拉回左边：
+     * 一条条左对齐才好扫，居中的话每行起点都不一样。 */
+    text-align: left;
+}
+
+.preference-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-3) 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.preference-row:last-child {
+    border-bottom: none;   /* 最后一条不画线，否则跟下面的按钮行之间多一道 */
+}
+
+.preference-body {
+    flex: 1;
+    /* 长内容要靠 break-word 换行，而不是把删除钮挤出卡片 */
+    min-width: 0;
+}
+
+.preference-text {
+    /* **正文级字号，不是小字**：这一行就是这个界面的全部内容（§2.1.10 的教训——
+     * 一行的两件东西差两级字重，看起来像是没对齐）。 */
+    font-size: var(--fs-md);
+    font-weight: var(--fw-medium);
+    color: var(--ink);
+    word-break: break-word;
+}
+
+.preference-source {
+    margin-top: 2px;
+    font-size: var(--fs-sm);
+    color: var(--muted);
+}
+
+.preferences-empty {
+    margin-top: var(--sp-4);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    line-height: 1.8;
+    text-align: left;
+}
+
+.preferences-empty-lead {
+    font-size: var(--fs-md);
+    font-weight: var(--fw-medium);
+    color: var(--ink);
+}

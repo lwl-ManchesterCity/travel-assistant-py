@@ -494,3 +494,10 @@
         max-width: 92%;
     }
 }
+
+/* 「我的偏好」入口（docs/ASK_LONGTERM_MEMORY.md §2.3.4）。
+ * 靠右顶：左边是窄屏的「← 返回方案」、中间是标题，三个东西各占一块不挤。
+ * 弹层本身的长相沿用 .adjust-prompt-*（见 controls.css），这里只管这个钮的位置。 */
+.preferences-entry {
+    margin-left: auto;
+}

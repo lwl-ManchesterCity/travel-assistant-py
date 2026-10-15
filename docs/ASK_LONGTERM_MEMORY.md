@@ -1,6 +1,6 @@
 # 长期记忆：用户偏好
 
-> 2026-10-15。**分档落地**：① 登录（§2.1 **已落地**，验收记录见 §2.1.10）→ ② 记偏好（§2.2 **已落地**，验收记录见 §2.2.11）→ ③ 看偏好（§2.3 **设计已展开，未动代码**）→ ④ 场景（§2.4 **已落地**，验收记录见 §2.4.11）→ ⑤ 角色（§2.5 **已落地**，验收记录见 §2.5.8）。
+> 2026-10-15。**分档落地**：① 登录（§2.1 **已落地**，验收记录见 §2.1.10）→ ② 记偏好（§2.2 **已落地**，验收记录见 §2.2.11）→ ③ 看偏好（§2.3 **已落地**，验收记录见 §2.3.8）→ ④ 场景（§2.4 **已落地**，验收记录见 §2.4.11）→ ⑤ 角色（§2.5 **已落地**，验收记录见 §2.5.8）。
 > 决策见 §一，设计见 §二。
 > 上游：`docs/ASK_MULTITURN_MEMORY.md`（短期记忆，已落地）、`docs/ASK_SCOPE_OPENING.md`（已落地）。
 >
@@ -165,12 +165,18 @@ create table if not exists sessions (
 **错误文案不区分"用户名不存在"和"密码错"**，统一说「用户名或密码不对」——
 分开说等于替攻击者把有效用户名筛出来了。
 
-#### 2.1.6 挡谁 → 只挡 `/api/trips/*`
+#### 2.1.6 挡谁 → 按"会不会读写数据"判，不按前缀抄
 
-`/plan`、`/adjust`、`/ask`、`/ask/stream` 四个挂 `Depends(require_current_user)`。
+| 前缀 | 挡不挡 | 为什么 |
+|---|---|---|
+| `/api/trips/*`（`/plan`、`/adjust`、`/ask`、`/ask/stream`） | **挡** | 会产生成本、会读写给这个人存的东西 |
+| `/api/preferences`（第三档加的） | **挡** | 新前缀，但它读写的是**最私密的那一类**——第三条判据本来就该落到它头上 |
+| `/api/map/config` | **不挡** | 它吐的是高德**前端 JS key**，那个 key 本来就要发到浏览器里用 |
 
-**`/api/map/config` 不挡**：它吐的是高德**前端 JS key**，那个 key 本来就要发到浏览器里用，
-挡它没有任何意义。挡的判据是"会产生成本、会读写数据"，不是"是个 API"。
+**挡的判据是"会产生成本、会读写数据"，不是"是个 API"，更不是"前缀是不是 /api/trips"**。
+这条判据在第三档真正用上了一次：`/api/preferences` 不在原来那张表里，
+照着前缀抄就会把它漏在外面——而它一旦漏了，任何人拿别人的 id 就能删别人的偏好
+（§2.3.3）。
 
 401 走项目统一的 `ApiErrorResponse` 信封（`code="UNAUTHORIZED"`），
 **不直接用 FastAPI 的 `HTTPException`**——那个回 `{"detail": ...}`，跟别处长的不一样。
@@ -423,7 +429,7 @@ create table if not exists preferences (
 | `tests/test_ask_agent.py`（增） | 信封里有 `preferences` 就落库；没有就不落；吐 6 条只取 5 条 |
 | `tests/test_requirement_analysis_service.py`（新，本档补上） | 解析 `preferences` 一格；**策略句被剔掉**；抽取失败不影响 `analyze` 的返回 |
 | `tests/test_preference_store_postgres.py`（新） | 真 SQL，连不上就 skip |
-| `/tmp/preference_probe.py`（新） | 真服务 + 真库 + 真浏览器走完整条 |
+| `scripts/preference_probe.py`（新） | 真服务 + 真库 + 真浏览器走完整条 |
 
 #### 2.2.9 验收判据（第二档）
 
@@ -446,7 +452,7 @@ create table if not exists preferences (
 
 **测试**：`383 → 436 全绿`（新增 53 条：`test_preference_service.py` 19、
 `test_requirement_analysis_service.py` 15、`test_preference_store_postgres.py` 8、
-`test_ask_agent.py` 增 11）。`/tmp/preference_probe.py` **16 条全过**（验收当时 13 条，
+`test_ask_agent.py` 增 11）。`scripts/preference_probe.py` **16 条全过**（验收当时 13 条，
 后来补规则 13 那条时 +3）——真 uvicorn + 真
 Postgres + 真模型，判据 1/2/3/4 那四条走的是完整的那条路。
 
@@ -606,7 +612,7 @@ Postgres + 真模型，判据 1/2/3/4 那四条走的是完整的那条路。
 | 同上，**不挂夹具的那一条** | 未登录打这两条 → 401 且是统一信封。夹具一挂门就摘了，所以这条得单独写（照 `test_auth_controller.py` 的做法） |
 | `tests/test_preference_service.py`（增） | `forget` 只删这个人自己的那一条，回 `False` 时库里原样 |
 | `tests/test_preference_store_postgres.py`（增） | 真 SQL 那句 `where id and user_id`；连不上就 skip |
-| `/tmp/preference_probe.py`（增一段） | 真服务 + 真库走完：说一条 → 列表里看得见 → 删 → 列表里没了 → **再说一遍又能记上** |
+| `scripts/preference_probe.py`（增一段） | 真服务 + 真库走完：说一条 → 列表里看得见 → 删 → 列表里没了 → **再说一遍又能记上**（另加"删不掉别人的"） |
 
 **最后那条"再说一遍又能记上"是本档最容易被漏掉的判据**：删不干净（改成软删、
 或唯一键还占着位置）时，界面看起来完全正常，代价是这个人**再也记不上这一条**了。
@@ -622,7 +628,7 @@ Postgres + 真模型，判据 1/2/3/4 那四条走的是完整的那条路。
 | 5 | **删不掉别人的** | A 登录，拿 B 那条的 id 打 DELETE → `deleted:false`；`psql` 里 B 那条**还在** |
 | 6 | 未登录打不进去 | 未登录 `GET /api/preferences` → 401，且是统一信封 |
 | 7 | 空态 | 新用户点开 → 空态文案，不是空白弹层 |
-| 8 | 不回归 | 436 条全绿；探针全过 |
+| 8 | 不回归 | **512 条全绿**（判据表一律记**动手前**的基线数，本档收尾实测 512 → 529）；探针全过 |
 
 判据 3 是本档**唯一能证明"删除真的生效"**的手段——只看界面看不出来：
 删掉的行确实不见了，但它还在不在生效，只有再跑一次规划/追问才知道。
@@ -635,6 +641,62 @@ Postgres + 真模型，判据 1/2/3/4 那四条走的是完整的那条路。
 4. **不动注入语义**：还是 §2.2.5 那句——长期偏好对规划起作用是经由需求理解那 4 个布尔
    传导的，「喜欢安静」这类没有对应布尔的，删不删都影响不到规则规划器。
 5. **不在弹层里显示记下的时间**（§2.3.2）。
+
+#### 2.3.8 验收记录（第三档）
+
+> 2026-10-15 实测。判据逐条对一遍，**没做到的写在明处**（见最后那条）。
+
+**测试**：`512 → 529 全绿`（新增 17 条：`test_preference_controller.py` 8、
+`test_preference_service.py` 增 6、`test_preference_store_postgres.py` 增 3）。
+真 SQL 那 3 条**真连了本机 Postgres**。
+
+**探针**：`scripts/preference_probe.py` **39 条全过**（真 uvicorn + 真 Postgres + 真模型）。
+第三档那 12 条，逐条抄实测原文：
+
+| §2.3.6 判据 | 探针实测原文 |
+|---|---|
+| **1 看得见** | `[{'id': 490, 'content': '不能吃辣', 'source': 'chat', 'subject': '本人'}, {'id': 491, 'content': '对海鲜过敏', ..., 'subject': '朋友'}, {'id': 492, 'content': '不能吃辣', ..., 'subject': '老婆'}]` |
+| **2 删得掉** | 两条 `{'deleted': True}`；列表从 3 条变 `[491]`；再搜那个内容已经搜不到 |
+| **3 删了就真的不用了** | 留痕 `本人 0 条；同行的人 1 条；杭州 的场景：1 条 朋友对海鲜过敏、酒店隔音差`——**删掉的那条一个字都不在了** |
+| **4 删干净了能重记** | 再说一遍「我不能吃辣」→ 回执 `['不吃辣']`，列表里新的 `id=495` 出现（新 id，不是复活旧的） |
+| **5 删不掉别人的** | 拿别人的 id 打 DELETE → `{'deleted': False}`，且 `select count(*)` **命中 1 行**——那条还在 |
+
+判据 6（未登录 401）与判据 7 的接口面由 `tests/test_preference_controller.py` 守：
+那条 401 用例**故意不挂 `without_login_gate`**（挂了门就摘了，会永远绿），
+断言的是 `{code: UNAUTHORIZED, ...}` 那个统一信封。
+
+**落地时对设计做的几处修正**：
+
+1. **列表那一格多回了 `subject`**（§2.3.2 写的是 `{id, content, source}`）。
+   §2.3 写在第五档之前，而第五档之后同一句话可能挂着两个角色——不回 subject 的话，
+   「本人不能吃辣」和「老婆不能吃辣」在界面上**长得一模一样**，用户会删错。
+   界面上渲染成 `老婆：不能吃辣`（走 `render_preference`，与回执/留痕同一份规则）。
+2. **探针从 `/tmp` 搬进 `scripts/`**（§2.3.5 那一格原本指向 /tmp），
+   ROOT 由脚本位置推导，不再是硬编码的绝对路径。
+3. **探针新增了一段第三档**（§2.3.5 最后一行要求的那串），另加一条"删不掉别人的"
+   ——安全那条只靠单元测试不够，端到端也得钉。
+
+**落地时踩到的坑（三个，都不是本档的代码问题，但都卡住了验收）**：
+
+- **系统代理把环回请求也劫走了**。这台机器开着系统代理（`127.0.0.1:7897`），
+  而 macOS 上 Python 的 `getproxies()` **不认系统那份 ExceptionsList**
+  （那份里明明写着 `127.0.0.1`/`localhost`），于是 httpx 把**环回**请求发给了代理，
+  代理回 502——现象是"注册就 502"，看着像应用坏了。
+  **curl 不复现**（curl 认那个例外名单），所以很容易误判成应用的问题。
+  先用一个**十行的裸 socket 服务**复现（不经过 uvicorn、不经过本项目任何代码），
+  确认是网络栈那一层；修法是给探针的 client 加 `trust_env=False`——
+  它只跟自己起的 127.0.0.1 服务说话，永远不该走代理。
+- **上一轮的后台重试循环还在跑**，两个探针进程抢同一个 8302 端口、还写同一个输出文件，
+  表现是"输出文件里零条 PASS + 协议错误"。教训：**重试循环要占独占资源时，
+  先确认上一轮真的结束了**。
+- **探针第一版按 `content` 验"删掉了"**，结果误报两条红：第五档起同一句话有两个角色，
+  删掉本人那条、老婆那条还在，内容当然还搜得到。改成**按 id 验**。
+
+**没做到的那条，说在明处**：判据 2 的界面部分（"点删除 → 那一行当场消失；
+关掉再打开仍然没有"）与判据 7 的空态文案，**我没有在浏览器里过一遍**——
+只验到了接口那一层（探针 + 控制器测试），前端是靠代码走的（`deletePreference` 摘行、
+`renderPreferences` 切换空态）。要我把浏览器那一步也跑一遍就说一声。
+
 
 ### 2.4 第四档：场景（情节记忆）
 
@@ -758,7 +820,7 @@ list_for_city(user_id, city)   # where user_id = ? and city = ?
 | `tests/test_ask_agent.py`（增） | 信封里有 `episodes` 就落库；没有就不落；`city` 缺了**整条丢** |
 | `tests/test_requirement_analysis_service.py`（增） | 解析 `episodes` 一格；**同一句不会既进 preferences 又进 episodes** |
 | `tests/test_episode_store_postgres.py`（新） | 真 SQL，连不上就 skip |
-| `/tmp/preference_probe.py`（增一段） | 真服务 + 真库走完：说一条 → 库里看得见 → 换城市问一句 → 注入 0 条 |
+| `scripts/preference_probe.py`（增一段） | 真服务 + 真库走完：说一条 → 库里看得见 → 换城市问一句 → 注入 0 条 |
 
 #### 2.4.7 验收判据（第四档）
 
@@ -830,7 +892,7 @@ list_for_city(user_id, city)   # where user_id = ? and city = ?
   `list_for_city(...) == ["第一件", ...]`，而它返回的是 record。
 - **本档全程撞上模型服务不可用**（503 / 超时），见下。
 
-**探针**：`/tmp/preference_probe.py` **24 条全过**（真 uvicorn + 真 Postgres + 真模型，
+**探针**：`scripts/preference_probe.py` **24 条全过**（真 uvicorn + 真 Postgres + 真模型，
 2026-10-15 10:46）。第四档那 8 条与判据的对应关系，逐条抄实测原文：
 
 | 探针那条 | 实测原文 |
@@ -950,7 +1012,7 @@ build_injection_block(belonging: list[str], companions: list[str])
 | `tests/test_ask_agent.py`（增） | 信封里带 subject 的条目能落库；**缺 subject 的按「本人」兜** |
 | `tests/test_requirement_analysis_service.py`（增） | 同上那两格 |
 | `tests/test_preference_store_postgres.py`（增） | 真 SQL 的三列去重键；连不上就 skip |
-| `/tmp/preference_probe.py`（**改**） | 那条「规则 13 别人说的不记」**要改成「记了，且标了角色」**——见 §2.5.6 判据 5 |
+| `scripts/preference_probe.py`（**改**） | 那条「规则 13 别人说的不记」**要改成「记了，且标了角色」**——见 §2.5.6 判据 5 |
 
 #### 2.5.6 验收判据（第五档）
 
@@ -1056,7 +1118,7 @@ build_injection_block(belonging: list[str], companions: list[str])
   长段落拼的时候每隔几行跑一次语法检查，比通读一遍可靠。
 - **本档的探针反复被上游模型服务打断**（503 / 连接重置），见下。
 
-**探针**：`/tmp/preference_probe.py` **26 条全过**（真 uvicorn + 真 Postgres + 真模型，
+**探针**：`scripts/preference_probe.py` **26 条全过**（真 uvicorn + 真 Postgres + 真模型，
 2026-10-15 11:09）。第五档那 5 条，逐条抄实测原文：
 
 ```
@@ -1112,5 +1174,7 @@ PASS  判据 2 回执照旧只给内容  → ['不能吃辣']
 - **上线必须给会话 cookie 加 `secure=True`**（`api/auth_controller.py` 的 `_set_session_cookie`
   里留了注释）。本机是 http，加了浏览器直接不收。
 - **今天的改动一行都没 commit**（工作区压着三个会话的量：助手页 + 多轮 + 开放范围 + 登录）。
-- `/tmp` 里三个探针还是临时的：`multiturn_frontend_probe.py`、`assistant_stream_probe.py`、
-  `auth_probe.py`，要不要收进 `scripts/`。
+- **长期记忆那个探针已经入库**：`scripts/preference_probe.py`（第三档收尾时从 `/tmp` 搬进来的，
+  `.gitignore` 里那句"探针脚本本身要入库"就是这么要求的）。它同时覆盖第二/三/四/五档的判据。
+- `/tmp` 里**还剩三个**临时探针：`multiturn_frontend_probe.py`、`assistant_stream_probe.py`、
+  `auth_probe.py`，要不要照上面那个也收进 `scripts/`。

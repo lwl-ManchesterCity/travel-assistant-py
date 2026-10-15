@@ -22,6 +22,7 @@ from .api.ask_controller import router as ask_router
 from .api.auth_controller import router as auth_router
 from .api.error_handlers import register_exception_handlers
 from .api.map_controller import router as map_router
+from .api.preference_controller import router as preference_router
 from .api.trip_controller import router as trip_router
 from .config.runtime_logger import log_travel_runtime
 from .config.settings import get_settings
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(trip_router)
     app.include_router(ask_router)
     app.include_router(map_router)
+    app.include_router(preference_router)
     app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
     return app
 

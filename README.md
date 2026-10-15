@@ -137,6 +137,8 @@ PYTHONPATH=. .venv/bin/python -m travel_assistant.main
 | `POST /api/trips/adjust` | 用自然语言改计划 |
 | `POST /api/trips/ask` | 就当前方案追问 |
 | `POST /api/trips/ask/stream` | 同上，SSE 推工具调用 |
+| `GET /api/preferences` | 列出已记住的偏好 |
+| `DELETE /api/preferences/{id}` | 删一条 |
 | `GET /api/map/config` | 前端地图配置（唯一不要求登录的端点） |
 
 除 `/api/map/config` 外都要求登录。字段名保持 Java 源的驼峰风格，
@@ -162,7 +164,7 @@ travel_assistant/
   service/            planner_input_builder / requirement_analysis / trip_planning
                       / auth / preference / episode / hotel_anchor / intercity …
   static/             index.html + css/ + js/ + 字体 + 插画（FastAPI 挂在根路径）
-tests/                512 条，见下
+tests/                529 条，见下
 docs/                 设计稿与验收记录，见下
 scripts/              建库工具、视觉验收探针、结果页渲染
 data/                 景点资料、标签表；chroma/ 是本地生成的索引，不入库
@@ -171,15 +173,18 @@ data/                 景点资料、标签表；chroma/ 是本地生成的索�
 ## 测试
 
 ```bash
-.venv/bin/python -m pytest -q      # 512 passed
+.venv/bin/python -m pytest -q      # 529 passed
 ```
 
 全部是单元测试——喂死数据，**不调模型、不碰数据库**。真 SQL（unique 约束、`on conflict do nothing`）
 由 `test_*_store_postgres.py` 三个文件单独守，它们要一个真的库。
 
-端到端验收另有一套探针：起真服务、连真库、调真模型，跑一次几分钟，脚本在 `/tmp` 下不入库。
+端到端验收另有一套探针：起真服务、连真库、调真模型，跑一次几分钟。**探针随仓库走**，
+在 `scripts/preference_probe.py`（长期记忆那几档的判据都在它里面），
+从仓库根跑：`.venv/bin/python scripts/preference_probe.py`。
 两层的分工是：单元测试证明**每个函数按写的做**，探针证明**整条链真的接通了**——
-后者能抓到前者抓不到的（HTTP 那条路上 `user_id` 有没有传到底、真库认不认那个唯一键）。
+后者能抓到前者抓不到的（HTTP 那条路上 `user_id` 有没有传到底、真库认不认那个唯一键、
+删掉之后是不是真的不再进提示词）。
 
 ## 与 Java 源项目的关系
 

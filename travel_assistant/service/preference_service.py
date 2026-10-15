@@ -6,7 +6,12 @@
 
 from dataclasses import dataclass, field
 
-from ..clients.preference_store import DEFAULT_SUBJECT, PreferenceStore, render_preference
+from ..clients.preference_store import (
+    DEFAULT_SUBJECT,
+    PreferenceRecord,
+    PreferenceStore,
+    render_preference,
+)
 
 # 一条偏好的长度上限。**这不是洁癖**：模型偶尔会把用户整句话当偏好吐出来
 # （「我希望这次去杭州的时候能顺便看看西湖」）。那不是偏好，是一条被截断的行程
@@ -114,6 +119,32 @@ class PreferenceService:
                 existing.add((subject, content))
                 kept += 1
         return result
+
+    def list_for_user(self, user_id: int | None) -> list[PreferenceRecord]:
+        """这个人的全部偏好**原样**（含 id 与 subject），按写入先后。给第三档的列表用。
+
+        与 `list_belonging` / `list_companions` 的分工：那两个是**注入**用的
+        （分两段、只给内容）；这一个要的是"库里到底有什么"，包括每条的 `id`——
+        删除按它删（§2.3.2）。少了 id，前端只能按内容拼，那就把"显示的那串
+        跟库里那串是否逐字相同"变成了一个隐含前提。
+        """
+        if user_id is None:
+            return []
+        return list(self._store.list_for_user(user_id))
+
+    def forget(self, user_id: int | None, preference_id: int | None) -> bool:
+        """删掉这个人的一条偏好。删别人的 / 已经不存在的都回 False（§2.3.3）。
+
+        **走 Service 而不是让控制器直接碰 Store**：删除既没有清洗也没有上限，
+        直接写 Store 看着更省事——但那是"两条链都只经过 Service"这个约束的
+        **第一个口子**（见本文件开头）。规矩破一次，下一个改动就有先例了。
+
+        **异常不吞**：与 `record` 相反。记偏好失败可以算了（搭便车的乘客）；
+        删除失败不能回一句 `deleted: false`——那是在撒谎，用户会以为库里没有了。
+        """
+        if user_id is None or preference_id is None:
+            return False
+        return self._store.delete(user_id, preference_id)
 
     def list_belonging(self, user_id: int) -> list[str]:
         """**用户本人**的偏好原文，按写入先后。没有就是空列表——**空列表不是错误**。"""
