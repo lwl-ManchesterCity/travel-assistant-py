@@ -7,18 +7,8 @@
 跨会话记得住你：不吃辣、同行的人对海鲜过敏、上次在杭州住的那家隔音差，
 下一次规划会自动带上，冲突时会当面指出来而不是顺着方案说「这家不错」。
 
-<!--
-  产品图放这里：把图放进 docs/images/，然后把下面这一段外面的注释去掉
-  （文件名按你实际用的改）。放在这一行下面的好处是它就在正文最上方。
-
-| 首页 | 规划结果 |
-| --- | --- |
-| ![首页](docs/images/landing.png) | ![规划结果](docs/images/result.png) |
-
-| 方案追问 | 登录 |
-| --- | --- |
-| ![方案追问](docs/images/assistant.png) | ![登录](docs/images/login.png) |
--->
+（下面每个功能都配了实拍图。图是真跑出来的：上海 → 北京 3 天，接了真模型与高德底图；
+全部产品图在 [`docs/images/`](docs/images/)，压成 webp 一共不到 1 MB。）
 
 ## 功能
 
@@ -26,9 +16,43 @@
 没配模型自动退回固定顺序取数 + 规则兜底文案，**不配模型也能出完整行程**。
 出方案后走「生成 → 反思评分 → 批评 → 修正 → 再生成」的多轮闭环选最优。
 
+填一张委托单（只有住宿位置可留空）：
+
+| 行程：城市、日期 | 偏好：预算、交通、住宿、偏好标签、备注 |
+| --- | --- |
+| ![行程](docs/images/form-trip.webp) | ![偏好](docs/images/form-preferences.webp) |
+
+提交后 SSE 推 6 步进度，出来的方案长这样：
+
+| 行程总览：徽章、摘要、结余 | 预算明细 + 真实底图与住宿锚点 |
+| --- | --- |
+| ![行程总览](docs/images/result-overview.webp) | ![预算与地图](docs/images/result-budget-map.webp) |
+
+| 每日行程：时间轴、调整说明 | 生成中：进度推到第 6 步 |
+| --- | --- |
+| ![每日行程](docs/images/result-day1.webp) | ![生成中](docs/images/generating.webp) |
+
+<details>
+<summary>更多规划截图：第 2 天、当日路线分段与三餐</summary>
+
+| 第 2 天：按反思意见减掉了故宫 | 路线分段（高德）与三餐 |
+| --- | --- |
+| ![第二天](docs/images/result-day2.webp) | ![路线与三餐](docs/images/result-route-meals.webp) |
+
+</details>
+
 **追问**　六个只读工具（方案总览 / 某天安排 / 景点详情 / 搜景点 / 查天气 / 荐酒店），
 答不上就说答不上，不编。联网失败不整体失败，改用方案内数据作答并留一条 `failed` 留痕。
-SSE 推工具调用当进度条。
+SSE 推工具调用当进度条。说到新偏好会**顺手记下**，答案下面回一行「已记住」：
+
+![追问，顺手记住](docs/images/ask-remember.webp)
+
+**改方案**　「第二天住得离西湖近一点」这类，追问时判出是改方案的诉求，
+但**它不擅自动手**——先把改动翻成人话给你看，点「确认修改」才重算：
+
+| 判出想改，先给确认卡 | 确认后才重算 |
+| --- | --- |
+| ![确认改动](docs/images/ask-adjust-confirm.webp) | ![调整中](docs/images/adjusting.webp) |
 
 **长期记忆**　两桶互斥：
 - **偏好**——「不吃辣」记给本人，「老婆不吃辣」记给老婆，去重键是 `(用户, 角色, 内容)`，
@@ -38,8 +62,18 @@ SSE 推工具调用当进度条。
 注入提示词时明写两条规矩：本次说的优先、冲突要说出来。空的时候整段不拼，
 不塞一句「暂无长期记忆」提醒模型这里本来该有点什么。
 
+上面「行程总览」那张里，摘要那段是**模型自己写的**：它主动写出了
+「太太和孩子也不能吃辣、爷爷不吃海鲜、太太还避香菜」——偏好不是躺在库里，
+是真进了提示词、真改了输出。记了哪些、要删哪条，点旅行助手右上角的「我的偏好」：
+
+![我的偏好：列出与删除](docs/images/preferences-panel.webp)
+
 **账号**　注册 / 登录 / 登出。密码 bcrypt，会话 cookie `httponly` + `samesite=lax`。
 长期记忆按 `user_id` 存，一个库装所有客户。
+
+| 登录 | 注册 |
+| --- | --- |
+| ![登录](docs/images/login.webp) | ![注册](docs/images/register.webp) |
 
 ## 快速开始
 
@@ -165,7 +199,7 @@ travel_assistant/
                       / auth / preference / episode / hotel_anchor / intercity …
   static/             index.html + css/ + js/ + 字体 + 插画（FastAPI 挂在根路径）
 tests/                529 条，见下
-docs/                 设计稿与验收记录，见下
+docs/                 设计稿与验收记录，见下；images/ 是 README 用的产品图
 scripts/              建库工具、视觉验收探针、结果页渲染
 data/                 景点资料、标签表；chroma/ 是本地生成的索引，不入库
 ```
