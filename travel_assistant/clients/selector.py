@@ -1,4 +1,4 @@
-"""对应 Java client/selector/Configurable*Client.java：按 providers 配置选择真实实现或兜底实现。"""
+"""四个 provider 包装类：各持一份高德实现和一份兜底实现，按 providers 配置挑一个转发。"""
 
 from ..config.settings import ProviderSettings
 from ..models.attraction import Attraction

@@ -1,4 +1,4 @@
-"""对应 Java agent/HotelAgent.java。"""
+"""酒店推荐：把请求折成 HotelQuery 交给 client，并附一句候选摘要。"""
 
 from ..models.hotel import Hotel
 from ..models.hotel_query import HotelQuery

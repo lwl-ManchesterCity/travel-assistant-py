@@ -1,4 +1,4 @@
-"""对应 Java client/impl/RuleBasedWeatherClient.java（mock 天气源）。"""
+"""规则天气源：按月份给一套写死的天气，兜底用（mock）。"""
 
 from datetime import date, timedelta
 

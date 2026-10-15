@@ -1,4 +1,4 @@
-"""对应 Java client/impl/AmapAttractionClient.java（高德 POI 景点检索）。"""
+"""高德 POI 景点检索：按偏好拼关键词搜景点，搜不到回退本地景点库。"""
 
 import logging
 
@@ -64,7 +64,7 @@ class AmapAttractionClient(AttractionClient):
 
     def _validate_amap_configuration(self) -> None:
         if self._amap.api_key is None or not self._amap.api_key.strip():
-            raise TripPlanningException("已选择高德景点 provider，但尚未配置 travel.providers.amap.api-key")
+            raise TripPlanningException("已选择高德景点 provider，但尚未配置 AMAP_API_KEY")
 
     def _request_attractions(self, query: AttractionQuery) -> list[Attraction]:
         pois: list[dict] = []

@@ -2,7 +2,7 @@
 
 不接真实模型：用一个"按脚本调工具"的假 graph 顶掉 create_agent，
 这样跑的是真工具、真上下文、真留痕，只有模型那一层是假的。
-Java 侧没有对应物（/api/trips/ask 是移植基线之外的扩展），期望值取自
+/api/trips/ask 是后加的能力，没有可参照的早期实现，期望值取自
 docs/ASK_AGENT_DESIGN.md 与 docs/ADJUST_AGENT_DESIGN.md。
 """
 

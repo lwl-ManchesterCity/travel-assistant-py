@@ -1,7 +1,7 @@
-"""对应 Java controller/MapConfigController.java 的 GET /api/map/config。
+"""GET /api/map/config：把高德前端地图的键交给浏览器。
 
-Java 用 @CrossOrigin(origins="*") 挂在该 controller 上，Python 侧由 main.py 的全局
-CORSMiddleware 覆盖（见 MIGRATION_NOTES.md 第三节第 13 条）。
+CORS 不在这个路由上单独处理——main.py 注册了全局 CORSMiddleware，所有路由都覆盖
+（见 docs/DESIGN_NOTES.md 第一节第 13 条）。
 """
 
 from fastapi import APIRouter, Depends

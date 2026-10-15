@@ -1,8 +1,8 @@
-"""对应 Java agent/TripAdjustmentAgent.java + service/TripPlanningService.adjustTrip 的行为断言。
+"""TripAdjustmentAgent 与 TripPlanningService.adjust_trip 的行为断言。
 
-Java 侧没有 adjust 相关测试类，期望文案全部取自源码：规则解析六个分支的 appliedChanges 文案、
+没有可参照的既有测试，期望文案全部按实现源码推得：规则解析六个分支的 applied_changes 文案、
 LLM 解析各字段的 "LLM 已…" 前缀文案、解析失败时的 "LLM 解析失败，已自动回退到规则解析" 与
-adjustmentSource=rule-fallback，以及 adjustTrip 追加的两句改计划备注。
+adjustment_source=rule-fallback，以及 adjust_trip 追加的两句改计划备注。
 """
 
 from travel_assistant.agent.trip_adjustment_agent import TripAdjustmentAgent
@@ -158,7 +158,9 @@ def test_shouldParseStructuredJsonWhenLlmAvailable():
     assert user_prompt.endswith("帮我把预算提到 4200，交通你来安排，住宿上高端，加人文历史去掉自然风景，另外不吃海鲜")
 
 
-def test_shouldFollowJacksonTextSemanticsForMalformedFields():
+def test_shouldFollowTextSemanticsForMalformedFields():
+    # 字段类型不按声明来也不报错：budget 给字符串 "3800" 照样当数字用，
+    # 字符串 "null" 等同 null，偏好项里的对象和数组取不出文本、按空串丢弃
     llm_client = _StubLlmClient(available=True, response=(
         '{"budget": "3800", "transportation": null, "accommodation": "null",'
         ' "preferencesToAdd": [{"a": 1}, ["x"], "  "]}'

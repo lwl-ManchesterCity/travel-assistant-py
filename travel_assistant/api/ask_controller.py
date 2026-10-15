@@ -9,7 +9,7 @@
 而工具调用发生在答案之前，是天然的进度条，所以**那部分真流**；答案整条推，
 前端拿到之后本地做打字机效果（"假流式"）。
 
-与 Java 无对应物，属于移植基线之外的能力扩展，见 docs/ASK_AGENT_DESIGN.md。
+这套追问能力是本项目自己加出来的，见 docs/ASK_AGENT_DESIGN.md。
 """
 
 import asyncio

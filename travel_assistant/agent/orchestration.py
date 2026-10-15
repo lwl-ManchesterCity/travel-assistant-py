@@ -1,10 +1,9 @@
 """用 LangChain create_agent 组织的取数链路：有可用模型时由模型自己决定调用哪个数据工具。
 
-Java 侧对应 PlannerInputBuilder 里 attractionAgent -> weatherAgent -> hotelAgent 的固定顺序调用。
-Python 侧按需求改成 agent + tools：模型可用时走 create_agent 自选工具，模型不可用时
-（`travel.llm.enabled=false` 或 api-key/base-url/model 缺任一）退回 Java 的固定顺序，
-两条路径调用的都是那三个 Agent，取数结果由 PlanningContext 交付给确定性的 PlannerAgent，
-模型不参与选点、算价或编造坐标。
+原来这条链是 景点 -> 天气 -> 酒店 的固定顺序调用；现在改成 agent + tools：模型可用时走
+create_agent 自选工具，模型不可用时（`travel.llm.enabled=false` 或 api-key/base-url/model
+缺任一）退回那个固定顺序，两条路径调用的都是那三个 Agent，取数结果由 PlanningContext
+交付给确定性的 PlannerAgent，模型不参与选点、算价或编造坐标。
 """
 
 from langchain.agents import create_agent
@@ -45,10 +44,10 @@ class PlanningDataAgent:
             reset_planning_context(token)
 
     def _collect_by_fixed_order(self, context: PlanningContext) -> None:
-        """没有可用模型时按 Java PlannerInputBuilder 的顺序取数：景点 -> 天气 -> 酒店。
+        """没有可用模型时按固定顺序取数：景点 -> 天气 -> 酒店。
 
         `self._tools` 的顺序就是那个顺序；某个源抛错即停，后面的源不再发请求，
-        异常由 data_tools.raise_planning_errors 冒泡，与 Java 让异常直接逃出 build() 等价。
+        异常由 data_tools.raise_planning_errors 冒泡出 build()，不在这一层被吞掉。
         """
         token = set_planning_context(context)
         try:

@@ -1,8 +1,9 @@
-"""对应 Java controller/MapConfigController.java 的行为断言。
+"""地图配置端点（GET /api/map/config）的行为断言。
 
-Java 侧没有 MapConfigControllerTest，期望值全部取自源码：enabled 的判定式
-`webJsKey != null && !webJsKey.isBlank()`、`enabled ? webJsKey : ""`、provider 字面量 "amap-jsapi"、
-以及两句 message 文案。静态挂载一项断言 Spring Boot 的 `src/main/resources/static/` 根路径等价行为。
+没有可参照的既有测试，期望值全部按实现源码推得：enabled 的判定式
+`web_js_key is not None and web_js_key.strip() != ""`、未启用时 key 出空串、
+provider 字面量 "amap-jsapi"，以及两句 message 文案。
+静态挂载那一项断言的是：根路径能拿到 index.html，而 /api/ 路由不被它遮住。
 """
 
 import pytest
@@ -52,16 +53,16 @@ def test_should_disable_and_blank_key_when_web_js_key_is_absent(client):
     body = client.get("/api/map/config").json()
 
     assert body["enabled"] is False
-    # Java：enabled ? webJsKey : "" —— 未启用时不吐 key
+    # 未启用时不吐 key：jsApiKey 落到空串
     assert body["jsApiKey"] == ""
-    # Java：securityJsCode 无条件透传，不受 enabled 影响
+    # securityJsCode 无条件透传，不受 enabled 影响
     assert body["securityJsCode"] == "fake-security-js-code"
     assert body["provider"] == "amap-jsapi"
     assert body["message"] == "尚未配置 AMAP_WEB_JS_KEY，当前地图暂显示占位提示"
 
 
 def test_should_disable_when_web_js_key_is_only_whitespace(client):
-    # Java 用的是 String.isBlank()，纯空白同样判为未配置
+    # 判定走的是 strip()：纯空白同样判为未配置
     _override_js_key("   ")
 
     body = client.get("/api/map/config").json()
@@ -85,7 +86,7 @@ def test_should_serve_index_html_from_root_and_keep_api_routes_ahead_of_static(c
     assert "/api/trips/adjust" in js_response.text
     assert "/api/map/config" in js_response.text
 
-    # 挂载 "/" 之后 /api/ 仍归路由管：校验失败要拿回 Java 形状的错误体，而不是 index.html
+    # 挂载 "/" 之后 /api/ 仍归路由管：校验失败要拿回统一错误体，而不是 index.html
     app.dependency_overrides[get_trip_planning_service] = _StubPlanningService
     invalid = client.post("/api/trips/plan", json={"city": ""})
     assert invalid.status_code == 400

@@ -1,5 +1,3 @@
-# 与 Java pom.xml 的依赖角色对照：Spring Boot Web/Validation -> FastAPI + pydantic，
-# RestTemplate -> httpx，Spring AI/OpenAI 兼容调用 -> langchain + langchain-openai。
 # 本机直连 pypi 会超时，安装命令用阿里云镜像：
 #   uv venv .venv && uv pip install -p .venv/bin/python --index-url https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 fastapi==0.141.1
@@ -14,7 +12,7 @@ langchain-openai==1.6.2
 pytest==9.1.1
 
 # 长期记忆（用户库）专用。整条规划链路一个字节都不碰它们。
-#   psycopg[binary,pool] —— Postgres 驱动 + 连接池（对应 Java 侧 HikariCP 的角色）。
+#   psycopg[binary,pool] —— Postgres 驱动 + 连接池。
 #     端点全是同步 def（FastAPI 自动丢线程池），所以用同步驱动，不上 asyncpg。
 #   bcrypt —— 密码哈希。不用 passlib：它已停更，且与新 bcrypt 有兼容告警。
 psycopg[binary,pool]==3.3.6

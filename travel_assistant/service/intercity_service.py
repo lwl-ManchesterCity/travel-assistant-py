@@ -25,7 +25,7 @@ from ..models.intercity_plan import (
 from ..models.location import Location
 from ..models.map_point import MapPoint
 from ..models.trip_plan_request import TripPlanRequest
-from ..utils import jround
+from ..utils import round_half_up
 
 # 直线估价格用的系数（元/公里），只在跨城接口拿不到时兜底。
 _STRAIGHT_COST_PER_KM = {
@@ -178,7 +178,7 @@ class IntercityService:
         传全量的话，那句「最便宜的一档是 X 元」里的 X 可能来自一条落地点不在目的城市、
         刚被排除掉的方案——等于报一个不该出现在候选里的价（缺陷单 B1）。
         """
-        gate = jround(budget * _INTERCITY_BUDGET_RATIO)
+        gate = round_half_up(budget * _INTERCITY_BUDGET_RATIO)
         cheapest = _cheapest_priced(options).round_trip_cost
         prefix = (f"城际按{origin_city}→{city}的{chosen.mode}估：往返约 {chosen.round_trip_cost} 元"
                   f"{'（按直线距离估算，非票价）' if chosen.estimated else '（高德换乘方案参考价，含两端接驳）'}")
@@ -228,7 +228,7 @@ def _straight_line_options(straight_km: float) -> list[InterCityOption]:
     options = [
         InterCityOption(
             mode=mode,
-            round_trip_cost=max(2, jround(straight_km * factor * 2)),
+            round_trip_cost=max(2, round_half_up(straight_km * factor * 2)),
             one_way_minutes=_estimated_minutes(mode, straight_km),
             estimated=True,
         )
@@ -237,7 +237,7 @@ def _straight_line_options(straight_km: float) -> list[InterCityOption]:
     if straight_km >= _FLIGHT_MIN_KM:
         options.append(InterCityOption(
             mode=MODE_FLIGHT,
-            round_trip_cost=max(2, jround(
+            round_trip_cost=max(2, round_half_up(
                 max(_FLIGHT_MIN_COST, straight_km * _STRAIGHT_COST_PER_KM[MODE_FLIGHT]) * 2)),
             one_way_minutes=_estimated_minutes(MODE_FLIGHT, straight_km),
             estimated=True,
@@ -250,4 +250,4 @@ def _estimated_minutes(mode: str, straight_km: float) -> int:
     minutes = straight_km / _STRAIGHT_SPEED_KMH[mode] * 60.0
     if mode == MODE_FLIGHT:
         minutes += _FLIGHT_FIXED_MINUTES
-    return max(1, jround(minutes))
+    return max(1, round_half_up(minutes))

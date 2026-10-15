@@ -1,7 +1,7 @@
-"""对应 Java service/TripPlanningService.java：planTrip 走 LoopPlanningAgent，adjustTrip 先解析再复用 planTrip。
+"""planTrip 走 LoopPlanningAgent，adjustTrip 先解析再复用 planTrip。
 
-Java 构造器里的 plannerInputBuilder/plannerAgent 两个参数在两个方法里都没有被用到
-（Spring 注入的历史遗留），Python 侧不保留这两个空参数，差异记在 MIGRATION_NOTES.md。
+构造器只收两个 agent：早先注入进来却从没用过的两个空参数这里不再保留，
+取舍见 docs/DESIGN_NOTES.md。
 """
 
 from typing import TYPE_CHECKING

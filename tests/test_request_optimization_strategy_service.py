@@ -1,7 +1,7 @@
-"""对应 Java service/RequestOptimizationStrategyService.java 的行为断言。
+"""RequestOptimizationStrategyService 的行为断言。
 
-期望文案全部取自 Java 源码：动作分支的 changeNotes、mergeExtraRequirement 的 "；" 连接、
-downgrade/upgradeAccommodation 的档位表，以及 sanitizePersistedExtraRequirements 按关键词剔除调整指令。
+期望文案全部按实现源码推得：各动作分支的 change_notes、merge_extra_requirement 用 "；" 连接、
+downgrade/upgrade_accommodation 的档位表，以及 copy_request 按关键词剔除遗留的调整指令。
 """
 
 from travel_assistant.models.budget import Budget

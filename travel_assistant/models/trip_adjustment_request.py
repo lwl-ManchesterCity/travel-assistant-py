@@ -1,8 +1,8 @@
-"""对应 Java model/TripAdjustmentRequest.java。
+"""调整请求体：原始规划请求 + 调整话术 + 追问摘出的住宿锚点与必去景点。
 
-Java 侧只有 @NotNull + @NotBlank 两个约束，且 originalRequest 上没有 @Valid，
-所以 Spring 不会级联校验内层 TripPlanRequest 的 @NotBlank/@Min；Python 侧字段类型是
-TripPlanRequest，内层约束会一并触发，差异记在 MIGRATION_NOTES.md。
+`original_request` 是 `TripPlanRequest`，所以它的内层校验（非空、预算下限等）
+会跟着一起触发：改方案时整份原请求被带上来，那套约束就一并生效——
+原请求里缺了必填项，改方案这一步照样会被拦下。
 """
 
 from typing import Optional
@@ -14,7 +14,7 @@ from .trip_plan_request import TripPlanRequest
 
 
 class TripAdjustmentRequest(CamelModel):
-    # validate_default：JSON 里缺字段等价于 Jackson 留出 null，Java 的 @NotNull/@NotBlank 同样会触发。
+    # validate_default：字段缺失也要跑一遍校验器，否则缺字段会被当成"没提供、跳过校验"。
     model_config = ConfigDict(validate_default=True)
 
     original_request: Optional[TripPlanRequest] = None

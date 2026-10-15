@@ -4,7 +4,10 @@ from .base import CamelModel
 
 
 class LoopIterationTrace(CamelModel):
-    """对应 Java model/LoopIterationTrace.java，字段名与顺序保持一致。"""
+    """闭环每一轮的留档：这一轮花掉多少、各项严重度、评审给了什么动作、有没有被选为最优。
+
+    字段名与顺序保持不变：这些名字会随 TripPlan 一起序列化出去。
+    """
 
     round: int = 0
     request_summary: Optional[str] = None

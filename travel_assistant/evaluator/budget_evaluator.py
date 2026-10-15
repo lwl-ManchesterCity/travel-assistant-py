@@ -1,4 +1,7 @@
-"""对应 Java evaluator/BudgetEvaluator.java。"""
+"""判定当天花费是否超预算。
+
+日均预算之上还留了 _TOLERANCE 的容差，只有超出「预算 + 容差」才算超。
+"""
 
 _TOLERANCE = 120
 

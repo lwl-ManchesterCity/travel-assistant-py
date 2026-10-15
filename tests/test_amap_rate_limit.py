@@ -1,7 +1,7 @@
 """高德限流（infocode=10021 / CUQPS_HAS_EXCEEDED_THE_LIMIT）的处理。
 
 背景：一次规划里景点、天气、酒店三路工具是被并行调用的，个人 key 的并发配额很容易瞬时打满。
-Java 只给路线做了降级，另外三路撞限流会把整个请求打成 400；用户看到的是
+改动前只有路线做了降级，另外三路撞限流会把整个请求打成 400；用户看到的是
 「请调整输入条件后重试」——一句和真实原因无关的话，于是以为是表单没填全。
 
 这里覆盖三处改动：判定收敛到 exceptions、client 层短退避重试、API 层错误文案分流。
@@ -153,7 +153,8 @@ def test_non_quota_failure_is_not_retried(monkeypatch):
     assert slept == []
 
 
-def test_zero_attempts_keeps_java_behaviour(monkeypatch):
+def test_zero_attempts_means_no_retry(monkeypatch):
+    # 尝试次数配成 0 就不重试：一次原始请求直接报错，不睡不退避
     amap = _settings(rate_limit_retry_attempts=0)
     calls = _install_stub_http(monkeypatch, [QUOTA_BODY])
     slept = _install_sleep_recorder(monkeypatch)

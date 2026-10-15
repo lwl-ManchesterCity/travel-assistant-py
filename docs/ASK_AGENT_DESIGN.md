@@ -1,7 +1,7 @@
 # 方案 A：行程追问 Agent（只读问答）设计
 
 状态：已实现并验证（见文末第 11 节）。两处与本文原稿不同，已在正文就地改准。
-落地位置：分支 `feature/ask-agent`，`main` 上的 Java 等价移植基线未动。
+落地位置：分支 `feature/ask-agent`，`main` 上的既有链路未动。
 
 ---
 
@@ -50,13 +50,13 @@
 | --- | --- | --- |
 | `models/ask_request.py` | 新增 | 上面那个请求体，校验 `question` 非空、`trip_plan` 非空 |
 | `models/ask_response.py` | 新增 | 上面那个响应体 |
-| `agent/ask_context.py` | 新增 | 请求级上下文（`trip_plan` + `question`），contextvar 存取，照搬 `agent/planning_context.py` 的写法 |
+| `agent/ask_context.py` | 新增 | 请求级上下文（`trip_plan` + `question`），contextvar 存取，沿用 `agent/planning_context.py` 的写法 |
 | `agent/ask_tools.py` | 新增 | 三个读方案工具 + 把现有三个取数工具挂进来 |
 | `agent/ask_agent.py` | 新增 | `create_agent` 装配、跑圈、收 trace |
 | `api/ask_controller.py` | 新增 | `POST /api/trips/ask` |
 | `main.py` | 改动 | `include_router(ask_router)`，位置在两个现有 router 之后、`StaticFiles` 挂载之前 |
 | `config/container.py` | 改动 | 装配 `AskAgent`，暴露 `get_ask_agent()` |
-| `static/index.html` | 改动 | 结果页加提问框 + 答案区；**这一处破坏"与 Java 字节级一致"，单独一个提交** |
+| `static/index.html` | 改动 | 结果页加提问框 + 答案区；**这一处会让 `index.html` 不再与早期版本逐字一致，单独一个提交** |
 
 依赖零新增：`langchain 1.4.2`、`langgraph 1.2.11`、`fastapi 0.141.1`、`pydantic 2.13.5` 都已装。
 
@@ -171,9 +171,9 @@
 
 ## 9. 已知风险
 
-1. **高德配额**：第 9 题这类会真打高德，仍可能撞 `CUQPS_HAS_EXCEEDED_THE_LIMIT`。A 阶段不加重试（与 Java 一致），撞了就按第 6 节记 `status=failed` 并回答"这项暂时查不到"。
+1. **高德配额**：第 9 题这类会真打高德，仍可能撞 `CUQPS_HAS_EXCEEDED_THE_LIMIT`。A 阶段不加重试，撞了就按第 6 节记 `status=failed` 并回答"这项暂时查不到"。
 2. **token 体积**：`trip_plan` 实测一次响应 18846 字节，但工具是从上下文里按天取，不进提示词的只有整份 JSON——前提是**不要把 `trip_plan` 直接塞进 system prompt**，只给工具清单。这条是实现时最容易图省事踩的坑。
-3. **前端一致性**：改 `index.html` 会让它不再与 Java 源文件字节级一致，`MIGRATION_NOTES.md` 第二节那一行必须同步改掉，否则文档说谎。
+3. **前端一致性**：`static/index.html` 是个大文件且和前端多处联动，改动单独一个提交，别和后端改动混在一起。
 4. **A 依赖模型**：与 `/plan` 不同，A 没有降级路径，模型不可用即不可用。
 
 ---
@@ -185,7 +185,7 @@
 3. 单测 5 条 + 回归。
 4. 前端一块。
 5. 真实跑 10 题，把每题的 traces 贴出来核对。
-6. 更新 `MIGRATION_NOTES.md`（新增"与 Java 不等价的能力扩展"一节，与移植差异清单分开）和 `README.md`。
+6. 更新 `DESIGN_NOTES.md`（新增"能力扩展"一节，与差异清单分开）和 `README.md`。
 
 ---
 

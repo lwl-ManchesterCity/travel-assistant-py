@@ -1,7 +1,7 @@
-"""对应 Java 的 Spring 组件装配：@Component/@Service 构造器注入 + TravelClientConfiguration。
+"""依赖装配：按依赖关系手工把整套对象建出来，供各端点取用。
 
-Java 靠组件扫描按类型注入，Python 侧没有容器注解，这里按同样的依赖关系手工装配一份单例，
-装配顺序与被装配对象的构造参数与 Java 保持一致，方便逐类对照。
+没有自动注入的容器，谁依赖谁全在这里显式写出来；装配顺序就是构造参数的先后，
+改了某个类的构造签名，这里要跟着改。
 """
 
 from dataclasses import dataclass
@@ -71,20 +71,20 @@ def build_container(settings: Settings | None = None) -> Container:
     providers = settings.providers
     amap = providers.amap
 
-    # 兜底实现（Java client/impl 里的 RuleBased* 与 InMemory*）
+    # 兜底实现：不连外网也能跑完规划（规则版 / 内存版）
     travel_knowledge_service = TravelKnowledgeService()
     in_memory_attraction_client = InMemoryAttractionClient(travel_knowledge_service)
     rule_hotel_client = RuleBasedHotelClient()
     rule_weather_client = RuleBasedWeatherClient()
     rule_route_client = RuleBasedRouteClient()
 
-    # 高德实现（Java client/impl/Amap*Client，RestTemplate 等价替换为 httpx + curl 兜底）
+    # 高德实现：真实 HTTP 调用，走 httpx，httpx 这条路全失败时再用本机 curl 重试一遍
     amap_attraction_client = AmapAttractionClient(amap, in_memory_attraction_client)
     amap_hotel_client = AmapHotelClient(amap, rule_hotel_client)
     amap_weather_client = AmapWeatherClient(amap, rule_weather_client)
     amap_route_client = AmapRouteClient(amap, rule_route_client)
 
-    # provider 选择器（Java client/selector/Configurable*Client）
+    # provider 选择器：按配置在兜底实现与高德实现之间挑一个
     attraction_client = ConfigurableAttractionClient(
         providers, in_memory_attraction_client, amap_attraction_client
     )
@@ -127,7 +127,7 @@ def build_container(settings: Settings | None = None) -> Container:
         preference_service,
         episode_service)
 
-    # Loop 闭环（Java agent/LoopPlanningAgent.java 及其三个协作者）
+    # Loop 闭环：规划 + 反思 + LLM 评审 + 决策执行
     request_optimization_strategy_service = RequestOptimizationStrategyService()
     reflection_agent = ReflectionAgent(daily_plan_evaluator)
     llm_critic_agent = LlmCriticAgent(llm_client)
@@ -141,10 +141,10 @@ def build_container(settings: Settings | None = None) -> Container:
         settings.loop,
     )
 
-    # 行程调整（Java agent/TripAdjustmentAgent.java，与 loop 共用同一个策略服务 Bean）
+    # 行程调整：与 loop 共用上面那同一个策略服务实例
     trip_adjustment_agent = TripAdjustmentAgent(llm_client, request_optimization_strategy_service)
 
-    # 方案 A 的追问 agent（移植基线之外的扩展，复用上面那三个数据 Agent）
+    # 追问 agent：回答"某天怎么玩"这类问题，复用上面那三个数据 Agent
     ask_agent = AskAgent(llm_client, attraction_agent, weather_agent, hotel_agent,
                          preference_service, episode_service)
 
@@ -177,12 +177,12 @@ def reset_container() -> None:
 
 
 def get_trip_planning_service() -> TripPlanningService:
-    """对应 Spring 按类型注入 TripPlanningService。"""
+    """端点依赖：取容器里的规划服务（/plan 与 /adjust 都用它）。"""
     return get_container().trip_planning_service
 
 
 def get_amap_settings() -> AmapSettings:
-    """对应 Spring 按类型注入 TravelProviderProperties 后读取的 Amap 段。"""
+    """端点依赖：取容器配置里的高德段（map_controller 用它吐前端地图键）。"""
     return get_container().settings.providers.amap
 
 

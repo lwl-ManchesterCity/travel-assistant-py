@@ -1,4 +1,4 @@
-"""对应 Java client/impl/AmapRouteClient.java（高德路线分段规划，仅限流时回退规则路线）。"""
+"""高德路线分段规划：相邻两点逐段请求高德，仅在限流或配额保护时回退规则路线。"""
 
 import logging
 import re
@@ -16,7 +16,7 @@ from ..models.provider_metadata import ProviderMetadata
 from ..models.route_plan import RoutePlan
 from ..models.route_query import RouteQuery
 from ..models.route_step import RouteStep
-from ..utils import jround, round1
+from ..utils import round_half_up, round1
 from .amap_http import build_candidate_urls, fetch_json
 from .base import RouteClient
 from .rule_route import RuleBasedRouteClient
@@ -137,8 +137,8 @@ class AmapRouteClient(RouteClient):
         arrival = railway.get("arrival_stop") if isinstance(railway.get("arrival_stop"), dict) else {}
         return InterCityOption(
             mode=MODE_HIGH_SPEED_RAIL if _HIGH_SPEED_PREFIX.match(trip) else MODE_ORDINARY_RAIL,
-            round_trip_cost=max(1, jround(one_way_cost * 2)),
-            one_way_minutes=max(1, jround(self._parse_double(railway.get("time") or transit.get("duration")) / 60.0)),
+            round_trip_cost=max(1, round_half_up(one_way_cost * 2)),
+            one_way_minutes=max(1, round_half_up(self._parse_double(railway.get("time") or transit.get("duration")) / 60.0)),
             arrival_station=str(arrival.get("name") or "").strip() or None,
             arrival_location=_parse_stop_location(arrival.get("location")),
         )
@@ -158,7 +158,7 @@ class AmapRouteClient(RouteClient):
 
     def _validate_amap_configuration(self) -> None:
         if self._amap.api_key is None or not self._amap.api_key.strip():
-            raise TripPlanningException("已选择高德路线 provider，但尚未配置 travel.providers.amap.api-key")
+            raise TripPlanningException("已选择高德路线 provider，但尚未配置 AMAP_API_KEY")
 
     def _request_route_plan(self, query: RouteQuery) -> RoutePlan:
         # points 是"首个景点→…→末个景点→酒店"这条链路，相邻两点逐段各请求一次高德
@@ -243,7 +243,7 @@ class AmapRouteClient(RouteClient):
 
         return {
             "distance_km": distance_meters / 1000.0,
-            "duration_minutes": max(1, jround(duration_seconds / 60.0)),
+            "duration_minutes": max(1, round_half_up(duration_seconds / 60.0)),
             "instruction": instruction,
         }
 

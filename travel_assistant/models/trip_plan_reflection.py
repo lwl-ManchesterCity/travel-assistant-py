@@ -4,7 +4,10 @@ from .base import CamelModel
 
 
 class TripPlanReflection(CamelModel):
-    """对应 Java model/TripPlanReflection.java，字段名、顺序与零值默认值保持一致。"""
+    """一轮反思的结论：是否可接受、各项超标多少、严重度与总分、建议怎么动。
+
+    字段与零值默认值不要随手改：评审与选优都直接读这些名字和数值。
+    """
 
     acceptable: bool = False
     over_budget: bool = False

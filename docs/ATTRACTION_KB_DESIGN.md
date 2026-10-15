@@ -18,7 +18,7 @@
 
 ### 2.1 高德的能力边界（有实测出处）
 
-`MIGRATION_NOTES.md` §6.5 记录：高德 POI 接口**顶层 47 个字段没有价格字段**，
+`DESIGN_NOTES.md` 第三节 记录：高德 POI 接口**顶层 47 个字段没有价格字段**，
 `biz_ext.cost` 为空、`ticket_ordering` 恒为 `'0'`/null；酒店侧实测 10 家 `biz_ext.cost` 也全为空。
 
 | 追问会问到的东西 | 高德 | 现状 |
@@ -61,7 +61,7 @@
    恰恰**没有好的公开源可爬**。爬虫能补的部分与已有部分高度重叠，外加授权与长期维护成本。
 3. **运行时联网查。** 每次追问多几秒、有成本、结果不可复现。**联网只在建表那一刻用。**
 4. **`ticket_price` 缺失时填 0。** 会让系统把「不知道」当成「免费」——预算里门票那一桶直接少算一笔，
-   而且**不报错、不告警**。必须区分 `0`（确定免费）与 `null`（未知）。详见第七节。
+   而且**不报错、不告警**。必须区分 `0`（确定免费）与 `null`（未知）。详见第四节。
 
 ---
 
@@ -174,7 +174,7 @@ curl -s "https://restapi.amap.com/v3/place/text?key=$AMAP_KEY&keywords=浙江省
 **一条一条来，不要一次塞 30 条让模型批量输出**——批量必串味（把 A 的门票写到 B 上），
 且这是**看不出来的静默错误**。
 
-### 第 4 步：校验（见第七节，脚本必须实现）
+### 第 4 步：校验（见第四节，脚本必须实现）
 
 ### 第 5 步：抽检 5 条
 
@@ -235,13 +235,13 @@ curl -s "https://restapi.amap.com/v3/place/text?key=$AMAP_KEY&keywords=浙江省
 
 ## 九、判据（可机器核对）
 
-1. `attractions.json` 存在，≥ 30 条，每条通过第七节全部 7 条校验。
+1. `attractions.json` 存在，≥ 30 条，每条通过第四节全部 7 条校验。
 2. **没有任何一条的 `ticket_price` 是把「未知」写成了 `0`**——抽查若干条，其 `source_url` 指向的页面里确实有该价格。
 3. `tags` 全集 ⊆ `tags.json` 词表并集。
 4. 每条都有非空 `source_url`，且 URL 可访问（脚本可做 HEAD 请求抽查）。
 5. `amap_poi_id` 无重复。
 6. 建表脚本可重复运行：**同一份 fixture 跑两次，输出一致**（`updated_at` 除外）。
-7. 校验函数有 `pytest` 用例，覆盖第七节 7 条规则的正反例。
+7. 校验函数有 `pytest` 用例，覆盖第四节 7 条规则的正反例。
 8. **现有测试仍全绿**（本单不改现有代码，`pytest` 应仍为 158 passed 起）。
 
 ---
@@ -249,7 +249,7 @@ curl -s "https://restapi.amap.com/v3/place/text?key=$AMAP_KEY&keywords=浙江省
 ## 十、红线
 
 - **本单不改动 `travel_assistant/` 下的任何现有代码**，只新增数据文件、离线脚本与测试。
-- **不许用 `0` 表示未知票价**。第七节第 2 条是本单最重要的一条。
+- **不许用 `0` 表示未知票价**。第四节第 2 条是本单最重要的一条。
 - **不许跳过第 0 步**（确认高德给不给开放时间）就直接写脚本。
 - **不许一次让模型批量输出多条景点**——串味是静默错误。
 - **不许爬网页**。第三条已说明为什么（能爬到的与已有部分重叠，爬不到的没有好源）。
@@ -360,7 +360,7 @@ curl -s "https://restapi.amap.com/v3/place/text?key=$AMAP_KEY&keywords=浙江省
 | `FREE_KEYWORDS` 常量从未被引用 | 死代码，误导后来者以为有「自动判免费」逻辑 | 删除 |
 
 **注入脏数据实测**：6 类脏数据中 5 类被正确拦截；`tags` 混入词表外词走「丢弃并告警」而非丢整条——
-这是第七节规则 1 的明确规定，不是漏网。
+这是第四节规则 1 的明确规定，不是漏网。
 
 ### 7. 产出物
 
@@ -371,7 +371,7 @@ data/attractions.json           最终产物，通过全部 7 条校验
 scripts/kb/keywords.py                各城景点规格表（关键词 + 期望名 + category 覆写）
 scripts/kb/fetch_amap_fixture.py       第 1 步：抓骨架存 fixture（增量可重跑）
 scripts/kb/normalize.py                第 2 步：离线转换 + opentime2 解析 + 候选挑选
-scripts/kb/kb_schema.py                schema 与第七节 7 条校验
+scripts/kb/kb_schema.py                schema 与第四节 7 条校验
 scripts/kb/build_kb.py                 第 4 步：合成 + 校验 + 写出
 scripts/kb/fixtures/                   高德原始响应（含 biz_ext，只花一次配额）
 tests/test_attraction_kb.py            校验用例
@@ -467,7 +467,7 @@ tests/test_attraction_kb.py            校验用例
 > 理由：不改的话第 6 节的实测能力对追问 agent 不可见，等于任务没完成。
 > 这是 1 行常量 + 注释，无逻辑变更。
 
-### 8. 判据核对（交接文档第七节 7 条）
+### 8. 判据核对（交接文档第四节 7 条）
 
 | # | 判据 | 结果 |
 | --- | --- | --- |

@@ -4,7 +4,7 @@ from .base import CamelModel
 
 
 class LoopCritique(CamelModel):
-    """对应 Java model/LoopCritique.java。"""
+    """一轮评审的意见：动作、理由、预期效果，以及这条意见是谁给的（source）。"""
 
     action: Optional[str] = None
     reason: Optional[str] = None

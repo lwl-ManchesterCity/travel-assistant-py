@@ -116,34 +116,34 @@ OpenAI-Compatible 端点即可，本机实测用 DeepSeek 端点跑通全链路�
 <details>
 <summary>全部配置项</summary>
 
-| 环境变量 | Java `application.yml` | 默认值 |
-| --- | --- | --- |
-| `TRAVEL_LLM_ENABLED` | `travel.llm.enabled` | `false`（置 `true` 才走模型自选工具，否则按固定顺序纯规则取数） |
-| `TRAVEL_LLM_BASE_URL` | `travel.llm.base-url` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
-| `TRAVEL_LLM_API_KEY` / `DASHSCOPE_API_KEY` | `travel.llm.api-key` | 空 |
-| `TRAVEL_LLM_MODEL` | `travel.llm.model` | `qwen-plus` |
-| `TRAVEL_LLM_TEMPERATURE` | `travel.llm.temperature` | `0.2` |
-| `TRAVEL_PROVIDERS_ATTRACTION/WEATHER/HOTEL/ROUTE` | `travel.providers.*` | `amap` |
-| `AMAP_API_KEY` | `travel.providers.amap.api-key` | 空 |
-| `AMAP_BASE_URL` | `travel.providers.amap.base-url` | `http://restapi.amap.com` |
-| `AMAP_MOCK_RESPONSE` | `travel.providers.amap.mock-response` | `false` |
-| `AMAP_ROUTE_STRATEGY` / `AMAP_ROUTE_EXTENSIONS` | `route-strategy` / `route-extensions` | `0` / `base` |
-| `AMAP_CURL_FALLBACK_ENABLED` | `curl-fallback-enabled` | `true` |
-| `AMAP_POI_PAGE_SIZE` / `AMAP_CITY_LIMIT` | `poi-page-size` / `city-limit` | `10` / `true` |
-| `AMAP_WEB_JS_KEY` / `AMAP_SECURITY_JS_CODE` | `amap.web-js-key` / `amap.security-js-code` | 空。只被 `GET /api/map/config` 读 |
-| `TRAVEL_LOOP_ENABLED` | `travel.loop.enabled` | `true` |
-| `TRAVEL_LOOP_MAX_ROUNDS` | `travel.loop.max-rounds` | `3` |
-| `TRAVEL_LOOP_MAX_NO_IMPROVEMENT_ROUNDS` | `travel.loop.max-no-improvement-rounds` | `2` |
-| `TRAVEL_DB_DSN` | —（扩展） | `postgresql:///travel_assistant`，本地 socket、无密码 |
-| `SERVER_PORT` | `server.port` | `8080` |
+| 环境变量 | 默认值 |
+| --- | --- |
+| `TRAVEL_LLM_ENABLED` | `false`（置 `true` 才走模型自选工具，否则按固定顺序纯规则取数） |
+| `TRAVEL_LLM_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| `TRAVEL_LLM_API_KEY` / `DASHSCOPE_API_KEY` | 空 |
+| `TRAVEL_LLM_MODEL` | `qwen-plus` |
+| `TRAVEL_LLM_TEMPERATURE` | `0.2` |
+| `TRAVEL_PROVIDERS_ATTRACTION/WEATHER/HOTEL/ROUTE` | `amap` |
+| `AMAP_API_KEY` | 空 |
+| `AMAP_BASE_URL` | `http://restapi.amap.com` |
+| `AMAP_MOCK_RESPONSE` | `false` |
+| `AMAP_ROUTE_STRATEGY` / `AMAP_ROUTE_EXTENSIONS` | `0` / `base` |
+| `AMAP_CURL_FALLBACK_ENABLED` | `true` |
+| `AMAP_POI_PAGE_SIZE` / `AMAP_CITY_LIMIT` | `10` / `true` |
+| `AMAP_WEB_JS_KEY` / `AMAP_SECURITY_JS_CODE` | 空。只被 `GET /api/map/config` 读 |
+| `TRAVEL_LOOP_ENABLED` | `true` |
+| `TRAVEL_LOOP_MAX_ROUNDS` | `3` |
+| `TRAVEL_LOOP_MAX_NO_IMPROVEMENT_ROUNDS` | `2` |
+| `TRAVEL_DB_DSN` | `postgresql:///travel_assistant`，本地 socket、无密码 |
+| `SERVER_PORT` | `8080` |
 
-**兜底开关的两层语义（与 Java 一致）**：
+**兜底开关的两层语义**：
 
 1. `TRAVEL_PROVIDERS_<SOURCE>=amap` 走高德实现，其他任意值走规则/本地兜底实现（大小写不敏感）。
 2. 选中高德后：`AMAP_MOCK_RESPONSE=true` 直接返回兜底实现的数据；未配 `AMAP_API_KEY` 抛
-   "已选择高德X provider，但尚未配置 travel.providers.amap.api-key"；请求失败或结果为空时按各自源的规则
+   "已选择高德X provider，但尚未配置 AMAP_API_KEY"；请求失败或结果为空时按各自源的规则
    兜底（酒店/天气/路线回退规则实现，景点回退本地知识库，POI/天气缺某天用规则补全，
-   路线限流自动切规则估算）。景点/酒店的兜底与 Java 一样是静默的，只在 summary 与 `provider` 字段里体现来源。
+   路线限流自动切规则估算）。景点/酒店的兜底是静默的，只在 summary 与 `provider` 字段里体现来源。
 
 </details>
 
@@ -187,7 +187,7 @@ PYTHONPATH=. .venv/bin/python -m travel_assistant.main
 | `DELETE /api/preferences/{id}` | 删一条 |
 | `GET /api/map/config` | 前端地图配置（唯一不要求登录的端点） |
 
-除 `/api/map/config` 外都要求登录。字段名保持 Java 源的驼峰风格，
+除 `/api/map/config` 外都要求登录。字段名用驼峰风格，
 错误体统一是 `{code, message, details[], timestamp}`。
 
 **请求 / 响应字段、curl 示例、各端点行为细节见 [`docs/API.md`](docs/API.md)。**
@@ -199,7 +199,7 @@ travel_assistant/
   main.py             FastAPI 装配 + CORS + StaticFiles 挂载 + 启动
   db.py schema.sql    Postgres 连接池 + 建表（幂等执行）
   api/                auth / trip / ask / map 四个 controller + 鉴权依赖 + 错误处理
-  config/             settings（yml 等价）/ container（依赖注入）/ runtime_logger
+  config/             settings（配置项）/ container（依赖注入）/ runtime_logger
   models/             pydantic 模型，字段名对外保持驼峰
   clients/            高德四源 + 规则兜底 + selector + LLM
                       + 用户库三个 store（auth / preference / episode）
@@ -242,4 +242,4 @@ data/                 景点资料、标签表；chroma/ 是本地生成的索�
 | [`docs/ASK_AGENT_DESIGN.md`](docs/ASK_AGENT_DESIGN.md) | 方案追问：工具、护栏、意图判定 |
 | [`docs/ADJUST_AGENT_DESIGN.md`](docs/ADJUST_AGENT_DESIGN.md) | 追问驱动改方案 |
 | [`docs/API.md`](docs/API.md) | 接口参考 |
-| [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md) | Java → Python 映射表 + 全部不一致清单 |
+| [`docs/DESIGN_NOTES.md`](docs/DESIGN_NOTES.md) | 行为口径、设计取舍、验收记录 |

@@ -73,8 +73,8 @@
 8. `agent/planner_agent.py`：有必去景点的天走第二节基准点逻辑（先放必去景点、绕约束、扣票价、标 used、占名额；其余按 0-10/15/20 扩圈挑；酒店按 min-max 或维持）；代价写进 `optimizationNotes`。
 9. **两处 request 拷贝都带上第 4 格**：`request_optimization_strategy_service.copy_request` 与 `loop_planning_agent._copy_request`（漏一处＝静默丢数据；动手前 `grep "TripPlanRequest(" travel_assistant/` 数齐）。
 10. `static/js/app.js`：追问结果若是"指定景点且没提酒店"→ 多弹"挪酒店吗"确认；把 `pin_hint/pin_day/move_hotel` 转达给 `/adjust`。`index.html` 缓存戳 bump。
-11. `MIGRATION_NOTES.md`：记成第六处主动偏离。
-12. 测试：见第七节。
+11. `DESIGN_NOTES.md`：记成第四节。
+12. 测试：见第四节。
 
 ## 七、判据（可机器核对）
 

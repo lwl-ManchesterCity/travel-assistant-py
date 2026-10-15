@@ -1,6 +1,6 @@
-"""对应 Java 的 AttractionAgent / WeatherAgent / HotelAgent，但以 LangChain @tool 形式暴露给模型自主调用。
+"""把景点/天气/酒店那三个 Agent 包成 LangChain @tool，交给模型自主调用。
 
-工具内部仍然是 Java 的那三个 agent：模型决定调哪个、什么时候调，取到的数据按结构化对象写回 PlanningContext。
+工具内部调的还是那三个 Agent：模型决定调哪个、什么时候调，取到的数据按结构化对象写回 PlanningContext。
 """
 
 from langchain_core.tools import BaseTool, tool
@@ -59,7 +59,7 @@ def build_planning_tools(attraction_agent: AttractionAgent,
 
 
 def raise_planning_errors(context) -> None:
-    """把工具里暂存的取数异常按 Java 的方式抛出（保留原始提示文案）。"""
+    """取数结束后，把工具里暂存的异常抛出来（保留原始提示文案）。"""
     for error in context.errors:
         if isinstance(error, TripPlanningException):
             raise error

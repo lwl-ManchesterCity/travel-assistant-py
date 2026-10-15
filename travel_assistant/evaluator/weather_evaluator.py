@@ -1,4 +1,7 @@
-"""对应 Java evaluator/WeatherEvaluator.java。"""
+"""判定当天要不要优先安排室内。
+
+两条同时成立才算：用户勾了室内备选（prefers_indoor_backup），且当天天气是雨/雪/雷。
+"""
 
 from ..models.planning_constraints import PlanningConstraints
 from ..models.weather_info import WeatherInfo

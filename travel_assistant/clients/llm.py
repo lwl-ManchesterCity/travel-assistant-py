@@ -1,4 +1,4 @@
-"""对应 Java client/LlmClient.java + client/impl/OpenAiCompatibleLlmClient.java。
+"""LLM 客户端接口与唯一的 OpenAI-Compatible 实现。
 
 同一个 OpenAI-Compatible 端点（默认 DashScope compatible-mode v1 + qwen-plus），
 base_url / model / api-key 全部来自环境变量；api-key 只能来自环境变量，不进代码。
@@ -47,7 +47,7 @@ class OpenAiCompatibleLlmClient(LlmClient):
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=user_prompt),
             ])
-        except Exception as exception:  # noqa: BLE001 - 对齐 Java：任何失败都抛给调用方走规则兜底
+        except Exception as exception:  # noqa: BLE001 - 任何失败都转成 RuntimeError 抛给调用方走规则兜底
             status_code = getattr(exception, "status_code", None)
             if status_code is not None and int(status_code) >= 400:
                 raise RuntimeError(f"LLM 请求失败: HTTP {status_code} -> {exception}") from exception
@@ -71,7 +71,7 @@ class OpenAiCompatibleLlmClient(LlmClient):
         return self._chat_model
 
     def _resolve_base_url(self, base_url: str) -> str:
-        # Java: baseUrl 去尾斜杠后以 /v1 结尾则请求 /chat/completions，否则请求 /v1/chat/completions。
+        # baseUrl 去尾斜杠后不以 /v1 结尾就补上 /v1；SDK 在这个 base_url 后面接 /chat/completions。
         normalized = base_url[:-1] if base_url.endswith("/") else base_url
         if not normalized.endswith("/v1"):
             normalized = f"{normalized}/v1"

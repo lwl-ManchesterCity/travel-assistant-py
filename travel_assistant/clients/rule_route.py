@@ -1,4 +1,4 @@
-"""对应 Java client/impl/RuleBasedRouteClient.java（规则路线兜底引擎）。"""
+"""规则路线兜底引擎：按直线距离和固定时速估通勤（mock）。"""
 
 import math
 
@@ -10,7 +10,7 @@ from ..models.provider_metadata import ProviderMetadata
 from ..models.route_plan import RoutePlan
 from ..models.route_query import RouteQuery
 from ..models.route_step import RouteStep
-from ..utils import jround, round1
+from ..utils import round_half_up, round1
 from .base import RouteClient
 
 _PROVIDER = ProviderMetadata(
@@ -121,7 +121,7 @@ class RuleBasedRouteClient(RouteClient):
             speed_km_per_hour = 28
         else:
             speed_km_per_hour = 18
-        return max(10, jround(distance_km / speed_km_per_hour * 60))
+        return max(10, round_half_up(distance_km / speed_km_per_hour * 60))
 
     def _estimate_distance(self, fr: Location | None, to: Location | None) -> float:
         if fr is None or to is None:

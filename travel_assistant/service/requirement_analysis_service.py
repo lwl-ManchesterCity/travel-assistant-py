@@ -1,11 +1,11 @@
-"""对应 Java service/RequirementAnalysisService.java：模型只做需求理解，失败即回到规则关键词。"""
+"""模型只做需求理解，解析失败即回到规则关键词（见 _analyze_by_rules）。"""
 
 import json
 
 from ..clients.llm import LlmClient
 from ..models.planning_constraints import PlanningConstraints
 from ..models.trip_plan_request import TripPlanRequest
-from ..utils import java_list_to_string
+from ..utils import render_list
 from .preference_service import build_injection_block
 from .request_optimization_strategy_service import strip_system_requirements
 
@@ -91,7 +91,7 @@ class RequirementAnalysisService:
         if self._llm_client.is_available():
             try:
                 return self._analyze_by_llm(request, long_term_preferences, episodes, companions)
-            except Exception:  # noqa: BLE001 - 与 Java 一致：任何解析失败都退回规则结果
+            except Exception:  # noqa: BLE001 - 模型输出不可控，任何解析失败都退回规则结果
                 fallback = self._analyze_by_rules(request)
                 fallback.analysis_source = "rule-fallback"
                 return fallback
@@ -134,7 +134,7 @@ class RequirementAnalysisService:
             f"目的地：{self._safe(request.city)}",
             f"日期：{self._safe(request.start_date)} 至 {self._safe(request.end_date)}",
             f"预算：{request.budget}",
-            f"偏好：{java_list_to_string(request.preferences)}",
+            f"偏好：{render_list(request.preferences)}",
             f"交通：{self._safe(request.transportation)}",
             f"住宿：{self._safe(request.accommodation)}",
             f"额外要求：{self._safe(user_requirements)}",

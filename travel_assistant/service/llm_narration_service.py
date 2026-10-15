@@ -1,4 +1,4 @@
-"""对应 Java service/LlmNarrationService.java：只润色文案，不改变任何结构化结果。
+"""只润色文案，不改变任何结构化结果。
 
 一处扩展（2026-10-09，见 ATTRACTION_PIN_DESIGN.md）：`order_attractions` 会让模型给"某天必去景点"
 排游玩顺序。它只重排、绝不增删景点，且模型不可用/输出异常一律回落成原顺序——所以"不改变结构化结果"
@@ -12,7 +12,7 @@ from ..models.attraction import Attraction
 from ..models.day_plan import DayPlan
 from ..models.trip_plan_request import TripPlanRequest
 from ..models.weather_info import WeatherInfo
-from ..utils import java_list_to_string
+from ..utils import render_list
 
 _SYSTEM_PROMPT = "你是一个中文旅游规划文案助手。输出尽量自然、准确、简洁。"
 
@@ -120,7 +120,7 @@ class LlmNarrationService:
             "5. 这天从哪儿开始走、到哪儿收工，一律照下面给的\"当天起点\"\"当天收工\"写，"
             "不要自己推断，尤其不要写成\"建议从某酒店乘公共交通出发\"——游客是自行到达首站的。\n\n"
         )
-        builder += f"用户请求：{self._safe(request.city)}，预算 {request.budget} 元，偏好 {java_list_to_string(request.preferences)}。\n"
+        builder += f"用户请求：{self._safe(request.city)}，预算 {request.budget} 元，偏好 {render_list(request.preferences)}。\n"
         builder += f"日期：{self._safe(day_plan.date)}\n"
         builder += f"原始描述：{self._safe(day_plan.description)}\n"
         builder += f"交通方式：{self._safe(day_plan.transportation)}\n"
@@ -133,7 +133,7 @@ class LlmNarrationService:
             builder += (f"当天收工：{self._safe(route_plan.end_point.name if route_plan.end_point else None)}\n")
             builder += f"路线摘要：{self._safe(route_plan.summary)}\n"
         if day_plan.optimization_notes:
-            builder += f"自动优化说明：{java_list_to_string(day_plan.optimization_notes)}\n"
+            builder += f"自动优化说明：{render_list(day_plan.optimization_notes)}\n"
         return builder
 
     def _build_overall_prompt(self,
@@ -164,13 +164,13 @@ class LlmNarrationService:
         builder += f"日期：{self._safe(request.start_date)} 至 {self._safe(request.end_date)}\n"
         builder += f"预算：{request.budget} 元\n"
         builder += f"住宿偏好：{self._safe(request.accommodation)}\n"
-        builder += f"偏好：{java_list_to_string(request.preferences)}\n"
+        builder += f"偏好：{render_list(request.preferences)}\n"
         builder += (
             f"首日天气：{'未知' if not weather_info else self._safe(weather_info[0].day_weather)}\n"
         )
         builder += f"总天数：{0 if day_plans is None else len(day_plans)}\n"
         if planning_notes:
-            builder += f"规划备注：{java_list_to_string(planning_notes)}\n"
+            builder += f"规划备注：{render_list(planning_notes)}\n"
         builder += f"原始总结：{self._safe(fallback)}\n"
         return builder
 

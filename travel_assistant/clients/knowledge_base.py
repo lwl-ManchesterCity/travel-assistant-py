@@ -1,4 +1,4 @@
-"""对应 Java service/TravelKnowledgeService.java：本地知识库景点源。"""
+"""本地知识库景点源：杭州/北京/成都各有一组写死的景点，其余城市给通用占位。"""
 
 from ..models.attraction import Attraction
 from ..models.location import Location

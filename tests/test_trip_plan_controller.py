@@ -1,8 +1,8 @@
-"""对应 src/test/java/com/lwl/travelassistant/controller/TripPlanControllerTest.java。
+"""规划 / 改计划端点在 HTTP 上的样子。
 
-Java 用 @WebMvcTest + @MockBean 替换 TripPlanningService，Python 侧等价做法是覆盖 FastAPI 依赖。
-Java 测试类里没有 /adjust 的用例，三条 /adjust 断言取自 TripAdjustmentRequest 的
-@NotNull/@NotBlank 文案与 TripAdjustmentResponse 的字段集合。
+用覆盖 FastAPI 依赖的办法把 TripPlanningService 换成测试替身，绕开真规划逻辑。
+早期没有 /adjust 的用例，三条 /adjust 断言取自 TripAdjustmentRequest 的必填校验文案
+与 TripAdjustmentResponse 的字段集合。
 """
 
 import pytest
@@ -51,7 +51,7 @@ VALID_ADJUST_REQUEST = {
 
 
 class StubTripPlanningService:
-    """对应 @MockBean TripPlanningService。"""
+    """TripPlanningService 的替身：两个方法都返回编死的响应。"""
 
     def adjust_trip(self, request: TripAdjustmentRequest,
                     user_id: int | None = None) -> TripAdjustmentResponse:
@@ -135,7 +135,7 @@ def test_should_return_trip_plan_when_request_is_valid(client):
     assert body["overallSuggestions"] == "杭州 3 天旅行计划"
     assert body["days"][0]["transportation"] == "公共交通"
     assert body["budget"]["total"] == 2190
-    # loop 两字段按 Java 的驼峰属性名出到 HTTP 响应
+    # loop 两字段按前端读的驼峰键名出到 HTTP 响应
     assert body["loopSummary"] == {
         "enabled": True,
         "roundsExecuted": 2,
@@ -163,7 +163,7 @@ def test_should_return_adjustment_response_when_adjust_request_is_valid(client):
 
     assert response.status_code == 200
     body = response.json()
-    # Java 的 TripAdjustmentResponse 只有这三个属性，adjustmentSource 不进响应体
+    # TripAdjustmentResponse 只有这三个字段，adjustment_source 不进响应体
     assert set(body) == {"tripPlan", "updatedRequest", "appliedChanges"}
     assert body["appliedChanges"] == ["已将预算调整为 5000 元", "已切换为经济型酒店偏好"]
     assert body["updatedRequest"]["budget"] == 5000

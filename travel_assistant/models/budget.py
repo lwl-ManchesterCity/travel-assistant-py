@@ -8,7 +8,7 @@ class Budget(CamelModel):
     total_hotels: int = 0
     total_meals: int = 0
     total_transportation: int = 0
-    # 城际往返票价（Java 没有这一桶）：先从总预算里扣掉，剩下的才按天分。
+    # 城际往返票价（本项目新增的一桶）：先从总预算里扣掉，剩下的才按天分。
     total_intercity: int = 0
     intercity_mode: Optional[str] = None
     intercity_estimated: bool = False

@@ -1,4 +1,4 @@
-"""对应 Java config/TravelRuntimeLogger.java：启动时打印一份运行时配置概览。
+"""启动时打印一份运行时配置概览。
 
 只打印 provider 名、base-url 和开关，不打印任何 api-key。
 """

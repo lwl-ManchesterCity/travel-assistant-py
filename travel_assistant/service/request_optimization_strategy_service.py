@@ -1,7 +1,7 @@
-"""对应 Java service/RequestOptimizationStrategyService.java：把批评动作翻译成下一轮请求参数。
+"""把批评动作翻译成下一轮请求参数。
 
-Java 里这个类被 LoopDecisionExecutor 与 TripAdjustmentAgent 共用；本轮只搬 Loop 需要的那部分调用方，
-方法本身按源码整体搬全，便于下一轮 TripAdjustmentAgent 直接复用。
+LoopDecisionExecutor 与 TripAdjustmentAgent 共用这个服务；本轮只接入 Loop 需要的那部分调用方，
+方法本身整体实现，便于下一轮 TripAdjustmentAgent 直接复用。
 """
 
 import re
@@ -98,7 +98,7 @@ class RequestOptimizationStrategyService:
             transportation=request.transportation,
             accommodation=request.accommodation,
             extra_requirements=self._sanitize_persisted_extra_requirements(request.extra_requirements),
-            # 这三格是 Java 没有的扩展，必须显式带上：漏一格的后果是用户改一次行程，
+            # 这三格是后加的扩展，必须显式带上：漏一格的后果是用户改一次行程，
             # 上次填的住宿位置与"整趟住同一家"就静默消失了。
             hotel_anchor=request.hotel_anchor,
             day_hotel_anchors=dict(request.day_hotel_anchors) if request.day_hotel_anchors else None,

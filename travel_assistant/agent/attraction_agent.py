@@ -1,4 +1,4 @@
-"""对应 Java agent/AttractionAgent.java：按偏好排序候选景点，数据本身来自 client 层。"""
+"""景点检索：把命中偏好的候选排到前面，数据本身来自 client 层。"""
 
 from ..models.attraction import Attraction
 from ..models.attraction_query import AttractionQuery

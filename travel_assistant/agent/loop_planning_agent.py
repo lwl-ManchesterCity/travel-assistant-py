@@ -1,4 +1,4 @@
-"""对应 Java agent/LoopPlanningAgent.java：生成-评估-反思-修正的多轮闭环。
+"""生成-评估-反思-修正的多轮闭环。
 
 每一轮都复用 PlannerInputBuilder -> PlannerAgent 这条既有链路（取数仍由 LangChain 取数智能体
 自选工具完成），本类只做评分、停止条件与下一轮请求的调整，不引入新的取数顺序。
@@ -14,7 +14,7 @@ from ..models.loop_iteration_trace import LoopIterationTrace
 from ..models.trip_plan import TripPlan
 from ..models.trip_plan_reflection import TripPlanReflection
 from ..models.trip_plan_request import TripPlanRequest
-from ..utils import java_list_to_string
+from ..utils import render_list
 from .llm_critic_agent import LlmCriticAgent
 from .loop_decision_executor import LoopDecisionExecutor
 from .planner_agent import PlannerAgent
@@ -281,12 +281,12 @@ class LoopPlanningAgent:
 
     def _build_request_signature(self, request: TripPlanRequest) -> str:
         return "|".join((
-            _java_concat(request.city),
-            _java_concat(request.budget),
-            _java_concat(request.accommodation),
-            _java_concat(request.transportation),
-            _java_concat(request.extra_requirements),
-            _java_concat(request.preferences),
+            _signature_part(request.city),
+            _signature_part(request.budget),
+            _signature_part(request.accommodation),
+            _signature_part(request.transportation),
+            _signature_part(request.extra_requirements),
+            _signature_part(request.preferences),
         ))
 
     def _copy_request(self, request: TripPlanRequest) -> TripPlanRequest:
@@ -309,10 +309,10 @@ class LoopPlanningAgent:
         )
 
 
-def _java_concat(value: object) -> str:
-    """Java 字符串拼接语义：null 渲染成 "null"，List 渲染成 List.toString()。"""
+def _signature_part(value: object) -> str:
+    """拼签名的取值口径：None 渲染成 "null"，列表走 `render_list`，其余走 `str()`。"""
     if value is None:
         return "null"
     if isinstance(value, list):
-        return java_list_to_string(value)
+        return render_list(value)
     return str(value)

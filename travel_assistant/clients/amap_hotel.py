@@ -1,4 +1,4 @@
-"""对应 Java client/impl/AmapHotelClient.java（高德酒店检索，异常与空结果都回退规则酒店）。"""
+"""高德酒店检索：按关键词搜酒店，异常与空结果都回退规则酒店。"""
 
 import logging
 
@@ -8,7 +8,7 @@ from ..models.hotel import Hotel
 from ..models.hotel_query import HotelQuery
 from ..models.location import Location
 from ..models.provider_metadata import ProviderMetadata
-from ..utils import jround
+from ..utils import round_half_up
 from .amap_http import build_candidate_urls, fetch_json
 from .base import HotelClient
 from .rule_hotel import RuleBasedHotelClient
@@ -36,7 +36,7 @@ class AmapHotelClient(HotelClient):
                 log.warning("高德酒店检索未返回有效结果，回退到规则酒店: city=%s", query.city)
                 return self._fallback_client.recommend_hotels(query)
             return hotels
-        except Exception as exception:  # noqa: BLE001 - 与 Java 的 catch (Exception) 一致
+        except Exception as exception:  # noqa: BLE001 - 检索失败就退规则酒店，任何异常都不该打断规划
             log.warning("高德酒店检索失败，回退到规则酒店: city=%s, reason=%s", query.city, exception)
             return self._fallback_client.recommend_hotels(query)
 
@@ -96,7 +96,7 @@ class AmapHotelClient(HotelClient):
 
     def _validate_amap_configuration(self) -> None:
         if self._amap.api_key is None or not self._amap.api_key.strip():
-            raise TripPlanningException("已选择高德酒店 provider，但尚未配置 travel.providers.amap.api-key")
+            raise TripPlanningException("已选择高德酒店 provider，但尚未配置 AMAP_API_KEY")
 
     def _request_hotels(self, query: HotelQuery) -> list[Hotel]:
         response = self._fetch_hotel_response(query)
@@ -198,7 +198,7 @@ class AmapHotelClient(HotelClient):
             cost = self._safe_string(biz_ext.get("cost"), "")
             if cost.strip():
                 try:
-                    return self._normalize_hotel_cost(jround(float(cost)), query)
+                    return self._normalize_hotel_cost(round_half_up(float(cost)), query)
                 except ValueError:
                     pass
         return self._infer_estimated_cost(query)

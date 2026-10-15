@@ -1,8 +1,8 @@
-"""对应 Java agent/ReflectionAgent.reflectTripPlan 的行为断言。
+"""ReflectionAgent.reflect_trip_plan 的行为断言。
 
-Java 侧没有 ReflectionAgentTest，这里的期望值全部按源码公式手算：
-expectedRouteLimit = 天数 * 180、acceptable 阈值 overallScore <= 15、
-clampScore = max(0, min(100, round(...)))，以及 recommendTripAction 的分支优先级。
+没有可参照的既有测试，这里的期望值全部按实现里的公式手算：
+expected_route_limit = 天数 * 180、acceptable 阈值 overall_score <= 15、
+_clamp_score = max(0, min(100, round(...)))，以及 _recommend_trip_action 的分支优先级。
 """
 
 from travel_assistant.agent.reflection_agent import ReflectionAgent, TripPlanRequestView

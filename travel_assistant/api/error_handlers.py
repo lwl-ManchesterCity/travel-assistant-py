@@ -1,4 +1,8 @@
-"""对应 Java exception/GlobalExceptionHandler.java（@RestControllerAdvice）。"""
+"""异常 → HTTP 响应的统一出口。
+
+所有错误都走同一个 ApiErrorResponse 信封（code / message / details / timestamp），
+前端只写一套解析。校验失败的 details 用 `字段: 人话` 的格式。
+"""
 
 import logging
 from datetime import datetime
@@ -26,8 +30,8 @@ _QUOTA_ERROR_DETAIL = "地图数据接口调用过于频繁，请稍后重试"
 
 
 def _field_name(loc: tuple) -> str:
-    # Spring 的 FieldError.getField() 只有驼峰属性名：FastAPI 的 loc 多了 body 前缀，
-    # 且字段缺失时给的是 Python 蛇形名，所以统一转成 Java 侧的驼峰名。
+    # 信封里的字段名一律是驼峰：FastAPI 的 loc 多了 body 前缀，字段缺失时给的又是蛇形名，
+    # 所以统一转成驼峰再拼出去。
     parts = [to_camel(str(item)) for item in loc if item != "body"]
     return ".".join(parts) if parts else "body"
 
@@ -35,7 +39,7 @@ def _field_name(loc: tuple) -> str:
 def _error_message(error: dict) -> str:
     message = str(error.get("msg", ""))
     if message.startswith(_VALUE_ERROR_PREFIX):
-        # 自定义校验器里抛出的文案就是 Java 的 message，去掉 pydantic 自己加的前缀
+        # 自定义校验器抛出的就是给人看的那句话，去掉 pydantic 自己加上的 `Value error, ` 前缀
         return message[len(_VALUE_ERROR_PREFIX):]
     return message
 
@@ -48,7 +52,7 @@ def _json_response(status_code: int, error_response: ApiErrorResponse) -> JSONRe
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    """注册三类异常处理，与 Java 的三个 @ExceptionHandler 一一对应。"""
+    """把全部异常处理挂到 app 上：校验失败、未登录、用户名重名、规划失败，以及兜底 500。"""
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_exception(request: Request, exc: RequestValidationError) -> JSONResponse:

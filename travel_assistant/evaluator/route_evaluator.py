@@ -1,4 +1,8 @@
-"""对应 Java evaluator/RouteEvaluator.java。"""
+"""判定当天路线是否过长，并算出超出的时长与里程。
+
+时长上限随节奏（relaxed_pace）与室内建议调整，见 determine_route_limit_minutes；
+里程上限是 _DISTANCE_LIMIT_KM，两者任一超出就算过长。
+"""
 
 from ..models.planning_constraints import PlanningConstraints
 from ..models.route_plan import RoutePlan
@@ -17,7 +21,7 @@ class RouteEvaluator:
         return route_limit
 
     def is_route_too_long(self, route_plan: RoutePlan | None, constraints: PlanningConstraints | None, current_weather: WeatherInfo | None, indoor_adjustment_recommended: bool) -> bool:
-        # current_weather 在 Java 里就是这个签名（判定只用 routeLimit 与里程阈值），保留形参不改变判定。
+        # current_weather 是保留的形参：判定只用 routeLimit 与里程阈值，天气不参与这条判定。
         if route_plan is None:
             return False
         route_limit = self.determine_route_limit_minutes(constraints, indoor_adjustment_recommended)

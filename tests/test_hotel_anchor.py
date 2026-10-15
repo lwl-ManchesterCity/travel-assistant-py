@@ -1,7 +1,7 @@
 """选酒店补格子（docs/ADJUST_AGENT_DESIGN.md 第 9 节 9.7 的十条判据）的行为断言。
 
 这一组用例钉的是"资格"而不是"分数"：填了住宿位置后，进入打分的候选集合怎么变、
-整趟住同一家时两处换店入口是否都被堵住、以及不填时是否与 Java 逐字一致。
+整趟住同一家时两处换店入口是否都被堵住、以及不填时是否与改动前逐字一致。
 """
 
 from travel_assistant.agent.planner_agent import PlannerAgent

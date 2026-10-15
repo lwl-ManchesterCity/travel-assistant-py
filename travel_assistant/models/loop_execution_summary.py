@@ -4,7 +4,7 @@ from .base import CamelModel
 
 
 class LoopExecutionSummary(CamelModel):
-    """对应 Java model/LoopExecutionSummary.java。"""
+    """闭环跑完的概况：是否启用、跑了几轮、选中哪一轮、为什么停。"""
 
     enabled: bool = False
     rounds_executed: int = 0

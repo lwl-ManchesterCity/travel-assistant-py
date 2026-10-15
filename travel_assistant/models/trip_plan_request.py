@@ -1,9 +1,9 @@
-"""对应 Java model/TripPlanRequest.java，含 Jakarta Validation 的等价校验。
+"""规划请求体，字段校验也在这里做。
 
-`hotel_anchor` / `day_hotel_anchors` / `hotel_continuity` 三个字段是 Java 源项目没有的扩展
-（见 MIGRATION_NOTES.md「主动偏离源项目」一节）：用户想指定住宿位置或要求整趟住同一家时，
+`hotel_anchor` / `day_hotel_anchors` / `hotel_continuity` 三个字段是本项目新增的扩展
+（见 docs/DESIGN_NOTES.md 第四节）：用户想指定住宿位置或要求整趟住同一家时，
 这句话在现有链路里没有任何格子承接，只能落进 `extra_requirements` 的自由文本而没人读。
-三个都可空，不填时行为与 Java 完全一致。
+三个都可空，都不填时整套住宿锚点逻辑不启用。
 """
 
 import re
@@ -19,7 +19,7 @@ _CONTINUITY_VALUES = ("strict", "optimal")
 
 
 class TripPlanRequest(CamelModel):
-    # validate_default：JSON 里缺字段等价于 Jackson 留出 null，Java 的 @NotBlank/@Min 同样会触发。
+    # validate_default：字段缺失也要跑一遍校验器，否则缺字段会被当成"没提供、跳过校验"。
     model_config = ConfigDict(validate_default=True)
 
     city: Optional[str] = None
@@ -33,10 +33,10 @@ class TripPlanRequest(CamelModel):
     hotel_anchor: Optional[str] = None
     day_hotel_anchors: Optional[dict[int, str]] = None
     hotel_continuity: Optional[str] = None
-    # 某天必去的景点名（Java 没有这格）：{第几天(0起) → 景点名列表}，一天可多个。
+    # 某天必去的景点名（本项目新增的一格）：{第几天(0起) → 景点名列表}，一天可多个。
     # 与住宿锚点同类——是"这句话没有格子承接"补出来的输入格子，见 ATTRACTION_PIN_DESIGN.md。
     day_attraction_pins: Optional[dict[int, list[str]]] = None
-    # 出发城市（Java 没有这格）：前端那个"出发城市"输入框以前只做预览展示、不进请求体。
+    # 出发城市（本项目新增的一格）：前端那个"出发城市"输入框以前只做预览展示、不进请求体。
     # 填了才会算城际往返票价、才会把第一天的起点换成到达口岸；空＝整套大交通逻辑不启用。
     origin_city: Optional[str] = None
 

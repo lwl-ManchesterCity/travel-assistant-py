@@ -1,4 +1,4 @@
-"""对应 Java client/impl/RuleBasedHotelClient.java（mock 酒店源）。"""
+"""规则酒店源：按每日预算档位给写死的酒店（mock）。"""
 
 from ..models.hotel import Hotel
 from ..models.hotel_query import HotelQuery

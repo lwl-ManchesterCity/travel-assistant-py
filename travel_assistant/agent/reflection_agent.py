@@ -1,8 +1,7 @@
-"""对应 Java agent/ReflectionAgent.java。
+"""反思评估：单日那份的实现落在 evaluator/daily_plan_evaluator.py（第二轮定下的落位），这里只做薄封装回指。
 
-reflectDailyPlan 的实现仍在 evaluator/daily_plan_evaluator.py（第二轮批准的落位约定），
-这里按那个约定做薄封装回指，不复制第二份判定逻辑；reflectTripPlan 及其评分/动作私有方法
-是 Java 里 Python 侧原本完全缺失的部分，按源码逐条搬过来。
+`reflect_daily_plan` 不复制第二份判定逻辑；`reflect_trip_plan` 及其评分/动作私有方法是
+整份方案这一层才有的东西——按预算/路线/天气/体验四项严重度打分，并给出建议动作。
 """
 
 from dataclasses import dataclass
@@ -14,7 +13,7 @@ from ..models.route_plan import RoutePlan
 from ..models.trip_plan import TripPlan
 from ..models.trip_plan_reflection import TripPlanReflection
 from ..models.weather_info import WeatherInfo
-from ..utils import jround
+from ..utils import round_half_up
 
 _RISKY_WEATHER_KEYWORDS = ("雨", "雪", "雷")
 _ACCEPTABLE_OVERALL_SCORE_LIMIT = 15
@@ -22,7 +21,7 @@ _ACCEPTABLE_OVERALL_SCORE_LIMIT = 15
 
 @dataclass
 class TripPlanRequestView:
-    """对应 Java ReflectionAgent.TripPlanRequestView record。"""
+    """评分要用到的请求侧视图，眼下只有用户当初填的预算。"""
 
     requested_budget: int
 
@@ -165,14 +164,14 @@ class ReflectionAgent:
         if not over_budget or request_view is None or request_view.requested_budget <= 0:
             return 0
         ratio = budget_overflow_amount / request_view.requested_budget
-        return self._clamp_score(jround(20 + ratio * 100))
+        return self._clamp_score(round_half_up(20 + ratio * 100))
 
     def _calculate_route_severity(self, route_overflow_minutes: int, trip_plan: TripPlan) -> int:
         if route_overflow_minutes <= 0 or trip_plan.days is None or len(trip_plan.days) == 0:
             return 0
         expected_route_limit = len(trip_plan.days) * 180
         ratio = 0 if expected_route_limit <= 0 else route_overflow_minutes / expected_route_limit
-        return self._clamp_score(jround(15 + ratio * 120))
+        return self._clamp_score(round_half_up(15 + ratio * 120))
 
     def _calculate_weather_severity(self, indoor_adjustment_recommended: bool, trip_plan: TripPlan) -> int:
         if (not indoor_adjustment_recommended
@@ -193,7 +192,7 @@ class ReflectionAgent:
         if remaining_budget <= threshold:
             return 0
         ratio = (remaining_budget - threshold) / request_view.requested_budget
-        return self._clamp_score(jround(10 + ratio * 80))
+        return self._clamp_score(round_half_up(10 + ratio * 80))
 
     def _calculate_overall_score(self,
                                  budget_severity: int,

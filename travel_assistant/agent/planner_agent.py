@@ -1,15 +1,15 @@
-"""对应 Java agent/PlannerAgent.java：单轮行程生成的规则主体。
+"""单轮行程生成的规则主体。
 
-判定与选点全部在这里按 Java 规则复现；模型只负责需求理解与文案润色，不产出 POI、坐标、价格或天气。
+判定与选点全部在这里按既定规则算；模型只负责需求理解与文案润色，不产出 POI、坐标、价格或天气。
 
-偏离源项目的一处（详见 MIGRATION_NOTES.md 与 docs/ADJUST_AGENT_DESIGN.md 第 9 节）：用户填了
-住宿位置或要求整趟住同一家时，这里会先按锚点筛掉圈外候选、再按远近分档，同档内仍跑 Java 原样的
-三项打分；打分公式与既有常数一个字没改。Java 没有这三格，因为它的请求里没有对应字段。
+本项目加的一处（详见 docs/ADJUST_AGENT_DESIGN.md 第 9 节）：用户填了
+住宿位置或要求整趟住同一家时，这里会先按锚点筛掉圈外候选、再按远近分档，同档内仍跑原来那套
+三项打分；打分公式与既有常数一个字没改。
 
-第二处偏离（2026-10-09）：选景点时同样让它贴酒店——候选先按离酒店 5/10km 分档、近档整档先选。
+第二处改动（2026-10-09）：选景点时同样让它贴酒店——候选先按离酒店 5/10km 分档、近档整档先选。
 **这一层已在 2026-10-12 撤掉**，理由见下一段，也见 docs/PLANNER_SELECTION_DESIGN.md。
 
-第三处偏离（2026-10-12，见 docs/PLANNER_SELECTION_DESIGN.md）：酒店和景点不再互相依赖。
+第三处改动（2026-10-12，见 docs/PLANNER_SELECTION_DESIGN.md）：酒店和景点不再互相依赖。
 原来是一条环——①按分数挑一批景点（完全不看地理）→ ②把酒店放在这批景点的算术平均点上
 → ③再按"离酒店 15km 内"重挑一批景点。③ 之后 ① 那批就不存在了，② 依据的是一批
 最终不存在的景点。现在换成：
@@ -44,17 +44,17 @@ from ..models.route_query import RouteQuery
 from ..models.trip_plan import TripPlan
 from ..models.trip_plan_request import TripPlanRequest
 from ..models.weather_info import WeatherInfo
-from ..utils import jround
+from ..utils import round_half_up
 from .route_agent import RouteAgent
 
-# 选景点（2026-10-12 第三次偏离 Java，见 docs/PLANNER_SELECTION_DESIGN.md 四）：
+# 选景点（2026-10-12 第三次改动，见 docs/PLANNER_SELECTION_DESIGN.md 四）：
 # 酒店跟着动线的末站走，景点跟酒店无关——顺序只由"起点→…→收工点"定。
 _ARRIVAL_DAY = "arrival"
 _DEPARTURE_DAY = "departure"
 _ORDINARY_DAY = "ordinary"
 
 # 到达日／离开日的"附近"半径：10km 起步，圈里不够挑就逐级放宽，最后一级 None＝不限范围
-# （纯按分数，等于 Java 原样）。机场都在远郊（萧山机场离西湖 25km+），没有最后这一级会选空。
+# （纯按分数，不限范围）。机场都在远郊（萧山机场离西湖 25km+），没有最后这一级会选空。
 _ANCHOR_DAY_RADII_KM: tuple[float | None, ...] = (10.0, 20.0, 30.0, None)
 # 圈里少于这个数就不叫"挑"了，只是没得选——放宽一级再挑。
 _ANCHOR_DAY_MIN_CHOICES = 2
@@ -193,7 +193,7 @@ def estimate_trip_spend(budget: int,
 
 
 class _DailyPlanDecision:
-    """对应 Java PlannerAgent.DailyPlanDecision。"""
+    """一天的定稿：酒店/景点/交通/三餐/路线/花费，外加几条要写进结果的备注。"""
 
     def __init__(self, hotel: Hotel | None,
                  attractions: list[Attraction],
@@ -486,7 +486,7 @@ class PlannerAgent:
         # 连放宽到 50 都排不出来：还是得给一个——`_build_meals` 和 `_build_description`
         # 都拿 attractions[0]／[-1] 当锚，空列表会直接炸。既然非给不可，就挑**离起点最近**的：
         # 这天反正已经超上限了，再挑个"分数最高但更远"的只会更赶。起点未知时全部并列，
-        # 退回分数最高的那个（与 Java 原样一致）。超了多少由 ReflectionAgent 写成备注，不静默。
+        # 退回分数最高的那个。超了多少由 ReflectionAgent 写成备注，不静默。
         fallback = self._nearest_unused(candidates, start, used_attraction_keys)
         return [fallback] if fallback is not None else []
 
@@ -603,11 +603,11 @@ class PlannerAgent:
                                           constraints: PlanningConstraints | None,
                                           current_weather: WeatherInfo | None,
                                           daily_budget_limit: int) -> list[Attraction]:
-        # Java: Comparator.comparingDouble(score).reversed().thenComparingInt(ticketPrice)
+        # 排序：分数降序，同分按门票价升序（便宜的先排）。
         #
         # 2026-10-09 那层"先按离酒店 5/10 公里分档、近的整档先选"已在 2026-10-12 撤掉：
         # 它让顺序由酒店推出来，而酒店又要拿顺序去定，绕成一个环（见模块 docstring）。
-        # 远近现在由 `_compose_day_route` 的"插入增量"在选的那一步管，这里回到 Java 原样。
+        # 远近现在由 `_compose_day_route` 的"插入增量"在选的那一步管，这里只按分数排。
         return sorted(
             attractions,
             key=lambda attraction: (
@@ -773,7 +773,7 @@ class PlannerAgent:
         best_km = ranked[0][1]
         tied = [(order, km) for order, km in ranked if km - best_km <= _PIN_ORDER_TOLERANCE_KM]
         if len(tied) == 1:
-            return tied[0][0], f"先后按少绕路排，全程约 {jround(best_km)} 公里"
+            return tied[0][0], f"先后按少绕路排，全程约 {round_half_up(best_km)} 公里"
         chosen = self._llm_narration_service.choose_attraction_order(
             [order for order, _ in tied], [km for _, km in tied], weather, endpoint_label)
         if chosen is None:
@@ -783,7 +783,7 @@ class PlannerAgent:
             chosen_order, why = chosen
             reason = "先后按少绕路排" if chosen_order is tied[0][0] else "里程相近，先后按时段常识调整"
             reason = f"{reason}（{why}）" if why else reason
-        return chosen_order, f"{reason}，全程约 {jround(self._route_length_km(chosen_order, start, endpoint))} 公里"
+        return chosen_order, f"{reason}，全程约 {round_half_up(self._route_length_km(chosen_order, start, endpoint))} 公里"
 
     def _apply_day_pins(self,
                         decision: "_DailyPlanDecision",
@@ -861,7 +861,7 @@ class PlannerAgent:
             extra_km = route_plan.total_distance_km - old_route.total_distance_km
             extra_minutes = route_plan.total_duration_minutes - old_route.total_duration_minutes
             if extra_km >= 0.1 or extra_minutes >= 1:
-                note += f"；通勤多 {jround(extra_km)} 公里 / {extra_minutes} 分钟"
+                note += f"；通勤多 {round_half_up(extra_km)} 公里 / {extra_minutes} 分钟"
         notes = list(decision.notes)
         notes.append(note)
         return _DailyPlanDecision(hotel, merged, decision.transportation, decision.meals,
@@ -960,7 +960,7 @@ class PlannerAgent:
             if self._recommends(reflection, "reduce_budget") and not hotel_adjusted:
                 self._append_diagnosis(notes, evaluation.budget_diagnosis)
                 cheaper_hotel = self._select_budget_friendly_hotel(hotels, working_attractions, daily_budget_limit, working_hotel)
-                # Java 这里是引用比较（!=），不是字段相等比较，所以必须用 is not。
+                # 这里判的是"是不是同一家"，不是字段相等，所以必须用 is not。
                 if cheaper_hotel is not None and cheaper_hotel is not working_hotel:
                     working_hotel = cheaper_hotel
                     hotel_adjusted = True
@@ -1038,7 +1038,7 @@ class PlannerAgent:
     def _determine_hard_budget_attraction_limit(self, daily_budget_limit: int) -> int:
         """低预算才砍景点；酒店贵不再是砍景点的理由。
 
-        Java 那条"一晚占日预算 52%/65% 就把景点砍到 2/1 个"与新的住宿上限管的是同一笔钱：
+        "一晚占日预算 52%/65% 就把景点砍到 2/1 个"那条规则与住宿上限管的是同一笔钱：
         住宿该在选店那一步由 `_cap_hotel_candidates` 拦住；拦不住（候选池里真没有便宜的）时，
         正确表现是方案标红超支，而不是偷偷少排一个景点——用户看到的天数安排会被误判成正常。
         """
@@ -1443,8 +1443,8 @@ class PlannerAgent:
         动线是有方向的，平均值落在中间，等于两头都要跑；晚上你人在末站。
         `attractions` 传进来的顺序就是游玩顺序。
 
-        价格折成公里当量（每 60 元＝1 公里）才能跟距离直接相加：Java 那套"一晚超日预算 55% 才罚 12 分"
-        的阶梯，在 6~110 公里的距离跨度面前几乎不起作用，于是近的贵的稳赢——2000 预算那单
+        价格折成公里当量（每 60 元＝1 公里）才能跟距离直接相加："一晚超日预算 55% 才罚 12 分"
+        那套阶梯，在 6~110 公里的距离跨度面前几乎不起作用，于是近的贵的稳赢——2000 预算那单
         每晚 380、每天只剩一个景点就是这么来的。评分同理给得很小（0.1 分＝0.5 公里当量）。
 
         **`budget_cap` 给了就换成"离理想价位越远越差"**（理想价＝上限×0.78，也就是日预算的 0.35）。
@@ -1507,9 +1507,9 @@ class PlannerAgent:
             return _LOCAL_TRANSPORT_FLAT_COST
         mode = route_plan.transportation_mode or ""
         if "自驾" in mode:
-            return max(_LOCAL_TRANSPORT_FLAT_COST, jround(route_plan.total_distance_km * _SELF_DRIVE_COST_PER_KM))
+            return max(_LOCAL_TRANSPORT_FLAT_COST, round_half_up(route_plan.total_distance_km * _SELF_DRIVE_COST_PER_KM))
         if "打车" in mode:
-            return max(_TAXI_MIN_COST, jround(route_plan.total_distance_km * _TAXI_COST_PER_KM))
+            return max(_TAXI_MIN_COST, round_half_up(route_plan.total_distance_km * _TAXI_COST_PER_KM))
         return _LOCAL_TRANSPORT_FLAT_COST
 
     def _estimate_hotel_cost(self, hotel: Hotel | None) -> int:

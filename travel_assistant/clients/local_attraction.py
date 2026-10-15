@@ -1,4 +1,4 @@
-"""对应 Java client/impl/InMemoryAttractionClient.java（mock 景点源）。"""
+"""本地景点源：拿 TravelKnowledgeService 里写死的数据当 mock 景点用。"""
 
 from ..models.attraction import Attraction
 from ..models.attraction_query import AttractionQuery

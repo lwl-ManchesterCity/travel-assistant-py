@@ -1,7 +1,7 @@
-"""对应 Java agent/LlmCriticAgent.java 的行为断言。
+"""LlmCriticAgent 的行为断言。
 
-Java 侧没有 LlmCriticAgentTest，期望文案取自源码：规则批评的六个分支 action/reason/expectedOutcome、
-source 取值（llm / rule / rule-fallback）、失败回退时追加的备注，以及 normalizeAction 的枚举白名单。
+没有可参照的既有测试，期望文案全部按实现源码推得：规则批评的六个分支 action/reason/expectedOutcome、
+source 取值（llm / rule / rule-fallback）、失败回退时追加的备注，以及枚举白名单对未知 action 的兜底。
 """
 
 from travel_assistant.agent.llm_critic_agent import LlmCriticAgent
@@ -105,7 +105,7 @@ def test_rule_critique_without_reflection_should_only_see_plan_facts():
 
     critique = agent.critique(_request(), _plan(False, -600), None)
 
-    # 没有 reflection 时四个严重度全为 0，Java 的分支只能落到最后的 else
+    # 没有 reflection 时四个严重度全为 0，分支只能落到最后的 else
     assert critique.action == "STOP"
     assert critique.reason == "当前方案整体可接受，无需进入下一轮"
     assert critique.notes == ["当前总预算超支 600 元"]
@@ -180,7 +180,7 @@ def test_missing_llm_fields_should_use_defaults():
 
 
 def test_non_object_llm_payload_should_use_all_defaults():
-    # Jackson 对数组节点取 path("action") 得到 MissingNode，等价于字段缺失，全部走默认值
+    # LLM 吐回的是数组不是对象：按名取字段全部落空，等价于字段缺失，全部走默认值
     llm = _StubLlmClient(available=True, response="[1, 2]")
 
     critique = LlmCriticAgent(llm).critique(_request(), _plan(True, 24), _acceptable_reflection())

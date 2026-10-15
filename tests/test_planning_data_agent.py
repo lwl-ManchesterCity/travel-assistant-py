@@ -1,8 +1,8 @@
-"""取数链路两条路径的断言：有模型走 create_agent 自选工具，没模型退回 Java 的固定顺序。
+"""取数链路两条路径的断言：有模型走 create_agent 自选工具，没模型退回固定顺序。
 
-Java 的 PlannerInputBuilder.build 是 attractionAgent -> weatherAgent -> hotelAgent 的直白顺序调用，
-任一 agent 抛异常就直接逃出 build()。Python 侧模型可用时改成模型自选工具，
-模型不可用时必须退回上面那个顺序、并且保持同样的失败即停语义，这里逐条钉住。
+没模型时走的是 attraction -> weather -> hotel 的直白顺序调用，任一 agent 抛异常就直接
+逃出这一串调用。模型可用时改成模型自选工具，模型不可用时必须退回那个顺序、
+并且保持同样的失败即停语义，这里逐条钉住。
 """
 
 import pytest
@@ -66,7 +66,7 @@ def _agent(available: bool, calls: list[str], attraction_error: Exception | None
     return PlanningDataAgent(_StubLlmClient(available), build_planning_tools(attraction, weather, hotel))
 
 
-def test_shouldCollectInJavaFixedOrderWhenLlmIsUnavailable():
+def test_shouldCollectInFixedOrderWhenLlmIsUnavailable():
     calls: list[str] = []
     agent = _agent(available=False, calls=calls)
     context = PlanningContext(request=_request())

@@ -1,4 +1,4 @@
-"""对应 Java controller/TripPlanController.java 的 /plan 与 /adjust 两个端点。"""
+"""/plan（出一份新方案）与 /adjust（按一句话改现有方案）两个端点。"""
 
 from fastapi import APIRouter, Depends
 

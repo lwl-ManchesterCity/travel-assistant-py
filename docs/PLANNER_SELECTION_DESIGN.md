@@ -327,7 +327,7 @@ def _is_reasonably_close(self, selected, candidate) -> bool:
 | `_try_select_attractions`（带 `(day_index+offset)%size` 轮转） | 删。顺序改由插入位置定，不再需要轮转制造差异 |
 | `_filter_nearby_attractions`（酒店 15km 顶 + 不足 2 个回落全城） | 删。近邻这个概念整个不要了 |
 | `_is_reasonably_close`（跟每一站比 30km） | 删。换成 `_best_insertion` 的增量 + `_route_length_km` 的总长上限 |
-| `_distance_band_to_hotel`（5/10km 分档） | 删。`_prioritize_candidate_attractions` 回到 Java 原样：只按分数排 |
+| `_distance_band_to_hotel`（5/10km 分档） | 删。`_prioritize_candidate_attractions` 回到只按分数排的写法 |
 | `_find_fallback_attraction`（分数最高的那个） | 换成 `_nearest_unused`（离起点最近的那个，见七之二第 2 条） |
 | `_pin_order_km` | 改名 `_route_length_km` 并加空列表守卫——贪心每步都要拿它当基准 |
 | `_select_hotel` 内部 `_calculate_center` | 换成 `_route_end_location`（末站）。`_calculate_center` 仍留给 `_sanitize_attractions`／`_locked_hotel_note` |

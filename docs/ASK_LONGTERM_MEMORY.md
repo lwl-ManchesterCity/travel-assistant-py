@@ -99,7 +99,7 @@
 
 | 包 | 干什么 | 为什么是它 |
 |---|---|---|
-| `psycopg[binary,pool]` | Postgres 驱动 + 连接池 | 端点全是同步 `def`（FastAPI 自动丢线程池），**用不上 asyncpg**；池子对应 Java 那边 HikariCP 的角色 |
+| `psycopg[binary,pool]` | Postgres 驱动 + 连接池 | 端点全是同步 `def`（FastAPI 自动丢线程池），**用不上 asyncpg**；池子由 psycopg 自带的 `pool` 提供 |
 | `bcrypt` | 密码哈希 | 直接用 `bcrypt`，**不用 `passlib`**——passlib 已停更，且与新 bcrypt 有兼容告警 |
 
 连接串走新配置项 `TRAVEL_DB_DSN`，默认 `postgresql:///travel_assistant`：

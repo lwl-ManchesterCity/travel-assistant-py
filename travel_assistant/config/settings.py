@@ -1,8 +1,6 @@
-"""对应 Java config/TravelLoopProperties.java、TravelProviderProperties.java、TravelLlmProperties.java
-与 application.yml 的 travel 段。
+"""运行时配置集中在这里，每个配置项声明自己的环境变量名。
 
-Java 用 @ConfigurationProperties(prefix="travel") 绑定 yml；Python 侧没有 yml，等价做法是每个配置项
-声明自己的环境变量名，密钥只能来自环境变量或本地未提交的 .env，绝不写进代码。
+密钥只能来自环境变量或本地未提交的 .env，绝不写进代码。
 """
 
 import logging
@@ -25,7 +23,7 @@ class TravelDefaults(BaseModel):
 
 
 class LoopSettings(TravelDefaults, BaseSettings):
-    """对应 Java config/TravelLoopProperties.java + application.yml 的 travel.loop 段。"""
+    """规划闭环：开关、最大轮次、连续几轮无改善就停。"""
 
     enabled: bool = Field(default=True, validation_alias="TRAVEL_LOOP_ENABLED")
     max_rounds: int = Field(default=3, validation_alias="TRAVEL_LOOP_MAX_ROUNDS")
@@ -35,7 +33,7 @@ class LoopSettings(TravelDefaults, BaseSettings):
 
 
 class LlmSettings(TravelDefaults, BaseSettings):
-    """对应 Java config/TravelLlmProperties.java + application.yml 的 travel.llm 段。"""
+    """规划与追问里用到的 LLM：开关、接入地址、密钥与生成参数。"""
 
     enabled: bool = Field(default=False, validation_alias="TRAVEL_LLM_ENABLED")
     provider: str = Field(default="dashscope", validation_alias="TRAVEL_LLM_PROVIDER")
@@ -50,14 +48,14 @@ class LlmSettings(TravelDefaults, BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
     def resolved_api_key(self) -> str:
-        # application.yml: api-key: ${TRAVEL_LLM_API_KEY:${DASHSCOPE_API_KEY:}}
+        # 没配 TRAVEL_LLM_API_KEY 时，退回通用的 DASHSCOPE_API_KEY 环境变量。
         if self.api_key:
             return self.api_key
         return os.environ.get("DASHSCOPE_API_KEY", "")
 
 
 class AmapSettings(TravelDefaults, BaseSettings):
-    """对应 Java TravelProviderProperties.Amap。"""
+    """高德侧接入参数：key、base_url、路线策略、翻页与重试等。"""
 
     api_key: str = Field(default="", validation_alias="AMAP_API_KEY")
     base_url: str = Field(default="http://restapi.amap.com", validation_alias="AMAP_BASE_URL")
@@ -67,9 +65,9 @@ class AmapSettings(TravelDefaults, BaseSettings):
     curl_fallback_enabled: bool = Field(default=True, validation_alias="AMAP_CURL_FALLBACK_ENABLED")
     poi_page_size: int = Field(default=10, validation_alias="AMAP_POI_PAGE_SIZE")
     city_limit: bool = Field(default=True, validation_alias="AMAP_CITY_LIMIT")
-    # 撞上高德配额/频率类失败时的短退避重试，Java 没有这一层（Java 只对路线做了降级）。
+    # 撞上高德配额/频率类失败时的短退避重试（此前只有路线做了降级，景点/天气/酒店撞上就直接失败）。
     # 一次规划里景点/天气/酒店是被并行调用的，个人 key 的并发配额很容易瞬时打满，
-    # 退避几百毫秒重试通常就能过。attempts=0 即关闭重试、退回 Java 原行为。
+    # 退避几百毫秒重试通常就能过。attempts=0 即关闭重试，失败直接往上抛。
     # 退避秒数写成逗号分隔的字符串而不是 list[float]：pydantic-settings 对复杂类型会按 JSON 解析，
     # "0.8,2.0" 不是合法 JSON，用 str 收再自己拆更可控，也和 preferences 那类逗号串的写法一致。
     rate_limit_retry_attempts: int = Field(default=2, validation_alias="AMAP_RATE_LIMIT_RETRY_ATTEMPTS")
@@ -105,7 +103,7 @@ class AmapSettings(TravelDefaults, BaseSettings):
 
 
 class ProviderSettings(TravelDefaults, BaseSettings):
-    """对应 Java config/TravelProviderProperties.java + application.yml 的 travel.providers 段。"""
+    """四类数据（景点/天气/酒店/路线）各走哪个 provider 实现。"""
 
     attraction: str = Field(default="amap", validation_alias="TRAVEL_PROVIDERS_ATTRACTION")
     weather: str = Field(default="amap", validation_alias="TRAVEL_PROVIDERS_WEATHER")
@@ -146,7 +144,7 @@ class DbSettings(TravelDefaults, BaseSettings):
 
 
 class Settings(BaseSettings):
-    """对应 application.yml 顶层：server.port + travel.loop + travel.llm + travel.providers。"""
+    """顶层配置：服务端口，以及 loop / llm / providers / anchor / db 各段。"""
 
     server_port: int = Field(default=8080, validation_alias="SERVER_PORT")
     loop: LoopSettings = Field(default_factory=LoopSettings)

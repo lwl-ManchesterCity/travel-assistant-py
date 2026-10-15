@@ -1,4 +1,4 @@
-"""对应 Java agent/WeatherAgent.java。"""
+"""天气查询：把请求折成 WeatherQuery 交给 client，并附一句天气摘要。"""
 
 from ..models.trip_plan_request import TripPlanRequest
 from ..models.weather_info import WeatherInfo

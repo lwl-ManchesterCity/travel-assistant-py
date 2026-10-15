@@ -1,4 +1,4 @@
-"""对应 src/test/java/com/lwl/travelassistant/agent/PlannerAgentTest.java。"""
+"""PlannerAgent 的选点、排线、挑酒店与预算估算：设计文档里的每条判据都有人钉着。"""
 
 from travel_assistant.agent.planner_agent import (
     _ARRIVAL_DAY,
@@ -31,7 +31,7 @@ from travel_assistant.service.llm_narration_service import LlmNarrationService
 
 
 class DisabledLlmClient(LlmClient):
-    """对应测试里的 DisabledLlmClient。"""
+    """永远不可用的 LLM 客户端：让叙述这条路走无模型分支。"""
 
     def is_available(self) -> bool:
         return False
@@ -43,7 +43,7 @@ class DisabledLlmClient(LlmClient):
 def build_planner_agent() -> PlannerAgent:
     return PlannerAgent(
         RouteAgent(RuleBasedRouteClient()),
-        # Java 这里注入的是 ReflectionAgent(DailyPlanEvaluator)，本轮 ReflectionAgent 未搬，
+        # 这里注入的是 DailyPlanEvaluator 而不是 ReflectionAgent：每日反思不走 ReflectionAgent 包装，
         # reflect_daily_plan 直接落在 DailyPlanEvaluator 上。
         DailyPlanEvaluator(BudgetEvaluator(), RouteEvaluator(), WeatherEvaluator()),
         LlmNarrationService(DisabledLlmClient()),
@@ -150,7 +150,7 @@ def _hotel_at(lng, lat):
 
 
 def test_prioritize_is_pure_score_ordering_again():
-    """离酒店分档那层撤了：这里回到 Java 原样，只按分数降序、票价升序。
+    """离酒店分档那层撤了：这里回到早先的样子，只按分数降序、票价升序。
 
     远近不在这步管，改由 `_compose_day_route` 的"插入增量"在选的时候管——
     顺序若由酒店推出来，就没法再拿顺序去定酒店（docs/PLANNER_SELECTION_DESIGN.md 3.1）。

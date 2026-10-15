@@ -1,8 +1,7 @@
-"""对应 Java agent/LlmCriticAgent.java：让模型批评当前方案，失败或不可用时走规则批评兜底。
+"""让模型批评当前方案，失败或不可用时走规则批评兜底。
 
-Java 用注入的 ObjectMapper 把 request/reflection/plan 以 writerWithDefaultPrettyPrinter 打进提示词，
-Python 侧等价用 json.dumps(indent=2, ensure_ascii=False)；两边缩进与冒号空格的差异记在
-MIGRATION_NOTES.md，不影响批评动作的判定。
+打进提示词的 request/reflection/plan 用 json.dumps(indent=2, ensure_ascii=False) 序列化；
+缩进和冒号空格的细节不影响批评动作的判定。
 """
 
 import json
@@ -55,7 +54,7 @@ class LlmCriticAgent:
         if self._llm_client.is_available():
             try:
                 return self._critique_by_llm(request, plan, reflection)
-            except Exception:  # noqa: BLE001 - 对齐 Java：批评阶段任何失败都回退规则批评
+            except Exception:  # noqa: BLE001 - 批评阶段任何失败都回退规则批评
                 fallback = self._critique_by_rules(request, plan, reflection)
                 fallback.source = "rule-fallback"
                 notes = [] if fallback.notes is None else list(fallback.notes)

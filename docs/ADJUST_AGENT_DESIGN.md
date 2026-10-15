@@ -19,7 +19,7 @@
 - 不让 agent 自己改方案：agent 全程只读、只产文本，写动作仍由 `/adjust` 做。
 - 不重复实现一套"自然语言→请求字段"的解析器：那是 `TripAdjustmentAgent` 已有的活（LLM 路径 + 规则兜底两条）。
 - 不做撤销/回滚、不做批量多轮改、不做会话记忆（会话是 C 档）。
-- 不改 `/api/trips/adjust` 的入参、响应体、错误分支——它是 Java 等价物。
+- 不改 `/api/trips/adjust` 的入参、响应体、错误分支——它的契约保持不动。
 
 ---
 
@@ -98,10 +98,10 @@ POST /api/trips/adjust        （已有端点，一字未改）
 | `static/index.html` | 改 | 追问返回 `need_change` 时弹确认层；确认即调 `/adjust`（复用 `adjustCurrentTrip` 里已有的请求与 loading 逻辑，抽成一个函数） |
 | `tests/test_ask_agent.py` | 改 | 加 B 的用例（见第 6 节） |
 | `docs/ASK_AGENT_DESIGN.md` | 改 | 护栏第 4 条同步；A 文档里"只提示不动手"的说法要改准 |
-| `MIGRATION_NOTES.md` / `README.md` | 改 | 第六节补 B；README 的 `/api/trips/ask` 一节加确认流程 |
+| `DESIGN_NOTES.md` / `README.md` | 改 | 第三节补 B；README 的 `/api/trips/ask` 一节加确认流程 |
 
 不碰：`api/trip_controller.py`、`service/trip_planning_service.py`、`agent/trip_adjustment_agent.py`、
-`agent/loop_planning_agent.py` 以及任何 Java 等价部分。
+`agent/loop_planning_agent.py`，以及任何不受本次改动影响的既有部分。
 
 ---
 
@@ -280,19 +280,19 @@ C 只在同档内部让原打分说话，档与档之间的取舍只剩"远近�
   （`planner_agent.py:406` → `_select_budget_friendly_hotel`，它会挑一家更便宜的顶掉当天的）。
   只守第一处的话，预算一超线第二天照样换店，"整趟同一家"就是句空话。两处都要读 `hotel_continuity`。
 
-### 9.5 与等价移植的冲突（开工前必须先拍板）
+### 9.5 与既有行为的冲突（开工前必须先拍板）
 
-`agent/planner_agent.py`、`models/trip_plan_request.py`、`static/index.html` 三个都是 Java 等价物
-（前端那 2905 行是字节级原样拷贝）。这一节会**故意偏离源项目**，四处：
+`agent/planner_agent.py`、`models/trip_plan_request.py`、`static/index.html` 三个都从早期版本沿用而来
+（前端那 2905 行是逐字拷贝）。这一节会**故意偏离既有行为**，四处：
 
-| 偏离点 | Java 行为 | Python 拟改 | 影响范围 |
+| 偏离点 | 现状 | 改法 | 影响范围 |
 | --- | --- | --- | --- |
 | `TripPlanRequest` 加三个字段 | 只有八个字段，没有位置/连续性 | 加 `hotel_anchor`/`day_hotel_anchors`/`hotel_continuity`，全可空 | 请求体扩展，老请求照常 |
 | 两处挑酒店的代码 | 三参数、三项打分；另一处两项打分 | 入参多一个锚点坐标，先按半径过滤、再按远近分档，**同档内跑原打分，公式与常数一字不改** | 只影响进入打分的候选集合与它们的先后 |
 | 一次地名→坐标的高德调用 | 无这次调用 | 有（仅填了锚点时） | 多占一次配额、多 ≈200ms |
-| `static/index.html` | "期望住宿位置"输入框与连续性下拉都不存在 | 加一个输入框 + 一个下拉 + 一句代价注释 | 前端偏离原样拷贝 |
+| `static/index.html` | "期望住宿位置"输入框与连续性下拉都不存在 | 加一个输入框 + 一个下拉 + 一句代价注释 | 前端不再与早期版本逐字一致 |
 
-按长期约束，这四条要逐条写进 `MIGRATION_NOTES.md`。并且**不填新字段时的结果必须与 Java 逐字一致**，
+按长期约束，这四条要逐条写进 `DESIGN_NOTES.md`。并且**不填新字段时的结果必须与改前逐字一致**，
 这条写成回归判据（9.7 第 1 条），偏离只在用户显式填了新格子时才发生。
 
 ### 9.6 非目标
@@ -331,7 +331,7 @@ C 只在同档内部让原打分说话，档与档之间的取舍只剩"远近�
 
 第 9 节（补格子）单独排在 B 之后：先 9.1 的字段与回落，再 9.2 的地名→坐标，再 9.3 的候选池过滤 +
 远近分档（两处挑酒店的代码共用同一个口子），最后 9.4 的前端代价注释；
-`MIGRATION_NOTES.md` 与判据 1 的回归 diff 在这步末尾一起补。
+`DESIGN_NOTES.md` 与判据 1 的回归 diff 在这步末尾一起补。
 
 ---
 
@@ -347,9 +347,9 @@ C 只在同档内部让原打分说话，档与档之间的取舍只剩"远近�
    注意第 9 节是**第三条路**：不是收窄承诺，而是把做不到的那些变成做得到的（补格子）。
    这两条不冲突——第 8 节管 B 的提示词，第 9 节管规划器，可以都做。
 5. 判据阈值认不认：该改的 ≥8/10、不该改的误判 ≤1/10。
-6. **第 9 节做不做**：它要动 `planner_agent.py` / `trip_plan_request.py` / `index.html` 这三个 Java 等价物，
-   是本项目第一次**主动偏离源项目**（详见 9.5）。做，就接受"移植等价"这条不再是绝对约束、
-   并且要新开一节偏离记录进 `MIGRATION_NOTES.md`；不做，第 8 节风险 2 只能靠收窄承诺兜住。
+6. **第 9 节做不做**：它要动 `planner_agent.py` / `trip_plan_request.py` / `index.html` 这三个沿用早期版本的文件，
+   是本项目第一次**主动偏离既有行为**（详见 9.5）。做，就接受"逐字一致"这条不再是绝对约束、
+   并且要新开一节偏离记录进 `DESIGN_NOTES.md`；不做，第 8 节风险 2 只能靠收窄承诺兜住。
 7. ~~三个格子先上哪几个（推荐先上前两个）~~ **已收回**：`dayHotelAnchors` 不是可加码的第三格，
    它是"希望第二天的酒店离西湖近一点"这句话**唯一的承接位**。砍掉它，这句照样没人读，
    等于重犯第 8 节风险 2 那一格。三格一起上，多出来的代价只有 9.2 那次地名→坐标要按不同地名各发一次

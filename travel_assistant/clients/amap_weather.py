@@ -1,4 +1,4 @@
-"""对应 Java client/impl/AmapWeatherClient.java（高德天气预报 + 规则天气逐日期合并）。"""
+"""高德天气预报：按日期与规则天气逐日合并，高德缺哪天就补哪天的规则值。"""
 
 import logging
 
@@ -34,7 +34,7 @@ class AmapWeatherClient(WeatherClient):
                 log.warning("高德天气未返回有效预报，回退到规则天气: city=%s", query.city)
                 return fallback_weather
             return self._merge_weather(fallback_weather, real_weather_by_date)
-        except Exception as exception:  # noqa: BLE001 - 与 Java 的 catch (Exception) 一致
+        except Exception as exception:  # noqa: BLE001 - 高德请求失败就退规则天气，不能让它打断规划
             log.warning("高德天气请求失败，回退到规则天气: city=%s, reason=%s", query.city, exception)
             return fallback_weather
 
@@ -47,7 +47,7 @@ class AmapWeatherClient(WeatherClient):
 
     def _validate_amap_configuration(self) -> None:
         if self._amap.api_key is None or not self._amap.api_key.strip():
-            raise TripPlanningException("已选择高德天气 provider，但尚未配置 travel.providers.amap.api-key")
+            raise TripPlanningException("已选择高德天气 provider，但尚未配置 AMAP_API_KEY")
 
     def _merge_weather(self, fallback_weather: list[WeatherInfo], real_weather_by_date: dict[str, WeatherInfo]) -> list[WeatherInfo]:
         merged: list[WeatherInfo] = []

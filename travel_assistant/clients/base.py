@@ -1,4 +1,4 @@
-"""对应 Java client 层的四个接口：AttractionClient / HotelClient / WeatherClient / RouteClient。"""
+"""数据源的四个接口：AttractionClient / HotelClient / WeatherClient / RouteClient。"""
 
 from abc import ABC, abstractmethod
 
@@ -62,7 +62,7 @@ class RouteClient(ABC):
                        straight_km: float) -> list[InterCityOption]:
         """跨城方案（票价＋到达站）。默认一条都不给＝这个 provider 查不到大交通。
 
-        不做成 @abstractmethod：Java 侧没有这一层，本地/规则那几个兜底实现没必要都被迫写一遍，
+        不做成 @abstractmethod：本地/规则那几个兜底实现查不到大交通，没必要都被迫写一遍，
         由调用方（IntercityService）在拿不到方案时按直线距离估。
         """
         return []

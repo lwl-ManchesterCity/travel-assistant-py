@@ -1,9 +1,9 @@
-"""对应 Java agent/LoopPlanningAgent.java 的闭环行为断言。
+"""LoopPlanningAgent 的闭环行为断言。
 
-Java 侧没有 LoopPlanningAgentTest，这里的期望值全部按源码流程推：
-停止条件与 stopReason 文案、appendLoopResult 追加的三句 planningNotes、
-loopTraces 前插到 agentTraces 头部、markSelectedRound 只留一条 selectedAsBest，
-以及 loopIterations 每轮字段的取值来源。
+没有可参照的既有测试，这里的期望值全部按实现源码的流程推：
+停止条件与 stop_reason 文案、收尾时追加的三句 planning_notes、
+loop_traces 前插到 agent_traces 头部、_mark_selected_round 只留一条 selected_as_best，
+以及 loop_iterations 每轮字段的取值来源。
 """
 
 from travel_assistant.agent.llm_critic_agent import LlmCriticAgent

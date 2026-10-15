@@ -22,17 +22,17 @@ class PlannerInput(CamelModel):
     planning_notes: Optional[list[str]] = None
     planner_query: Optional[str] = None
     agent_traces: Optional[list[AgentTrace]] = None
-    # 用户指定住宿位置时的坐标（Java 没有这两格）：地名字符串在请求上，坐标由
+    # 用户指定住宿位置时的坐标（本项目新增的这两格）：地名字符串在请求上，坐标由
     # service/hotel_anchor_service 解析好交进来，规划器只按坐标筛候选、不再发请求。
     hotel_anchor_location: Optional[Location] = None
     day_hotel_anchor_locations: Optional[dict[int, Location]] = None
     # 某天主张了某个位置时，那一天专用的候选池（全城候选 + 那个位置周边的酒店）。
     # 只装"有锚点的那些天"，其余天仍用 hotel_result 里那份全城候选。
     day_hotel_candidates: Optional[dict[int, list[Hotel]]] = None
-    # 某天用户点名必去、且已在候选池里解析出来的景点（Java 没有这格，见 ATTRACTION_PIN_DESIGN.md）。
+    # 某天用户点名必去、且已在候选池里解析出来的景点（本项目新增，见 ATTRACTION_PIN_DESIGN.md）。
     # 规划器把这天其余景点照常选好后再把它们强制塞进去，所以必去景点不会被预算/路线反思裁掉。
     pinned_attractions_by_day: Optional[dict[int, list[Attraction]]] = None
-    # 城际往返票价（Java 没有，见 INTERCITY_TRANSPORT_DESIGN.md 4.3）：先从总预算里扣掉，
+    # 城际往返票价（本项目新增，见 INTERCITY_TRANSPORT_DESIGN.md 4.3）：先从总预算里扣掉，
     # 剩下的"可玩预算"才按天分。0 ＝ 未启用（没填出发城市），逐天与现状一字不变。
     intercity_cost: int = 0
     # 各天路线的终点（第几天→点）：最后一天是返程口岸，其余天不填＝当晚那家酒店。

@@ -1,4 +1,4 @@
-"""对应 Java service/PlannerInputBuilder.java：组装 PlannerInput 并产出 planningNotes / agentTraces。"""
+"""组装 PlannerInput 并产出 planningNotes / agentTraces。"""
 
 from ..agent.data_tools import raise_planning_errors
 from ..agent.orchestration import PlanningDataAgent
@@ -282,7 +282,7 @@ class PlannerInputBuilder:
                             request: TripPlanRequest,
                             anchors,
                             day_candidates: dict[int, list]) -> AgentTrace | None:
-        # 用户没指定住宿位置时不留痕：这条链路的默认行为要与 Java 逐字一致，多一条痕迹都算差异。
+        # 用户没指定住宿位置时不留痕：这里要保持默认行为不变，多一条痕迹都算差异。
         if not (request.hotel_anchor or request.day_hotel_anchors):
             return None
         if anchors.unresolved:

@@ -1,4 +1,4 @@
-"""对应 Java agent/LoopDecisionExecutor.java：把批评动作落成下一轮的请求副本。"""
+"""把批评动作落成下一轮的请求副本。"""
 
 from dataclasses import dataclass
 

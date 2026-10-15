@@ -20,7 +20,7 @@ class PlanningContext:
     weather_result: WeatherQueryResult | None = None
     hotel_result: HotelSearchResult | None = None
     # LangChain 的 ToolNode 会把工具异常转成错误消息给模型，异常本身到不了 service 层；
-    # 这里把异常暂存下来，取数结束后按 Java 的方式抛出，保证 400 里的提示文案一致。
+    # 这里把异常暂存下来，取数结束后再抛出，保证 400 里的提示文案还是异常原文。
     errors: list[Exception] = None
 
     def __post_init__(self) -> None:

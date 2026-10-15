@@ -20,6 +20,6 @@ class PlanningConstraints(CamelModel):
 
     def __init__(self, **data) -> None:
         super().__init__(**data)
-        # Java 构造器把 analysisSource 固定成 "rule"，RequirementsService 之后再改写。
+        # 默认把 analysisSource 固定成 "rule"，RequirementAnalysisService 之后按实际情况改写。
         if self.analysis_source is None:
             self.analysis_source = "rule"

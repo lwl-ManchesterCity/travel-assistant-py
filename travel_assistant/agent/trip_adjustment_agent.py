@@ -1,4 +1,4 @@
-"""对应 Java agent/TripAdjustmentAgent.java：把自然语言改计划要求解析成新的请求副本。
+"""把自然语言改计划要求解析成新的请求副本。
 
 模型可用时先让模型输出结构化 JSON，解析过程抛任何异常都回退规则解析并把 adjustmentSource
 标成 rule-fallback；模型不可用时直接走规则解析。两条路径都只改请求副本，真正的重新规划
@@ -13,7 +13,7 @@ from ..models.trip_plan_request import TripPlanRequest
 from ..service.request_optimization_strategy_service import RequestOptimizationStrategyService
 from ..utils import node_as_text
 
-# Java 的 \d 只匹配 ASCII 数字，Python 的 \d 会匹配 Unicode 数字，这里按 Java 收窄。
+# \d 会连全角、阿拉伯-印度数字一起匹配，这里只要 ASCII 数字，所以写成 [0-9]。
 _BUDGET_PATTERN = re.compile(r"([0-9]{3,6})")
 _CLAUSE_SPLIT_PATTERN = re.compile(r"[；;\n]")
 _ADJUSTMENT_KEYWORDS = (
@@ -81,7 +81,7 @@ class TripAdjustmentAgent:
         if self._llm_client.is_available():
             try:
                 decision = self._adjust_by_llm(original_request, adjustment_prompt)
-            except Exception:  # noqa: BLE001 - 对齐 Java：解析阶段任何失败都回退规则解析
+            except Exception:  # noqa: BLE001 - 解析阶段任何失败都回退规则解析
                 decision = self._adjust_by_rules(original_request, adjustment_prompt)
                 decision.applied_changes.append("LLM 解析失败，已自动回退到规则解析")
                 decision.adjustment_source = "rule-fallback"
@@ -448,7 +448,7 @@ class TripAdjustmentAgent:
         return any(keyword in normalized for keyword in _ADJUSTMENT_KEYWORDS)
 
     class TripAdjustmentDecision:
-        """对应 Java 的静态内部类 TripAdjustmentDecision。"""
+        """解析结果：改后的请求副本、改了哪几项、来源是 llm 还是 rule。"""
 
         def __init__(self,
                      updated_request: TripPlanRequest,
@@ -484,7 +484,7 @@ def _array_items(node: object, name: str) -> list[object]:
 
 
 def _as_int(value: object) -> int:
-    # 对齐 Jackson JsonNode.asInt()：数字取整数部分，可解析的字符串按十进制读，其余取 0。
+    # 数字取整数部分，可解析的字符串按十进制读，其余取 0。
     if isinstance(value, bool):
         return int(value)
     if isinstance(value, int):
@@ -506,12 +506,12 @@ def _as_int(value: object) -> int:
 def _object_to_pretty_json(model: object) -> str:
     try:
         return json.dumps(model.model_dump(mode="json"), indent=2, ensure_ascii=False)
-    except Exception:  # noqa: BLE001 - 对齐 Java：序列化失败时回落到 String.valueOf
+    except Exception:  # noqa: BLE001 - 序列化失败时回落到 str(model)
         return str(model)
 
 
 def _remove_first(values: list[str], value: str) -> bool:
-    # Java List.remove(Object) 按值删除首个匹配项并返回是否删掉。
+    # 按值删除首个匹配项，返回有没有真的删掉。
     try:
         values.remove(value)
         return True

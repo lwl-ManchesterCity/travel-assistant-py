@@ -1,7 +1,7 @@
-"""对应 Java evaluator/DailyPlanEvaluator.java。
+"""把预算、路线、天气三家的判定合成当天评估，并给出当天的反思建议动作。
 
-reflect_daily_plan 来自 Java agent/ReflectionAgent.reflectDailyPlan：按批准的落位约定这段每日反思判定
-放在 evaluator 包，agent/reflection_agent.py 的 reflect_daily_plan 只是回指这里的薄封装。
+每日反思的判定按落位约定放在 evaluator 包，agent/reflection_agent.py 的 reflect_daily_plan
+只是回指这里的薄封装。
 """
 
 from ..models.daily_plan_evaluation import DailyPlanEvaluation
