@@ -232,21 +232,6 @@ data/                 景点资料、标签表；chroma/ 是本地生成的索�
 后者能抓到前者抓不到的（HTTP 那条路上 `user_id` 有没有传到底、真库认不认那个唯一键、
 删掉之后是不是真的不再进提示词）。
 
-## 与 Java 源项目的关系
-
-本项目从 Java 版「智能旅行助手」移植而来（Spring Boot 3 / Java 17），
-只做语言与框架替换：FastAPI 顶掉 Spring Web，pydantic 顶掉 POJO + Jakarta Validation，
-httpx 顶掉 RestTemplate，LangChain `create_agent` + `@tool` 顶掉固定顺序取数。
-业务规则、阈值、文案、字段名尽量照搬 Java 源码。
-
-在此之上做了几处**基线之外的扩展**：登录与长期记忆、方案追问（`/ask`）、
-住宿锚点（`hotelAnchor` / `dayHotelAnchors` / `hotelContinuity`）、城际交通、景点知识库。
-
-凡是与 Java 不一致的地方（模型自选工具取代固定顺序取数、`/adjust` 的嵌套校验会级联、
-api-key 在日志与异常文案里打码、`TripPlanResponse` 是源项目死类、引用相等语义的移植、
-配置默认值取 yml 生效值等）全部记在 [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md)，
-其中第四节列出了刻意保留、未修的源项目行为。
-
 ## 设计文档
 
 `docs/` 下是各功能的设计稿与逐条验收记录，**改代码前先看这里**：
