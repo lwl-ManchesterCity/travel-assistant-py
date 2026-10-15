@@ -8,9 +8,18 @@
 下一次规划会自动带上，冲突时会当面指出来而不是顺着方案说「这家不错」。
 
 > 下面每个功能都配了实拍图，都是真跑出来的：上海 → 北京 3 天，接真模型与高德底图。
-> 全部产品图在 [`docs/images/`](docs/images/)，压成 webp 一共 350 KB 出头。
+> 全部产品图在 [`docs/images/`](docs/images/)，压成 webp 一共 150 KB 不到。
 
 ## 功能
+
+### 账号
+
+注册 / 登录 / 登出。密码 bcrypt，会话 cookie `httponly` + `samesite=lax`。
+长期记忆按 `user_id` 存，一个库装所有客户。
+
+| 登录 | 注册 |
+| --- | --- |
+| ![登录](docs/images/login.webp) | ![注册](docs/images/register.webp) |
 
 ### 规划
 
@@ -92,15 +101,6 @@ SSE 推工具调用当进度条。说到新偏好会**顺手记下**，答案下
 是真进了提示词、真改了输出。记了哪些、要删哪条，点旅行助手右上角的「我的偏好」：
 
 <p align="center"><img src="docs/images/preferences-panel.webp" alt="我的偏好：列出与删除"></p>
-
-### 账号
-
-注册 / 登录 / 登出。密码 bcrypt，会话 cookie `httponly` + `samesite=lax`。
-长期记忆按 `user_id` 存，一个库装所有客户。
-
-| 登录 | 注册 |
-| --- | --- |
-| ![登录](docs/images/login.webp) | ![注册](docs/images/register.webp) |
 
 ## 快速开始
 
