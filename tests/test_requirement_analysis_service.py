@@ -209,3 +209,120 @@ def test_shouldFallBackToRulesWhenTheModelIsUnavailable():
 
     assert constraints.analysis_source == "rule"
     assert constraints.avoid_seafood is True
+
+
+# ---------- 第四档：场景那一格（docs/ASK_LONGTERM_MEMORY.md §2.4）----------
+
+
+def test_shouldReadTheExtractedEpisodes():
+    llm = _StubLlmClient({"extractedEpisodes": [{"city": "杭州", "content": "上次那家酒店隔音差"}]})
+    constraints = RequirementAnalysisService(llm).analyze(_request())
+
+    assert constraints.extracted_episodes == [{"city": "杭州", "content": "上次那家酒店隔音差"}]
+
+
+def test_shouldDefaultToNoEpisodesWhenTheModelOmitsTheField():
+    """老模型 / 老提示词不吐这一格时，是"没有场景"而不是报错。"""
+    constraints = RequirementAnalysisService(_StubLlmClient({})).analyze(_request())
+
+    assert not constraints.extracted_episodes
+
+
+def test_shouldDropTheWholeEpisodeWhenTheCityIsMissing():
+    """**city 缺了就整条丢**（§2.4.4）：按城市取，没城市永远捞不出来。
+    这一道闸门与 ask_agent 那条是**同一个判据的两处写法**——两条写入点都要挡。"""
+    llm = _StubLlmClient({"extractedEpisodes": [
+        {"content": "上次那家酒店隔音差"},          # 没有 city 这一格
+        {"city": "", "content": "排队太久"},        # 空的
+        {"city": "杭州"},                          # 没有 content
+        "杭州：上次那家酒店隔音差",                  # 模型偶尔吐成整句
+        {"city": "成都", "content": "上回第二天排太满"},
+    ]})
+    constraints = RequirementAnalysisService(llm).analyze(_request())
+
+    assert constraints.extracted_episodes == [{"city": "成都", "content": "上回第二天排太满"}]
+
+
+def test_shouldStripWhitespaceButLeaveThePunctuationToTheService():
+    """这一层只 strip。**尾标点怎么削归 EpisodeService**（clean_content），
+    与偏好那条的分工一字不差——同一处规矩不许有两份实现（§2.2.11 那条教训）。
+
+    所以这里期望值**带着那个「。」**是故意的：它到不了库里，
+    但它是"谁负责哪一段"的证据。削标点由 test_episode_service.py 守。
+    """
+    llm = _StubLlmClient({"extractedEpisodes": [
+        {"city": "  杭州 ", "content": " 上次那家酒店隔音差。 "}]})
+    constraints = RequirementAnalysisService(llm).analyze(_request())
+
+    assert constraints.extracted_episodes == [
+        {"city": "杭州", "content": "上次那家酒店隔音差。"}]
+
+
+# ---------- 判据 5：两个桶不许同时收下同一句 ----------
+
+
+def test_shouldNotLetTheSameSentenceIntoBothBaskets():
+    """§2.4.4 要求两个桶**互斥**。提示词里写死了，但模型仍可能两边都填——
+    规则拦不干净，而漏了的表现是**同一句话被注入两遍**，
+    且它明明是"上次发生的事"，却挂在了"他这个人"名下、跟着他每一趟。
+
+    代码这道闸门与挡表单勾选框回声是同一个手法：**精确相等**判据。
+    """
+    sentence = "上次杭州那家酒店隔音差"
+    llm = _StubLlmClient({
+        "extractedPreferences": [sentence, "不吃辣"],
+        "extractedEpisodes": [{"city": "杭州", "content": sentence}],
+    })
+    constraints = RequirementAnalysisService(llm).analyze(_request())
+
+    assert constraints.extracted_episodes == [{"city": "杭州", "content": sentence}]
+    # 场景那一桶收下之后，偏好这一桶里就不该再有它；同批的其它偏好不受影响。
+    assert constraints.extracted_preferences == ["不吃辣"]
+
+
+def test_shouldStillKeepPreferencesThatOnlyLookSimilar():
+    """只挡**精确相等**的。场景是「上次那家酒店隔音差」、偏好是「怕吵」——
+    两句说的是一件事，但文本不同，两个桶各留各的（代词义相近不该用字符串判）。
+    """
+    llm = _StubLlmClient({
+        "extractedPreferences": ["怕吵"],
+        "extractedEpisodes": [{"city": "杭州", "content": "上次那家酒店隔音差"}],
+    })
+    constraints = RequirementAnalysisService(llm).analyze(_request())
+
+    assert constraints.extracted_preferences == ["怕吵"]
+    assert constraints.extracted_episodes == [{"city": "杭州", "content": "上次那家酒店隔音差"}]
+
+
+# ---------- 注入 ----------
+
+
+def test_shouldPutTheEpisodesIntoThePromptWithTheirCity():
+    llm = _StubLlmClient({})
+
+    RequirementAnalysisService(llm).analyze(_request(), [], ["上次那家酒店隔音差"])
+
+    assert "上次那家酒店隔音差" in llm.user_prompt
+    # 城市标签取的是本趟目的地——调用方已经**按它筛过**了（§2.4.3）。
+    assert "杭州" in llm.user_prompt
+    # 与偏好那条并列写在一处，让总览文案分得清"上次发生过的"和"这次要办的"。
+    assert "已经发生过" in llm.user_prompt
+
+
+def test_shouldNotMentionEpisodesWhenThereAreNone():
+    """一条场景都没有时不拼那一段。**换个城市就是这条**（§2.4.7 判据 2 的根）。"""
+    llm = _StubLlmClient({})
+
+    RequirementAnalysisService(llm).analyze(_request(), [], [])
+
+    assert "他去过的地方" not in llm.user_prompt
+
+
+def test_shouldStillWorkWithoutTheEpisodesArgument():
+    """老调用方（只传两个参数）行为不变。"""
+    llm = _StubLlmClient({"relaxedPace": True})
+
+    constraints = RequirementAnalysisService(llm).analyze(_request(), ["不能吃辣"])
+
+    assert constraints.relaxed_pace is True
+    assert "他去过的地方" not in llm.user_prompt

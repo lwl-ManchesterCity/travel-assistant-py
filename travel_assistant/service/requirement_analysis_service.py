@@ -18,7 +18,8 @@ JSON 字段固定为：
   "wantsLandmarkCeremony": boolean,
   "prefersIndoorBackup": boolean,
   "extractedTags": string[],
-  "extractedPreferences": string[]
+  "extractedPreferences": string[],
+  "extractedEpisodes": [{"city": string, "content": string}]
 }
 字段含义：
 relaxedPace：用户希望慢节奏、轻松、不要太赶。
@@ -26,6 +27,10 @@ avoidSeafood：用户不吃海鲜、海鲜过敏、避开海鲜。
 wantsLandmarkCeremony：用户提到升旗、仪式感、地标打卡等。
 prefersIndoorBackup：用户担心下雨、高温、天气不稳定，或希望室内备选。
 extractedTags 用简短中文标签总结命中的约束。
+extractedPreferences 与 extractedEpisodes 是**两个互斥的桶**：同一条信息只进一个，
+**不许两边都写**。先看它是不是"上一次真实发生过的事"——是就进 episodes，
+不是再看它是不是"关于用户本人的"——是就进 preferences，都不是就都不进。
+
 extractedPreferences 从「额外要求」里挑出**关于用户本人**的长期偏好，会存下来、
 影响他以后每一趟。判断标准是「这个人的」还是「这一趟的」：
   要挑（这个人的）：「对海鲜过敏」「不吃辣」「不吃香菜」「预算敏感」「恐高」
@@ -43,6 +48,17 @@ extractedPreferences 从「额外要求」里挑出**关于用户本人**的长�
   「偏好」那一栏里勾选的类型词（如「人文历史」「自然风景」）**不要挑**，
   那是他这一趟选的，不是他这个人的。
   没有就交空数组，不要为了填而填。
+
+extractedEpisodes 从「额外要求」里挑出**上一次在这个城市发生过的事**（已经发生的事实），
+  一条写成 {"city":"杭州","content":"上次那家酒店隔音差"}。
+  要挑：「上次杭州那家酒店隔音差」「上回去成都第二天排太满」「上次在北京那家面馆排队太久」。
+  都不挑的：这一趟的想法（还没发生，「想去看升旗」「这次轻松点」「想去看西湖」）；
+    没地点的事（「上次那家酒店隔音差」——不知道是哪个城市，以后永远捞不出来，**整条丢**）。
+  **city 只许来自「额外要求」那一格的原文**，不许拿上面的「目的地」补：
+    用户写在备注里的"上次那家"，未必就是这一趟要去的城市——猜错了，
+    这条就**永远挂在错误的城市**下。**读不出城市就整条丢**（宁可少记）。
+  **content 里不要重复城市**，城市有它自己那一格。
+  没有就交空数组，不要为了填而填。
 """
 
 
@@ -53,16 +69,20 @@ class RequirementAnalysisService:
         self._llm_client = llm_client
 
     def analyze(self, request: TripPlanRequest,
-                long_term_preferences: list[str] | None = None) -> PlanningConstraints:
+                long_term_preferences: list[str] | None = None,
+                episodes: list[str] | None = None) -> PlanningConstraints:
         """解析需求。
 
-        `long_term_preferences` 是这个人的长期偏好**原文**，由调用方（PlannerInputBuilder）
-        从 PreferenceService 取好传进来。**这里不自己取**：留痕要写"注入了 N 条"，
+        `long_term_preferences` / `episodes` 是这个人的长期记忆**原文**，由调用方
+        （PlannerInputBuilder）取好传进来。**这里不自己取**：留痕要写"注入了 N 条"，
         而只有拿到同一个列表，那条留痕才真的证明了注入发生过（§2.2.9 判据 7）。
+
+        `episodes` 由调用方**按城市筛好**再传（§2.4.3）——这里不认识城市，
+        也不该认识：它只管理解需求。
         """
         if self._llm_client.is_available():
             try:
-                return self._analyze_by_llm(request, long_term_preferences)
+                return self._analyze_by_llm(request, long_term_preferences, episodes)
             except Exception:  # noqa: BLE001 - 与 Java 一致：任何解析失败都退回规则结果
                 fallback = self._analyze_by_rules(request)
                 fallback.analysis_source = "rule-fallback"
@@ -70,18 +90,22 @@ class RequirementAnalysisService:
         return self._analyze_by_rules(request)
 
     def _analyze_by_llm(self, request: TripPlanRequest,
-                        long_term_preferences: list[str] | None = None) -> PlanningConstraints:
+                        long_term_preferences: list[str] | None = None,
+                        episodes: list[str] | None = None) -> PlanningConstraints:
         content = self._llm_client.chat(
-            _SYSTEM_PROMPT, self._build_user_prompt(request, long_term_preferences))
+            _SYSTEM_PROMPT, self._build_user_prompt(request, long_term_preferences, episodes))
         result = json.loads(content)
+        extracted_episodes = self._read_episodes(result.get("extractedEpisodes"))
         constraints = PlanningConstraints(
             relaxed_pace=self._as_bool(result.get("relaxedPace"), False),
             avoid_seafood=self._as_bool(result.get("avoidSeafood"), False),
             wants_landmark_ceremony=self._as_bool(result.get("wantsLandmarkCeremony"), False),
             prefers_indoor_backup=self._as_bool(result.get("prefersIndoorBackup"), False),
             extracted_tags=self._read_string_list(result.get("extractedTags")),
+            # 偏好那一格要**先知道场景抽到了什么**：同一句两边都收时从偏好里剔掉（见 _read_preferences）。
             extracted_preferences=self._read_preferences(
-                result.get("extractedPreferences"), request),
+                result.get("extractedPreferences"), request, extracted_episodes),
+            extracted_episodes=extracted_episodes,
         )
         constraints.analysis_source = "llm"
         if not constraints.extracted_tags:
@@ -89,7 +113,8 @@ class RequirementAnalysisService:
         return constraints
 
     def _build_user_prompt(self, request: TripPlanRequest,
-                           long_term_preferences: list[str] | None = None) -> str:
+                           long_term_preferences: list[str] | None = None,
+                           episodes: list[str] | None = None) -> str:
         # **喂给模型的额外要求要先洗过**：里面混着策略服务自己追加的句子
         # （「整体控制预算，优先保留高价值景点」等）。它们是"这一次"的调节，
         # 存下来会变成"每一趟都强制压预算"（§2.2.4）。用户原话才进这一格。
@@ -103,11 +128,12 @@ class RequirementAnalysisService:
             f"住宿：{self._safe(request.accommodation)}",
             f"额外要求：{self._safe(user_requirements)}",
         ]
-        # 长期偏好**原文**进的是这一格，不是 _SYSTEM_PROMPT：那是模块级常量，
-        # 而偏好是每人每趟不同的。规则（判断标准）在系统提示词里，事实（具体哪几条）
+        # 长期记忆**原文**进的是这一格，不是 _SYSTEM_PROMPT：那是模块级常量，
+        # 而记忆是每人每趟不同的。规则（判断标准）在系统提示词里，事实（具体哪几条）
         # 在用户提示词里——同一次调用，位置只影响模型怎么读。
         # 这一段里还带着「表单优先」那条纪律（§2.2.6）。
-        block = build_injection_block(long_term_preferences or [])
+        # 场景那一段的城市标签用 request.city：**调用方已经按它筛过了**（§2.4.3）。
+        block = build_injection_block(long_term_preferences or [], episodes or [], request.city)
         if block:
             lines.append(block)
         return "\n".join(lines)
@@ -157,16 +183,45 @@ class RequirementAnalysisService:
             extracted_tags.append("预留室内备选方案")
         return extracted_tags
 
-    def _read_preferences(self, node: object, request: TripPlanRequest) -> list[str]:
-        """读 extractedPreferences，并**挡掉表单勾选框的回声**。
+    def _read_preferences(self, node: object, request: TripPlanRequest,
+                          episodes: list[dict] | None = None) -> list[str]:
+        """读 extractedPreferences，并挡掉两种**不该进来的回声**。
 
-        用户提示词里那行「偏好：人文历史、自然风景」是这一次选的类型，模型有可能
-        顺手把它们当成"关于这个人的偏好"吐回来。那不是长期偏好——用户自己纠正过
-        这条（见 docs/ASK_LONGTERM_MEMORY.md §1.1：写入点只有备注和助手输入两处）。
-        精确相等就够：回声必然与勾选框一字不差。
+        一、**表单勾选框的回声**。用户提示词里那行「偏好：人文历史、自然风景」是这一次
+        选的类型，模型有可能顺手把它们当成"关于这个人的偏好"吐回来。那不是长期偏好
+        ——用户自己纠正过这条（见 docs/ASK_LONGTERM_MEMORY.md §1.1：写入点只有备注和
+        助手输入两处）。精确相等就够：回声必然与勾选框一字不差。
+
+        二、**同一句被两个桶都收下**（§2.4.4 要求互斥）。提示词里写死了互斥，但模型
+        仍可能两边都填——规则拦不干净，而这一条漏了的表现是**同一句话被注入两遍**，
+        且它是"上次发生的事"却挂在了"他这个人"名下、跟着他每一趟。
+        两处都是**精确相等**判据：同一句原文才会撞上。
         """
         chosen = {item.strip() for item in (request.preferences or []) if item and item.strip()}
-        return [value for value in self._read_string_list(node) if value.strip() not in chosen]
+        already_episodes = {item["content"].strip() for item in (episodes or [])}
+        return [value for value in self._read_string_list(node)
+                if value.strip() and value.strip() not in chosen
+                and value.strip() not in already_episodes]
+
+    def _read_episodes(self, node: object) -> list[dict]:
+        """读 extractedEpisodes：只收 `{city, content}` 都是非空字符串的那种条目。
+
+        **city 缺了就整条丢**（§2.4.4）：按城市取，没城市就永远捞不出来，
+        存了等于没存。长度闸门与 5 条上限归 EpisodeService——与偏好同一条分工理由。
+        """
+        if not isinstance(node, list):
+            return []
+        values: list[dict] = []
+        for item in node:
+            if not isinstance(item, dict):
+                continue
+            city, content = item.get("city"), item.get("content")
+            if not isinstance(city, str) or not isinstance(content, str):
+                continue
+            pair = {"city": city.strip(), "content": content.strip()}
+            if pair["city"] and pair["content"] and pair not in values:
+                values.append(pair)
+        return values
 
     def _read_string_list(self, node: object) -> list[str]:
         values: list[str] = []

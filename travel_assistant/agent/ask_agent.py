@@ -24,8 +24,12 @@ from ..clients.preference_store import SOURCE_CHAT
 from ..exceptions import TripPlanningException
 from ..models.ask_request import AskRequest, AskTurn
 from ..models.ask_response import AskResponse
+from ..service.episode_service import (
+    MAX_PER_USER as EPISODE_MAX_PER_USER,
+    EpisodeService,
+)
 from ..service.preference_service import (
-    MAX_PER_USER,
+    MAX_PER_USER as PREFERENCE_MAX_PER_USER,
     PreferenceService,
     build_injection_block,
 )
@@ -72,8 +76,9 @@ _SYSTEM_PROMPT = (
     "「方案里查不到这个景点」不是拒绝的理由，这类诉求照样判 need_change；"
     "你自己不要凭知识断言这个地点存不存在。\n"
     "9. 最后一轮只输出一个 JSON 对象，二选一，不要任何多余文字：\n"
-    "   {\"intent\":\"answer\",\"answer\":\"…\",\"preferences\":[]}\n"
-    "   {\"intent\":\"need_change\",\"answer\":\"…\",\"adjustmentPrompt\":\"…\",\"preferences\":[]}\n"
+    "   {\"intent\":\"answer\",\"answer\":\"…\",\"preferences\":[],\"episodes\":[]}\n"
+    "   {\"intent\":\"need_change\",\"answer\":\"…\",\"adjustmentPrompt\":\"…\","
+    "\"preferences\":[],\"episodes\":[]}\n"
     "   需要指定住宿位置时再加 \"anchorHint\":\"西湖\" 与 \"anchorDay\":1；"
     "需要指定某天必去某景点时再加 \"pinHints\":[\"白云山\",\"广州塔\"] 与 \"pinDay\":1。\n"
     "10. answer 用中文，控制在三句以内，不要复述整份方案；"
@@ -105,26 +110,40 @@ _SYSTEM_PROMPT = (
     "12. **本地库的答案要自己核对类别。** 检索永远会返回几条，返回了不等于对得上——"
     "用户问爬山却返回溶洞、问湖却返回博物馆，那就要说库里没有，"
     "不许因为「它是搜出来的」就把沾边的说成是用户要的。这条优先于「尽量给出答案」。\n"
-    "13. `preferences` 填用户在这一句里露出的**关于他自己**的长期偏好，"
-    "它会存下来、影响他以后每一趟。**判断标准是「这个人的」还是「这一趟的」**：\n"
-    "    要记（这个人的）：「对海鲜过敏」「我不能吃辣」「不吃香菜」「预算敏感」"
-    "「恐高」「带小孩出行」「喜欢安静」「腿脚不便」。\n"
-    "    不记（这一趟的）：「想去看升旗」「这次轻松点」「明天想去西湖」「这次多留一天」。\n"
-    "    **拿不准就按「这一趟的」不记。** 这一档宁可漏记，不可错记——"
-    "错记的那条会跟着他每一趟，而他根本不知道它在那儿。\n"
-    "    只记**用户本人**的。同行的人自己什么口味、什么状况，不算他的："
+    "13. 用户这一句里露出的**关于他自己**的长期记忆，是**两个互斥的桶**——"
+    "一句话只进一个，**不许两边都填**：\n"
+    "    ① `preferences` —— **这个人是怎样的**（不限哪一趟）。"
+    "要记：「对海鲜过敏」「我不能吃辣」「不吃香菜」「预算敏感」「恐高」"
+    "「带小孩出行」「喜欢安静」「腿脚不便」。\n"
+    "    ② `episodes` —— **上次在这个城市发生过什么**（已经发生的事），一条写成"
+    " {\"city\":\"杭州\",\"content\":\"上次那家酒店隔音差\"}。"
+    "要记：「上次杭州那家酒店隔音差」「上回去成都第二天排太满」"
+    "「上次在北京那家面馆排队太久」。**content 里不要重复城市**，城市有它自己那一格。\n"
+    "    两个桶都**别收**的（宁可少记）：\n"
+    "      · **这一趟的想法**，还没发生：「想去看升旗」「这次轻松点」「明天想去西湖」"
+    "「这次多留一天」——那是这次的要求，不是要记下来的事。\n"
+    "      · **没地点的事**：「上次那家酒店隔音差」——不知道是哪个城市，"
+    "以后永远捞不出来，**整条丢**。\n"
+    "      · 闲聊：「你好」「谢谢」「今天天气不错」。\n"
+    "    **拿不准就不记。** 记错的那条会跟着他每一趟，而他根本不知道它在那儿。\n"
+    "    `preferences` 那几格的规矩：\n"
+    "      只记**用户本人**的。同行的人自己什么口味、什么状况，不算他的："
     "「我老婆不能吃辣」「我朋友对海鲜过敏」「我妈腿脚不好」都整条不记。\n"
-    "    注意别人的话**不许「去掉主语再记」**：下面要求你不带主语，而「老婆不能吃辣」"
+    "      别人的话**不许「去掉主语再记」**：下面要求你不带主语，而「老婆不能吃辣」"
     "剥掉主语就是「不能吃辣」，跟用户本人说的**长得一模一样**，你分不出来，"
     "他以后每一趟也就都被这么带着了——所以只能整条丢。\n"
-    "    分界看是**谁**：同行的人是谁，是他的情况（「带小孩出行」要记）；"
+    "      分界看是**谁**：同行的人是谁，是他的情况（「带小孩出行」要记）；"
     "同行的人**自己**的口味和状况，不是。\n"
-    "    闲聊不记：「你好」「谢谢」「今天天气不错」。\n"
-    "    一句话里可以有多条：「我不吃辣也不吃香菜」→ [\"不吃辣\",\"不吃香菜\"]。\n"
-    "    每条只写**偏好本身**，短，不超过十几个字；不要带主语，不要写成一句话"
-    "（写「不吃辣」，不写「用户说他不能吃辣」），更不要把整句话抄进来。\n"
+    "      一句话里可以有多条：「我不吃辣也不吃香菜」→ [\"不吃辣\",\"不吃香菜\"]。\n"
+    "    `episodes` 的那条死规矩：**city 只许来自用户这一句的原话**——"
+    "不许拿当前方案的城市，也不许拿上下文补。他在杭州的页面上说「上次那家酒店隔音差」，"
+    "那个「上次」未必是杭州；猜错了，这条就**永远挂在错误的城市**下。"
+    "**读不出城市就整条丢**（宁可少记）。\n"
+    "    两个桶里每条都只写**偏好/事情本身**，短，不超过十几个字；"
+    "不要带主语，不要写成一句话（写「不吃辣」，不写「用户说他不能吃辣」），"
+    "更不要把整句话抄进来。\n"
     "    **没有就交空数组，不要为了填而填。** 你天然倾向于「总得输出点什么」，"
-    "这一格允许空——空是正常答案，不是失败。\n"
+    "这两格都允许空——空是正常答案，不是失败。\n"
 )
 
 _INTENTS = ("answer", "need_change")
@@ -137,6 +156,12 @@ _INTENTS = ("answer", "need_change")
 # 正好踩中"从头到尾看不到 JSON 脚手架"那条判据。
 # 数据不丢：它们照旧进 AskResponse.traces，只是不在聊天里显示。
 _AGENT_TRACE_NAME = "AskAgent"
+
+# 长期记忆那一层的留痕名（偏好 + 场景）。与上面同一个道理，它也**不进 SSE**：
+# 记忆注入不是一次工具调用，混进"工具调用进度条"里是另一种噪音。
+# 但它**必须进 AskResponse.traces**——「这一轮注入了 N 条」是这一档唯一能自动化
+# 证明注入真的发生了的痕迹（§2.4.7 判据 2/3 的追问侧，同 §2.2.9 判据 7 的理由）。
+_MEMORY_TRACE_NAME = "MemoryService"
 
 # 历史对话的窗口（见 docs/ASK_MULTITURN_MEMORY.md §3.4）。
 # 先说清这不是"怕撑爆"：实测一轮问答 ≈ 28 token，聊一百轮才刚赶上系统提示词那个量级。
@@ -195,6 +220,18 @@ def _history_messages(history: list[AskTurn] | None) -> list[HumanMessage | AIMe
     return messages
 
 
+def _read_or_empty(load: Callable[[], list[str]]) -> list[str]:
+    """读长期记忆时任何异常都当"没有"：记忆读不出来不该让整轮追问挂掉（§2.2.4）。
+
+    偏好与场景**各读各的**：一个库炸了，不该把另一个也一起搭进去——那等于
+    一个无关故障把"他还记着不吃辣"也一并抹掉了。
+    """
+    try:
+        return load()
+    except Exception:  # noqa: BLE001
+        return []
+
+
 class _Decision:
     """模型最后一轮输出的解析结果。"""
 
@@ -202,7 +239,8 @@ class _Decision:
                  adjustment_prompt: str | None = None,
                  anchor_hint: str | None = None, anchor_day: int | None = None,
                  pin_hints: list[str] | None = None, pin_day: int | None = None,
-                 preferences: list[str] | None = None):
+                 preferences: list[str] | None = None,
+                 episodes: list[dict] | None = None):
         self.intent = intent
         self.answer = answer
         self.adjustment_prompt = adjustment_prompt
@@ -211,17 +249,21 @@ class _Decision:
         self.pin_hints = pin_hints or []
         self.pin_day = pin_day
         self.preferences = preferences or []
+        self.episodes = episodes or []
 
 
 class AskAgent:
 
     def __init__(self, llm_client: LlmClient, attraction_agent: AttractionAgent,
                  weather_agent: WeatherAgent, hotel_agent: HotelAgent,
-                 preference_service: PreferenceService | None = None):
+                 preference_service: PreferenceService | None = None,
+                 episode_service: EpisodeService | None = None):
         self._llm_client = llm_client
         self._tools: list[BaseTool] = build_ask_tools(attraction_agent, weather_agent, hotel_agent)
-        # 不传就整条链不碰偏好：老的单测构造它时不带这个参数，行为与加这一档之前一字不差。
+        # 不传就整条链不碰长期记忆：老的单测构造它时不带这两个参数，
+        # 行为与加这两档之前一字不差。
         self._preference_service = preference_service
+        self._episode_service = episode_service
         self._agent: CompiledStateGraph | None = None
 
     def ask(self, request: AskRequest,
@@ -241,6 +283,10 @@ class AskAgent:
         if request.trip_plan is None or not (request.trip_plan.days or []):
             raise TripPlanningException("回传的方案里没有可追问的内容，请先生成一次旅行计划")
 
+        # 城市从**方案**里取，不从这一句里取（§2.4.3）：「上次那家隔音差」说的是哪个城市，
+        # 得看用户现在站在哪个方案的页面上。方案没有城市时场景一律不注入——
+        # 注进去反而是在诱导模型认错地方。
+        city = request.trip_plan.city
         context = AskContext(
             question=request.question,
             trip_plan=request.trip_plan,
@@ -253,15 +299,17 @@ class AskAgent:
         token = set_ask_context(context)
         try:
             messages: list = []
-            # 长期偏好**顶在最前**，是一条独立的系统消息，不是塞进历史。
+            # 长期记忆（偏好 + 本城市的场景）**顶在最前**，是一条独立的系统消息，
+            # 不是塞进历史。
             #
             # 不塞历史的两个理由：历史是"可以被不被读"的（模型能选择性忽略），
-            # 而且历史有窗口（_HISTORY_MAX_TURNS），偏好会被裁掉——那就等于
+            # 而且历史有窗口（_HISTORY_MAX_TURNS），记忆会被裁掉——那就等于
             # "有时候生效有时候不生效"，是最难查的一种坏。
             #
             # 也不改 create_agent(system_prompt=…)：那个参数在 create_agent 时
             # 就固化了，而 self._agent 是缓存的，按请求重建等于每轮把图重编译一遍。
-            block = self._preference_block(user_id)
+            preferences, episodes = self._injected_memory(user_id, city)
+            block = build_injection_block(preferences, episodes, city)
             if block:
                 messages.append(SystemMessage(content=block))
             # 历史在前、当前这句在后。模型看到的是完整的多轮，工具调用由它自己决定
@@ -279,6 +327,8 @@ class AskAgent:
             context.record(_AGENT_TRACE_NAME, "归一化改方案诉求", "等用户确认后才发 /adjust",
                            decision.adjustment_prompt or "", "pending")
         recorded = self._record_preferences(user_id, decision, context)
+        self._record_episodes(user_id, decision, context)
+        self._record_memory_trace(context, user_id, city, preferences, episodes)
         response = AskResponse(
             answer=decision.answer,
             intent=decision.intent,
@@ -297,14 +347,65 @@ class AskAgent:
             on_event("answer", response.model_dump(by_alias=True))
         return response
 
-    def _preference_block(self, user_id: int | None) -> str:
-        """这一轮要顶在最前的那段长期偏好。没接服务 / 没登录 / 一条都没有 → 空串。"""
-        if self._preference_service is None or user_id is None:
-            return ""
+    def _injected_memory(self, user_id: int | None,
+                         city: str | None) -> tuple[list[str], list[str]]:
+        """这一轮要顶在最前的长期记忆：(偏好原文, **本城市**的场景原文)。
+
+        两个都取回来是为了留痕——判据 2/3 要看的正是"注入了 N 条"；拼成提示词
+        那一步交给 build_injection_block。没接服务 / 没登录 → 两个空列表。
+        """
+        if user_id is None:
+            return [], []
+        preferences: list[str] = []
+        episodes: list[str] = []
+        if self._preference_service is not None:
+            preferences = _read_or_empty(
+                lambda: self._preference_service.list_for_injection(user_id))
+        if self._episode_service is not None:
+            episodes = _read_or_empty(lambda: self._episode_service.list_for_city(user_id, city))
+        return preferences, episodes
+
+    def _record_memory_trace(self, context: AskContext, user_id: int | None, city: str | None,
+                             preferences: list[str], episodes: list[str]) -> None:
+        """这一轮的记忆留痕：偏好几条、**本城市**的场景几条。
+
+        **登录了就写，两个都是 0 也写**——「换个城市 → 注入 0 条」只有写出来才验得了
+        （§2.4.7 判据 2）。这与规划链那条 `_build_preference_trace` 的触发条件不同：
+        那条要保住"默认链路留痕逐字一致"，这条没有那份包袱（没登录就不写，
+        而没登录时本来也碰不到记忆）。
+        """
+        if user_id is None or (self._preference_service is None and self._episode_service is None):
+            return
+        where = city if city else "方案里没有城市"
+        context.record(
+            _MEMORY_TRACE_NAME, "注入长期记忆",
+            f"偏好 {len(preferences)} 条；{where} 的场景：{len(episodes)} 条",
+            "、".join(preferences + episodes) if (preferences or episodes) else "没有可注入的",
+        )
+
+    def _record_episodes(self, user_id: int | None, decision: _Decision,
+                         context: AskContext) -> None:
+        """把这一句里露出的**场景**落库。整段包在 try 里，理由同 _record_preferences：
+        记记忆是搭便车的乘客，不能让它把车开翻（§2.2.4）。
+
+        **不弹回执**（§2.4.8）：那要动已验收的 `recorded_preferences` 契约，
+        而场景本趟不一定生效。新记下的那几条只在留痕里露一次。
+        """
+        if self._episode_service is None or user_id is None or not decision.episodes:
+            return
         try:
-            return build_injection_block(self._preference_service.list_for_injection(user_id))
-        except Exception:  # noqa: BLE001 - 偏好读不出来不该让整轮追问挂掉
-            return ""
+            result = self._episode_service.record(user_id, decision.episodes, SOURCE_CHAT)
+        except Exception:  # noqa: BLE001
+            return
+        if result.overflowed:
+            context.record(_MEMORY_TRACE_NAME, "记录场景记忆",
+                           "；".join(f"{city}：{content}" for city, content in result.added),
+                           f"已达 {EPISODE_MAX_PER_USER} 条上限，丢弃 {result.dropped_for_cap} 条",
+                           "fallback")
+        if result.added:
+            context.record(_MEMORY_TRACE_NAME, "记录场景记忆", "本句说到的",
+                           "记下：" + "；".join(f"{city}：{content}"
+                                              for city, content in result.added))
 
     def _record_preferences(self, user_id: int | None, decision: _Decision,
                             context: AskContext) -> list[str]:
@@ -323,14 +424,18 @@ class AskAgent:
         if result.overflowed:
             context.record(_AGENT_TRACE_NAME, "记录长期偏好",
                            "、".join(decision.preferences),
-                           f"已达 {MAX_PER_USER} 条上限，丢弃 {result.dropped_for_cap} 条",
+                           f"已达 {PREFERENCE_MAX_PER_USER} 条上限，丢弃 {result.dropped_for_cap} 条",
                            "fallback")
         return result.added
 
     @staticmethod
     def _emit_trace(on_event: Callable[[str, dict], None], trace) -> None:
-        """把一条留痕推给流式那条链。只推工具调用，理由见 _AGENT_TRACE_NAME 那段。"""
-        if trace.agent_name == _AGENT_TRACE_NAME:
+        """把一条留痕推给流式那条链。只推工具调用，理由见 _AGENT_TRACE_NAME 那段。
+
+        记忆那几条（`_MEMORY_TRACE_NAME`）同样不推：注入不是一次工具调用，
+        混进"工具调用进度条"里是噪音。它们照旧进 AskResponse.traces。
+        """
+        if trace.agent_name in (_AGENT_TRACE_NAME, _MEMORY_TRACE_NAME):
             return
         on_event("trace", trace.model_dump(by_alias=True))
 
@@ -374,9 +479,11 @@ class AskAgent:
             return _Decision(intent="need_change", answer=answer, adjustment_prompt=prompt,
                              anchor_hint=self._anchor_hint(parsed), anchor_day=self._anchor_day(parsed),
                              pin_hints=self._pin_hints(parsed), pin_day=self._pin_day(parsed),
-                             preferences=self._preferences(parsed))
+                             preferences=self._preferences(parsed),
+                             episodes=self._episodes(parsed))
         return _Decision(intent="answer", answer=answer or raw,
-                         preferences=self._preferences(parsed))
+                         preferences=self._preferences(parsed),
+                         episodes=self._episodes(parsed))
 
     def _record_fallback(self, context: AskContext, raw: str, why: str) -> None:
         context.record(_AGENT_TRACE_NAME, "解析模型最后一轮输出", raw[:120], why, "fallback")
@@ -444,6 +551,31 @@ class AskAgent:
             content = item.strip() if isinstance(item, str) else ""
             if content and content not in cleaned:
                 cleaned.append(content)
+        return cleaned
+
+    @staticmethod
+    def _episodes(parsed: dict) -> list[dict]:
+        """规则 13 的第二格：`[{"city": "杭州", "content": "上次那家酒店隔音差"}]`。收 dict / list 两种写法。
+
+        **city 缺了就整条丢**（§2.4.4）：场景是按城市存的，没城市就永远捞不出来，
+        存了等于没存，而且它还占着上限、用户以为记下了。长度闸门与 5 条上限归
+        EpisodeService——与 _preferences 同一条分工理由。
+        """
+        raw = parsed.get("episodes")
+        if isinstance(raw, dict):
+            raw = [raw]
+        if not isinstance(raw, list):
+            return []
+        cleaned: list[dict] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            city, content = item.get("city"), item.get("content")
+            if not isinstance(city, str) or not isinstance(content, str):
+                continue
+            pair = {"city": city.strip(), "content": content.strip()}
+            if pair["city"] and pair["content"] and pair not in cleaned:
+                cleaned.append(pair)
         return cleaned
 
     @staticmethod

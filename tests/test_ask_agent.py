@@ -972,3 +972,213 @@ def test_shouldKeepWorkingWhenThePreferenceStoreBlowsUp():
 
     assert response.answer == "好。"
     assert response.recorded_preferences is None
+
+
+# ---------- 第四档：场景（docs/ASK_LONGTERM_MEMORY.md §2.4）----------
+#
+# 与上面第二档那几条同一个分法：这里守的是**管道**（信封里那一格进不进库、
+# 按城市取回来的有没有顶到提示词最前），模型判得对不对归探针。
+# 判据 2/3（换城市 0 条、同城市 1 条）的单元面在「注入与留痕」那两条。
+
+def _episode_agent(episode_store, script=None, answer=None):
+    """只带场景记忆的 agent（偏好不接，免得两条链混在一起看不出是谁的功劳）。"""
+    from travel_assistant.service.episode_service import EpisodeService
+
+    agent = AskAgent(_StubLlmClient(True), _StubAttractionAgent(),
+                     _StubWeatherAgent(), _StubHotelAgent(),
+                     None, EpisodeService(episode_store))
+    graph = _RecordingGraph(agent._tools, script or [], answer or _answer_json("答。"))
+    agent._get_agent = lambda: graph
+    return agent, graph
+
+
+def _answer_with_episodes(episodes):
+    import json
+    return json.dumps({"intent": "answer", "answer": "好。", "episodes": episodes},
+                      ensure_ascii=False)
+
+
+def _ask_request_in_city(city: str, question: str = "第二天为什么这么赶") -> AskRequest:
+    """**方案的城市**才是取场景的依据（§2.4.3），所以这里改的是 trip_plan.city，
+    不是 request.city——两个都改只是为了让这份请求自洽。"""
+    plan = _trip_plan().model_copy(update={"city": city})
+    return AskRequest(question=question, trip_plan=plan, request=_request(city))
+
+
+def test_shouldRecordTheEpisodesFromTheEnvelope():
+    """判据 1 的单元面：信封里给了就落库，来源是 chat，城市原样存下。"""
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+
+    store = InMemoryEpisodeStore()
+    agent, _ = _episode_agent(store, answer=_answer_with_episodes(
+        [{"city": "杭州", "content": "上次那家酒店隔音差"}]))
+
+    agent.ask(_ask_request(), user_id=7)
+
+    assert [(row.city, row.content, row.source) for row in store.list_for_user(7)] == [
+        ("杭州", "上次那家酒店隔音差", "chat")]
+
+
+def test_shouldDropTheWholeEpisodeWhenTheCityIsMissing():
+    """**没城市就整条丢**（§2.4.4）：按城市取，没城市永远捞不出来。"""
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+
+    store = InMemoryEpisodeStore()
+    agent, _ = _episode_agent(store, answer=_answer_with_episodes([
+        {"content": "上次那家酒店隔音差"},
+        {"city": "", "content": "排队太久"},
+        {"city": "杭州", "content": "上次那家酒店隔音差"},
+    ]))
+
+    agent.ask(_ask_request(), user_id=7)
+
+    assert len(store.list_for_user(7)) == 1
+
+
+def test_shouldNotRecordEpisodesWhenTheEnvelopeSaysSo():
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+
+    store = InMemoryEpisodeStore()
+    agent, _ = _episode_agent(store, answer=_answer_with_episodes([]))
+
+    agent.ask(_ask_request(question="你好"), user_id=7)
+
+    assert store.list_for_user(7) == []
+
+
+def test_shouldNotRecordEpisodesWithoutAUserId():
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+
+    store = InMemoryEpisodeStore()
+    agent, _ = _episode_agent(store, answer=_answer_with_episodes(
+        [{"city": "杭州", "content": "上次那家酒店隔音差"}]))
+
+    agent.ask(_ask_request())
+
+    assert store.list_for_user(7) == []
+
+
+# ---------- 注入：按城市 ----------
+
+
+def test_shouldInjectTheEpisodesOfTheCityWeAreIn():
+    """判据 3 的单元面：方案是杭州，杭州那条就顶到最前。"""
+    from langchain_core.messages import SystemMessage
+
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+
+    store = InMemoryEpisodeStore()
+    store.add(7, "杭州", "上次那家酒店隔音差", "chat")
+    agent, graph = _episode_agent(store)
+
+    agent.ask(_ask_request_in_city("杭州"), user_id=7)
+
+    assert isinstance(graph.seen[0], SystemMessage)
+    assert "上次那家酒店隔音差" in graph.seen[0].content
+
+
+def test_shouldNotInjectTheEpisodesOfAnotherCity():
+    """**判据 2 的单元面**：方案换成都，杭州那条**一个字都不该出现**。"""
+    from langchain_core.messages import SystemMessage
+
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+
+    store = InMemoryEpisodeStore()
+    store.add(7, "杭州", "上次那家酒店隔音差", "chat")
+    agent, graph = _episode_agent(store)
+
+    agent.ask(_ask_request_in_city("成都"), user_id=7)
+
+    assert not any(isinstance(message, SystemMessage) for message in graph.seen)
+    assert not any("隔音差" in str(message.content) for message in graph.seen)
+
+
+def test_shouldNotInjectAnythingForAUserWithNoEpisodes():
+    """一条场景都没有时不加那条系统消息——没登录过的城市是常态。"""
+    from langchain_core.messages import SystemMessage
+
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+
+    agent, graph = _episode_agent(InMemoryEpisodeStore())
+
+    agent.ask(_ask_request_in_city("杭州"), user_id=7)
+
+    assert not any(isinstance(message, SystemMessage) for message in graph.seen)
+
+
+# ---------- 留痕：判据 2/3 唯一能自动化证伪 0 与 1 的地方 ----------
+
+
+def test_shouldReportTheInjectedEpisodeCountInTheTrace():
+    """**判据 3**：同城市 → 留痕里是 1 条。
+
+    「注入了 N 条」是这一档唯一能自动化证明注入真的发生了的痕迹——不加这条，
+    注入只能靠"答案看起来对"来判断，那不算判据（§2.2.9 判据 7 同一个理由）。
+    """
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+
+    store = InMemoryEpisodeStore()
+    store.add(7, "杭州", "上次那家酒店隔音差", "chat")
+    agent, _ = _episode_agent(store)
+
+    response = agent.ask(_ask_request_in_city("杭州"), user_id=7)
+
+    trace = [t for t in response.traces if t.agent_name == "MemoryService"][0]
+    assert "杭州 的场景：1 条" in trace.input_summary
+    assert "上次那家酒店隔音差" in trace.output_summary
+
+
+def test_shouldReportZeroInjectedEpisodesForAnotherCity():
+    """**判据 2**：换城市 → 留痕里是 **0** 条。
+
+    这一条与上面那条是一对：只验"存进去了"不算验，要验
+    「该出现的时候出现、不该出现的时候不出现」（§2.4.7）。
+    """
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+
+    store = InMemoryEpisodeStore()
+    store.add(7, "杭州", "上次那家酒店隔音差", "chat")
+    agent, _ = _episode_agent(store)
+
+    response = agent.ask(_ask_request_in_city("成都"), user_id=7)
+
+    trace = [t for t in response.traces if t.agent_name == "MemoryService"][0]
+    assert "成都 的场景：0 条" in trace.input_summary
+    assert "隔音差" not in trace.output_summary
+
+
+def test_shouldNotWriteAMemoryTraceWhenNobodyIsLoggedIn():
+    """没登录时不写那条痕：那条链本来就碰不到记忆，多一条痕反而是噪音。"""
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+
+    agent, _ = _episode_agent(InMemoryEpisodeStore())
+
+    response = agent.ask(_ask_request_in_city("杭州"))
+
+    assert [t for t in response.traces if t.agent_name == "MemoryService"] == []
+
+
+def test_shouldKeepTheMemoryTraceOutOfTheStreamingEvents():
+    """记忆留痕**不进 SSE**：注入不是一次工具调用，混进"工具调用进度条"里是噪音。
+    它照旧进 AskResponse.traces（上一条用例验的就是它）。"""
+    from travel_assistant.service.episode_service import EpisodeService
+    from travel_assistant.clients.episode_store import InMemoryEpisodeStore
+    from travel_assistant.service.preference_service import PreferenceService
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    preference_store = InMemoryPreferenceStore()
+    preference_store.add(7, "不能吃辣", "chat")
+    episode_store = InMemoryEpisodeStore()
+    episode_store.add(7, "杭州", "上次那家酒店隔音差", "chat")
+    agent = AskAgent(_StubLlmClient(True), _StubAttractionAgent(),
+                     _StubWeatherAgent(), _StubHotelAgent(),
+                     PreferenceService(preference_store), EpisodeService(episode_store))
+    agent._get_agent = lambda: _ScriptedGraph(agent._tools, [], _answer_json("答。"))
+
+    events = []
+    response = agent.ask(_ask_request_in_city("杭州"),
+                         lambda kind, payload: events.append((kind, payload)), user_id=7)
+
+    pushed = [name for name, _ in events]
+    assert "trace" not in pushed          # 记忆不留痕进流
+    assert [t.agent_name for t in response.traces if t.agent_name == "MemoryService"]

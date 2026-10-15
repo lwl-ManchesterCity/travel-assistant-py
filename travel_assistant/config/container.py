@@ -27,6 +27,7 @@ from ..clients.knowledge_base import TravelKnowledgeService
 from ..clients.llm import LlmClient, OpenAiCompatibleLlmClient
 from ..clients.local_attraction import InMemoryAttractionClient
 from ..clients.postgres_auth_store import PostgresAuthStore
+from ..clients.postgres_episode_store import PostgresEpisodeStore
 from ..clients.postgres_preference_store import PostgresPreferenceStore
 from ..clients.rule_hotel import RuleBasedHotelClient
 from ..clients.rule_route import RuleBasedRouteClient
@@ -42,6 +43,7 @@ from ..evaluator.daily_plan_evaluator import DailyPlanEvaluator
 from ..evaluator.route_evaluator import RouteEvaluator
 from ..evaluator.weather_evaluator import WeatherEvaluator
 from ..service.auth_service import AuthService
+from ..service.episode_service import EpisodeService
 from ..service.llm_narration_service import LlmNarrationService
 from ..service.hotel_anchor_service import HotelAnchorService
 from ..service.intercity_service import IntercityService
@@ -61,6 +63,7 @@ class Container:
     ask_agent: AskAgent
     auth_service: AuthService
     preference_service: PreferenceService
+    episode_service: EpisodeService
 
 
 def build_container(settings: Settings | None = None) -> Container:
@@ -105,6 +108,10 @@ def build_container(settings: Settings | None = None) -> Container:
     # 两个写入点（追问链 / 需求理解）与两处注入共用**同一个** service 实例。
     preference_service = PreferenceService(PostgresPreferenceStore())
 
+    # 情节记忆（docs/ASK_LONGTERM_MEMORY.md §2.4）。与偏好**分开两个 service**，
+    # 但共用同一个 Store 语义：两个写入点、两处注入也都共用同一个实例。
+    episode_service = EpisodeService(PostgresEpisodeStore())
+
     requirement_analysis_service = RequirementAnalysisService(llm_client)
     llm_narration_service = LlmNarrationService(llm_client)
     planner_agent = PlannerAgent(route_agent, daily_plan_evaluator, llm_narration_service, settings.anchor)
@@ -117,7 +124,8 @@ def build_container(settings: Settings | None = None) -> Container:
         HotelAnchorService(amap, amap_hotel_client, settings.anchor),
         attraction_client,
         IntercityService(amap, route_client),
-        preference_service)
+        preference_service,
+        episode_service)
 
     # Loop 闭环（Java agent/LoopPlanningAgent.java 及其三个协作者）
     request_optimization_strategy_service = RequestOptimizationStrategyService()
@@ -138,7 +146,7 @@ def build_container(settings: Settings | None = None) -> Container:
 
     # 方案 A 的追问 agent（移植基线之外的扩展，复用上面那三个数据 Agent）
     ask_agent = AskAgent(llm_client, attraction_agent, weather_agent, hotel_agent,
-                         preference_service)
+                         preference_service, episode_service)
 
     auth_service = AuthService(PostgresAuthStore(), settings.db.session_days)
 
@@ -149,6 +157,7 @@ def build_container(settings: Settings | None = None) -> Container:
         ask_agent=ask_agent,
         auth_service=auth_service,
         preference_service=preference_service,
+        episode_service=episode_service,
     )
 
 
@@ -190,3 +199,8 @@ def get_auth_service() -> AuthService:
 def get_preference_service() -> PreferenceService:
     """规划端点按类型注入 PreferenceService（第二档起，按 user_id 读写长期偏好）。"""
     return get_container().preference_service
+
+
+def get_episode_service() -> EpisodeService:
+    """按类型注入 EpisodeService（第四档起，按 user_id + 城市读写情节记忆）。"""
+    return get_container().episode_service

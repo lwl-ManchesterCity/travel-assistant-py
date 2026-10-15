@@ -28,14 +28,16 @@ class PlannerInputBuilder:
                  hotel_anchor_service: HotelAnchorService,
                  attraction_client=None,
                  intercity_service=None,
-                 preference_service=None):
+                 preference_service=None,
+                 episode_service=None):
         self._planning_data_agent = planning_data_agent
         self._requirement_analysis_service = requirement_analysis_service
         self._hotel_anchor_service = hotel_anchor_service
         self._attraction_client = attraction_client
         self._intercity_service = intercity_service
-        # 不传就整条链不碰偏好（老的单测构造它时不带这个参数）。
+        # 不传就整条链不碰长期记忆（老的单测构造它时不带这两个参数）。
         self._preference_service = preference_service
+        self._episode_service = episode_service
 
     def build(self, request: TripPlanRequest, user_id: int | None = None) -> PlannerInput:
         """组装一次规划的全部输入。
@@ -52,15 +54,23 @@ class PlannerInputBuilder:
         weather_result = context.weather_result
         hotel_result = context.hotel_result
         long_term = self._long_term_preferences(user_id)
-        constraints = self._requirement_analysis_service.analyze(request, long_term)
+        # 场景**按这一趟的城市**取（§2.4.3）：拿的是 request.city，与下面检索景点用的是同一个。
+        long_term_episodes = self._long_term_episodes(user_id, request.city)
+        constraints = self._requirement_analysis_service.analyze(
+            request, long_term, long_term_episodes)
         self._record_preferences(constraints, user_id)
+        self._record_episodes(constraints, user_id)
         self._validate_planning_inputs(attraction_result, weather_result, hotel_result)
         planning_notes = self._build_planning_notes(
-            request, attraction_result, weather_result, hotel_result, constraints, long_term)
+            request, attraction_result, weather_result, hotel_result, constraints,
+            long_term, long_term_episodes)
         agent_traces = self._build_agent_traces(request, attraction_result, weather_result, hotel_result, constraints)
         preference_trace = self._build_preference_trace(long_term, constraints)
         if preference_trace is not None:
             agent_traces.append(preference_trace)
+        episode_trace = self._build_episode_trace(request, user_id, long_term_episodes, constraints)
+        if episode_trace is not None:
+            agent_traces.append(episode_trace)
         anchors = self._hotel_anchor_service.resolve(request)
         day_candidates = self._hotel_anchor_service.build_day_candidates(
             request, anchors, list(hotel_result.hotels or []))
@@ -106,6 +116,57 @@ class PlannerInputBuilder:
             return self._preference_service.list_for_injection(user_id)
         except Exception:  # noqa: BLE001 - 偏好读不出来不该让整次规划挂掉
             return []
+
+    def _long_term_episodes(self, user_id: int | None, city: str | None) -> list[str]:
+        """这个人**在这个城市**的场景原文。没接服务 / 没登录 / 读不出来 → 空列表，规划照跑。
+
+        没城市时返回空——**不是**"把全部场景都拿出来"：场景取出来是给模型看
+        "上次在这儿发生了什么"，喂别的城市的等于在诱导它认错地方（§2.4.3）。
+        """
+        if self._episode_service is None or user_id is None or not city:
+            return []
+        try:
+            return self._episode_service.list_for_city(user_id, city)
+        except Exception:  # noqa: BLE001 - 场景读不出来不该让整次规划挂掉
+            return []
+
+    def _record_episodes(self, constraints: PlanningConstraints, user_id: int | None) -> None:
+        """把备注里抽出来的场景落库。整段包在 try 里、失败即不记（§2.2.4）：搭便车的乘客。"""
+        if self._episode_service is None or user_id is None:
+            return
+        try:
+            self._episode_service.record(user_id, constraints.extracted_episodes, SOURCE_FORM)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _build_episode_trace(self, request: TripPlanRequest, user_id: int | None,
+                             long_term_episodes: list[str],
+                             constraints: PlanningConstraints) -> AgentTrace | None:
+        """场景留痕：这一趟的城市注入了 N 条、本次新记下哪几条（§2.4.7 判据 2/3）。
+
+        **触发条件与 _build_preference_trace 故意不同**：那条在"什么都没有"时不写，
+        为的是保住默认链路的留痕逐字一致。这条**登录了就写**，哪怕两样都是 0——
+        判据 2 要看的正是「换个城市 → 注入 **0** 条」，不写出来就只剩"没有那条痕"
+        这个弱信号，而"没有"和"这条链根本没跑"看起来是一样的。
+        """
+        if self._episode_service is None or user_id is None:
+            return None
+        extracted = list(constraints.extracted_episodes or [])
+        city = request.city or "未填目的地"
+        input_summary = f"{city} 的场景：{len(long_term_episodes)} 条" + (
+            "（" + "；".join(long_term_episodes) + "）" if long_term_episodes else "")
+        if extracted:
+            output_summary = "本次新记下：" + "；".join(
+                f"{item['city']}：{item['content']}" for item in extracted)
+        else:
+            output_summary = "本次没有新的场景"
+        return AgentTrace(
+            agent_name="EpisodeService",
+            action="注入并记录场景记忆",
+            input_summary=input_summary,
+            output_summary=output_summary,
+            status="success",
+        )
 
     def _record_preferences(self, constraints: PlanningConstraints, user_id: int | None) -> None:
         """把备注里抽出来的长期偏好落库。整段包在 try 里、失败即不记（§2.2.4）：
@@ -251,7 +312,8 @@ class PlannerInputBuilder:
                               weather_result: WeatherQueryResult,
                               hotel_result: HotelSearchResult,
                               constraints: PlanningConstraints,
-                              long_term: list[str] | None = None) -> list[str]:
+                              long_term: list[str] | None = None,
+                              long_term_episodes: list[str] | None = None) -> list[str]:
         """注意这里同时是**总览文案的输入**（planning_notes 会进 LlmNarrationService 的
         总览 prompt），所以长期偏好写到这儿就够了，不用再往文案那一层单独穿一次 user_id。
         """
@@ -273,6 +335,10 @@ class PlannerInputBuilder:
             # 长期偏好进这里，规划器和总览文案都能看到。**一条都没有时不写**：
             # 默认链路的备注要与加这一档之前逐字一致。
             notes.append("这个人的长期偏好：" + "、".join(long_term))
+        if long_term_episodes:
+            # 场景同理，同一格（§2.4.5）。**写法上刻意与偏好那条并列**，
+            # 让总览文案知道这是"上次发生过的事"，不是"这次要办的事"。
+            notes.append(f"上次在{request.city}的事：" + "；".join(long_term_episodes))
         return notes
 
     def _build_agent_traces(self,

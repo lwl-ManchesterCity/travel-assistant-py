@@ -1,6 +1,7 @@
 -- 用户库的建表语句。由 db.get_pool() 在第一次用到数据库时幂等执行，不上 alembic。
 --
--- 第一档（登录）两张表，第二档（记偏好）加第三张，见 docs/ASK_LONGTERM_MEMORY.md §2.2。
+-- 第一档（登录）两张表，第二档（记偏好）加第三张，第四档（场景）加第四张，
+-- 见 docs/ASK_LONGTERM_MEMORY.md §2.2 与 §2.4。
 --
 -- **边界要记牢**：`create table if not exists` 对**已存在的表整条跳过**，
 -- 所以改列它一个字都不会做——加个字段、改个类型，这里写了也没用。
@@ -43,3 +44,24 @@ create table if not exists preferences (
 );
 
 -- 不另建索引：注入时那句 where user_id = %s 走上面 unique 约束的最左前缀。
+
+-- 第四档：情节记忆 / 场景（docs/ASK_LONGTERM_MEMORY.md §2.4.1）。
+-- 偏好回答"他是谁"，这张表回答"上次发生了什么"。
+--
+-- **city not null 是这一档的核心约束**，不是顺手加的：取的时候按城市捞（§2.4.3），
+-- 没地点就捞不出来，存了等于没存。闸门开在写入端，不在读取端。
+--
+-- 去重键是**三列**：「上次杭州那家隔音差」与「上次成都那家隔音差」是两条，不能撞。
+create table if not exists episodes (
+    id         bigserial   primary key,
+    user_id    bigint      not null references users (id) on delete cascade,
+    city       text        not null,
+    content    text        not null,
+    source     text        not null,
+    created_at timestamptz not null default now(),
+    unique (user_id, city, content)
+);
+
+-- 不另建索引：注入那句 where user_id = %s and city = %s 走上面 unique 约束的
+-- 最左前缀 (user_id, city)。注意**按人计数**（每人 50 条上限）那句是 where user_id = %s，
+-- 也走同一个前缀。
