@@ -7,12 +7,14 @@
 跨会话记得住你：不吃辣、同行的人对海鲜过敏、上次在杭州住的那家隔音差，
 下一次规划会自动带上，冲突时会当面指出来而不是顺着方案说「这家不错」。
 
-（下面每个功能都配了实拍图。图是真跑出来的：上海 → 北京 3 天，接了真模型与高德底图；
-全部产品图在 [`docs/images/`](docs/images/)，压成 webp 一共不到 1 MB。）
+> 下面每个功能都配了实拍图，都是真跑出来的：上海 → 北京 3 天，接真模型与高德底图。
+> 全部产品图在 [`docs/images/`](docs/images/)，压成 webp 一共不到 1 MB。
 
 ## 功能
 
-**规划**　景点 / 天气 / 酒店 / 路线四路数据，配了模型时由 `create_agent` 自主选工具取，
+### 规划
+
+景点 / 天气 / 酒店 / 路线四路数据，配了模型时由 `create_agent` 自主选工具取，
 没配模型自动退回固定顺序取数 + 规则兜底文案，**不配模型也能出完整行程**。
 出方案后走「生成 → 反思评分 → 批评 → 修正 → 再生成」的多轮闭环选最优。
 
@@ -26,47 +28,58 @@
 
 **② 提交，等它跑**　约 30 秒。SSE 把「景点 → 天气 → 酒店 → 路线 → 生成 → 反思」推到进度条上。
 
-![生成中：进度推到第 6 步](docs/images/generating.webp)
+<p align="center"><img src="docs/images/generating.webp" width="560" alt="生成中：进度推到第 6 步"></p>
 
 **③ 先看总览**　摘要、徽章、预算结余、通勤规模。摘要那段是模型写的，不是模板拼的。
 
-![行程总览](docs/images/result-overview.webp)
+<p align="center"><img src="docs/images/result-overview.webp" width="860" alt="行程总览"></p>
 
 **④ 看钱花在哪**　每一格都写着自己怎么估出来的。同一屏右边是真底图，「住」那个图钉就是住宿锚点。
 
-![预算明细 + 真实底图与住宿锚点](docs/images/result-budget-map.webp)
+<p align="center"><img src="docs/images/result-budget-map.webp" width="860" alt="预算明细 + 真实底图与住宿锚点"></p>
 
 **⑤ 最后翻每天**　每天一条时间轴、一段路线、三餐。最下面是这一轮的调整说明——反思提了什么、最后为什么这么定。
 
-![每日行程](docs/images/result-day1.webp)
+<p align="center"><img src="docs/images/result-day1.webp" width="860" alt="每日行程"></p>
 
 <details>
 <summary>更多规划截图：第 2 天、当日路线分段与三餐</summary>
 
-| 第 2 天：按反思意见减掉了故宫 | 路线分段（高德）与三餐 |
-| --- | --- |
-| ![第二天](docs/images/result-day2.webp) | ![路线与三餐](docs/images/result-route-meals.webp) |
+**第 2 天**：按反思意见减掉了故宫
+
+<p align="center"><img src="docs/images/result-day2.webp" width="860" alt="第 2 天：按反思意见减掉了故宫"></p>
+
+**路线分段（高德）与三餐**
+
+<p align="center"><img src="docs/images/result-route-meals.webp" width="860" alt="当日路线分段与三餐"></p>
 
 </details>
 
-**追问**　六个只读工具（方案总览 / 某天安排 / 景点详情 / 搜景点 / 查天气 / 荐酒店），
+### 追问
+
+六个只读工具（方案总览 / 某天安排 / 景点详情 / 搜景点 / 查天气 / 荐酒店），
 答不上就说答不上，不编。联网失败不整体失败，改用方案内数据作答并留一条 `failed` 留痕。
 SSE 推工具调用当进度条。说到新偏好会**顺手记下**，答案下面回一行「已记住」：
 
-![追问，顺手记住](docs/images/ask-remember.webp)
+<p align="center"><img src="docs/images/ask-remember.webp" width="860" alt="追问，顺手记住"></p>
 
-**改方案**　「第二天住得离西湖近一点」这类，追问时判出是改方案的诉求，
+### 改方案
+
+「第二天住得离西湖近一点」这类，追问时判出是改方案的诉求，
 但**它不擅自动手**。两步：
 
 **① 先给确认卡**　把改动翻成人话——「住宿位置：天安门（第 2 天）」。点「算了」就当没说过。
 
-![判出想改，先给确认卡](docs/images/ask-adjust-confirm.webp)
+<p align="center"><img src="docs/images/ask-adjust-confirm.webp" width="860" alt="判出想改，先给确认卡"></p>
 
 **② 点了才重算**　重算期间盖一层进度弹窗，不会偷偷改完再告诉你。
 
-![确认后才重算](docs/images/adjusting.webp)
+<p align="center"><img src="docs/images/adjusting.webp" width="560" alt="确认后才重算"></p>
 
-**长期记忆**　两桶互斥：
+### 长期记忆
+
+两桶互斥：
+
 - **偏好**——「不吃辣」记给本人，「老婆不吃辣」记给老婆，去重键是 `(用户, 角色, 内容)`，
   同一条内容两个角色各存一条
 - **场景**——「上次杭州那家酒店隔音差」按城市存，**只在目的地是杭州时**才注入
@@ -78,9 +91,11 @@ SSE 推工具调用当进度条。说到新偏好会**顺手记下**，答案下
 「太太和孩子也不能吃辣、爷爷不吃海鲜、太太还避香菜」——偏好不是躺在库里，
 是真进了提示词、真改了输出。记了哪些、要删哪条，点旅行助手右上角的「我的偏好」：
 
-![我的偏好：列出与删除](docs/images/preferences-panel.webp)
+<p align="center"><img src="docs/images/preferences-panel.webp" width="860" alt="我的偏好：列出与删除"></p>
 
-**账号**　注册 / 登录 / 登出。密码 bcrypt，会话 cookie `httponly` + `samesite=lax`。
+### 账号
+
+注册 / 登录 / 登出。密码 bcrypt，会话 cookie `httponly` + `samesite=lax`。
 长期记忆按 `user_id` 存，一个库装所有客户。
 
 | 登录 | 注册 |
@@ -192,7 +207,7 @@ PYTHONPATH=. .venv/bin/python -m travel_assistant.main
 
 **请求 / 响应字段、curl 示例、各端点行为细节见 [`docs/API.md`](docs/API.md)。**
 
-## 目录
+## 项目结构
 
 ```
 travel_assistant/
