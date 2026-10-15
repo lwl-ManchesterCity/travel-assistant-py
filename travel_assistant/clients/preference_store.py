@@ -21,6 +21,23 @@ from typing import Protocol
 SOURCE_FORM = "form"
 SOURCE_CHAT = "chat"
 
+# `subject` 的缺省值，也是**"这条是用户本人的"那个标记**（docs/ASK_LONGTERM_MEMORY.md §2.5.1）。
+# 注入时按它把偏好分成两段（本人 / 同行的人，§2.5.4），所以它不只是个默认值——
+# **改这个字符串要同时改 schema.sql 里那个 column default**（那里是字面量，改不了引用）。
+DEFAULT_SUBJECT = "本人"
+
+
+def render_preference(subject: str | None, content: str) -> str:
+    """一条偏好渲染成给人看的那串：**本人的只给内容，别人的带上是谁**。
+
+    回执（答案下面那行「已记住：…」）、规划留痕、注入块里的同行那一段、以及第三档的
+    列表，全走这一份——同一条偏好在四个地方得长一样，否则用户对不上。
+    只给「不能吃辣」的话，他妻子那条会被他当成自己的。
+    """
+    if not subject or subject == DEFAULT_SUBJECT:
+        return content
+    return f"{subject}{content}"
+
 
 @dataclass(frozen=True)
 class PreferenceRecord:
@@ -30,23 +47,29 @@ class PreferenceRecord:
     user_id: int
     content: str
     source: str
+    # 这条是**谁的**（第五档）。自由文本，不做归一化：老婆可能每趟都在、朋友就那一趟，
+    # 这个区别本身就是有用的信息（§2.5.1）。等于 DEFAULT_SUBJECT 就是用户本人的。
+    subject: str = DEFAULT_SUBJECT
     created_at: datetime | None = None
 
     @property
     def display_text(self) -> str:
         """给前端「已记住：…」和留痕用的那一段。前端不直接读 dataclass，见 to_payload。"""
-        return self.content
+        return render_preference(self.subject, self.content)
 
     def to_payload(self) -> dict:
         """过 API 的那一份。带 source 是给第三档的列表用的，前端现在只读 content。"""
-        return {"content": self.content, "source": self.source}
+        return {"content": self.content, "source": self.source, "subject": self.subject}
 
 
 class PreferenceStore(Protocol):
-    def add(self, user_id: int, content: str, source: str) -> bool:
+    def add(self, user_id: int, content: str, source: str,
+            subject: str = DEFAULT_SUBJECT) -> bool:
         """存一条。**已经有一条一模一样的就返回 False**（不算错误，是正常去重）。
 
-        判重按 (user_id, content)，与表上的 unique 约束同一套判据。
+        判重按 **(user_id, subject, content)**，与表上的 unique 约束同一套判据。
+        `subject` 放在最后并给缺省：**老调用方（只有本人的年代写的）不用改就还是本人的**，
+        而"缺省即本人"正好也是 §2.5.5 要的那条兜底。
         """
         ...
 
@@ -66,12 +89,15 @@ class InMemoryPreferenceStore:
         self._rows: dict[int, list[PreferenceRecord]] = {}
         self._next_id = 1
 
-    def add(self, user_id: int, content: str, source: str) -> bool:
+    def add(self, user_id: int, content: str, source: str,
+            subject: str = DEFAULT_SUBJECT) -> bool:
         rows = self._rows.setdefault(user_id, [])
-        if any(row.content == content for row in rows):
+        # 判重按三列：同一句话挂在两个角色下是两条（§2.5.2）。
+        if any(row.content == content and row.subject == subject for row in rows):
             return False
         rows.append(PreferenceRecord(
-            id=self._next_id, user_id=user_id, content=content, source=source))
+            id=self._next_id, user_id=user_id, content=content, source=source,
+            subject=subject))
         self._next_id += 1
         return True
 

@@ -57,10 +57,25 @@ def _request(**overrides) -> TripPlanRequest:
 
 
 def test_shouldReadTheExtractedPreferences():
+    llm = _StubLlmClient({"extractedPreferences": [
+        {"subject": "本人", "content": "对海鲜过敏"},
+        {"subject": "老婆", "content": "不吃辣"},
+    ]})
+    constraints = RequirementAnalysisService(llm).analyze(_request())
+
+    assert constraints.extracted_preferences == [
+        {"subject": "本人", "content": "对海鲜过敏"},
+        {"subject": "老婆", "content": "不吃辣"},
+    ]
+
+
+def test_shouldStillReadTheOldBareStringShape():
+    """老模型（或老提示词）只吐一串文本时，**subject 那一格不填**——
+    兜成「本人」是 PreferenceService 的事（§2.5.5），这一层只保证形状。"""
     llm = _StubLlmClient({"extractedPreferences": ["对海鲜过敏", "不吃辣"]})
     constraints = RequirementAnalysisService(llm).analyze(_request())
 
-    assert constraints.extracted_preferences == ["对海鲜过敏", "不吃辣"]
+    assert constraints.extracted_preferences == [{"content": "对海鲜过敏"}, {"content": "不吃辣"}]
 
 
 def test_shouldDefaultToNoPreferencesWhenTheModelOmitsTheField():
@@ -79,7 +94,7 @@ def test_shouldNotEchoTheFormCheckboxesBackAsPreferences():
     llm = _StubLlmClient({"extractedPreferences": ["自然风景", "不吃辣"]})
     constraints = RequirementAnalysisService(llm).analyze(_request(preferences=["自然风景"]))
 
-    assert constraints.extracted_preferences == ["不吃辣"]
+    assert constraints.extracted_preferences == [{"content": "不吃辣"}]
 
 
 def test_shouldKeepAMentionedPreferenceThatHappensToLookLikeACheckboxWord():
@@ -88,7 +103,7 @@ def test_shouldKeepAMentionedPreferenceThatHappensToLookLikeACheckboxWord():
     llm = _StubLlmClient({"extractedPreferences": ["自然风景"]})
     constraints = RequirementAnalysisService(llm).analyze(_request(preferences=["人文历史"]))
 
-    assert constraints.extracted_preferences == ["自然风景"]
+    assert constraints.extracted_preferences == [{"content": "自然风景"}]
 
 
 def test_shouldNotFailWhenPreferencesComeBackAsAString():
@@ -277,7 +292,7 @@ def test_shouldNotLetTheSameSentenceIntoBothBaskets():
 
     assert constraints.extracted_episodes == [{"city": "杭州", "content": sentence}]
     # 场景那一桶收下之后，偏好这一桶里就不该再有它；同批的其它偏好不受影响。
-    assert constraints.extracted_preferences == ["不吃辣"]
+    assert constraints.extracted_preferences == [{"content": "不吃辣"}]
 
 
 def test_shouldStillKeepPreferencesThatOnlyLookSimilar():
@@ -290,7 +305,7 @@ def test_shouldStillKeepPreferencesThatOnlyLookSimilar():
     })
     constraints = RequirementAnalysisService(llm).analyze(_request())
 
-    assert constraints.extracted_preferences == ["怕吵"]
+    assert constraints.extracted_preferences == [{"content": "怕吵"}]
     assert constraints.extracted_episodes == [{"city": "杭州", "content": "上次那家酒店隔音差"}]
 
 
@@ -326,3 +341,39 @@ def test_shouldStillWorkWithoutTheEpisodesArgument():
 
     assert constraints.relaxed_pace is True
     assert "他去过的地方" not in llm.user_prompt
+
+
+# ---------- 第五档：同行的人（docs/ASK_LONGTERM_MEMORY.md §2.5.4）----------
+
+
+def test_shouldPutCompanionsInTheirOwnSegment():
+    """**表单这一侧也必须分两段**：只改追问卷不改这里，就是"聊天里分得开、表单里分不开"
+    （§2.2.11 踩过一次"两处必须同时改"）。"""
+    llm = _StubLlmClient({})
+
+    RequirementAnalysisService(llm).analyze(
+        _request(), ["不吃辣"], None, ["老婆不能吃辣"])
+
+    assert "【同行的人的偏好】老婆不能吃辣" in llm.user_prompt
+    # 本人那一段里不许出现她。
+    assert "老婆" not in llm.user_prompt.split("【同行的人的偏好】")[0]
+    # 那条判不了的规矩也要在（没有代码兜底，只能写给模型）。
+    assert "本趟确实有这个人" in llm.user_prompt
+
+
+def test_shouldNotMentionCompanionsWhenThereAreNone():
+    llm = _StubLlmClient({})
+
+    RequirementAnalysisService(llm).analyze(_request(), ["不吃辣"], None, [])
+
+    assert "同行的人的偏好" not in llm.user_prompt
+
+
+def test_shouldStillWorkWithoutTheCompanionsArgument():
+    """老调用方（只传到 episodes 为止）行为不变。"""
+    llm = _StubLlmClient({"relaxedPace": True})
+
+    constraints = RequirementAnalysisService(llm).analyze(_request(), ["不吃辣"])
+
+    assert constraints.relaxed_pace is True
+    assert "同行的人的偏好" not in llm.user_prompt

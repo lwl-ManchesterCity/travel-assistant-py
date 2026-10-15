@@ -6,12 +6,17 @@
 
 from dataclasses import dataclass, field
 
-from ..clients.preference_store import PreferenceStore
+from ..clients.preference_store import DEFAULT_SUBJECT, PreferenceStore, render_preference
 
 # 一条偏好的长度上限。**这不是洁癖**：模型偶尔会把用户整句话当偏好吐出来
 # （「我希望这次去杭州的时候能顺便看看西湖」）。那不是偏好，是一条被截断的行程
 # 要求，存进去之后**每一次**规划都会被带上。
 MAX_CONTENT_CHARS = 40
+
+# 角色名的长度闸门（第五档）。角色是「本人」「老婆」「我妈」这种，10 字对谁都够宽；
+# 它防的是模型把整句话塞进 subject——那一格被污染，这条偏好就会被归到一段
+# 根本不存在的"同行的人"里，从而**有条件地不生效**（§2.5.4 那条规矩）。
+MAX_SUBJECT_CHARS = 10
 
 # 一次最多取几条。用户一口气说八条，前五条大概率才是他真正在意的，
 # 后三条往往是抱怨的复述。
@@ -69,81 +74,159 @@ class PreferenceService:
     def __init__(self, store: PreferenceStore):
         self._store = store
 
-    def record(self, user_id: int, contents: list[str] | None, source: str) -> RecordResult:
+    def record(self, user_id: int, items: object, source: str) -> RecordResult:
         """把模型/表单抽出的一批偏好落库，**只返回真正新存进去的**。
+
+        `items` 是 `[{"subject": "本人", "content": "不吃辣"}, …]`，也就是信封里那一格的
+        原样；**也收裸字符串**，那种按「本人」兜（§2.5.5）——老模型、老调用方只吐一串
+        文本，不能让它们变成"记不上"。
 
         任何一步出问题都不抛：记偏好是搭便车的乘客，不能让它把车开翻——
         规划失败和偏好没记住，代价差着一个量级（§2.2.4）。
         """
         result = RecordResult()
-        if user_id is None or not contents:
+        if user_id is None or not items:
             return result
-        cleaned = self._clean_batch(contents)
+        cleaned = self._clean_batch(items)
         if not cleaned:
             return result
 
         # 现有那几条一次读出来，两件事都用它：**撞上限的计数**，以及**判重**。
         # 顺序要紧——先判重再判上限：满了之后又说一遍已经有的，那是"重复"
         # 不是"溢出"，报成溢出会让留痕说"丢弃了 N 条"，而其实一条都没丢。
+        #
+        # 判重的键是 **(subject, content)** 两列，与库上那个三列唯一键（含 user_id）
+        # 同一套判据。「本人不吃辣」和「老婆不吃辣」是两条，**不许撞**（§2.5.2）。
         rows = self._store.list_for_user(user_id)
-        existing = {row.content for row in rows}
+        existing = {(row.subject, row.content) for row in rows}
         kept = len(rows)
-        for content in cleaned:
-            if content in existing:
+        for subject, content in cleaned:
+            if (subject, content) in existing:
                 continue
             if kept >= MAX_PER_USER:
                 result.dropped_for_cap += 1
                 continue
-            if self._store.add(user_id, content, source):
-                result.added.append(content)
-                existing.add(content)
+            if self._store.add(user_id, content, source, subject):
+                # **回执也走 render_preference**（§2.5.6）：added 是"答案下面那行
+                # 「已记住：…」"的来源，裸给 content 的话，两个角色说同一句话时
+                # 屏幕上会长得一模一样——而那是两个人。
+                result.added.append(render_preference(subject, content))
+                existing.add((subject, content))
                 kept += 1
         return result
 
-    def list_for_injection(self, user_id: int) -> list[str]:
-        """注入提示词用的那几条原文，按写入先后。没有就是空列表——**空列表不是错误**。"""
+    def list_belonging(self, user_id: int) -> list[str]:
+        """**用户本人**的偏好原文，按写入先后。没有就是空列表——**空列表不是错误**。"""
         if user_id is None:
             return []
-        return [row.content for row in self._store.list_for_user(user_id)]
+        return [row.content for row in self._store.list_for_user(user_id)
+                if row.subject == DEFAULT_SUBJECT]
+
+    def list_companions(self, user_id: int) -> list[str]:
+        """**同行的人**的偏好，按写入先后，每条**带上是谁**（「老婆不能吃辣」）。
+
+        第五档之前这一份不存在（别人的整条不记，§1.2 第 3 条）；现在记了，就必须
+        带着角色一起注入：只给「不能吃辣」，模型会当成用户自己的。
+        """
+        if user_id is None:
+            return []
+        return [render_preference(row.subject, row.content)
+                for row in self._store.list_for_user(user_id)
+                if row.subject != DEFAULT_SUBJECT]
 
     @staticmethod
-    def _clean_batch(contents: list[str]) -> list[str]:
+    def _clean_batch(items: object) -> list[tuple[str, str]]:
         """清洗 + 本批内去重 + 截到 5 条。**顺序不能反**：先截 5 条的话，
         前 5 条里若有两条清洗后变成同一条，实际就只记了 4 条。"""
-        cleaned: list[str] = []
-        for item in contents:
-            content = PreferenceService._clean(item)
-            if content and content not in cleaned:
-                cleaned.append(content)
+        if not isinstance(items, list):
+            return []
+        cleaned: list[tuple[str, str]] = []
+        for item in items:
+            pair = PreferenceService._clean_item(item)
+            if pair is not None and pair not in cleaned:
+                cleaned.append(pair)
         return cleaned[:MAX_PER_CALL]
 
     @staticmethod
+    def _clean_item(item: object) -> tuple[str, str] | None:
+        """一条偏好 → (subject, content)。不合规（空的、太长的）返回 None。
+
+        **subject 缺了 / 空白按「本人」兜**（§2.5.5）：宁可当成他本人的（第五档之前
+        所有条目本来也都是本人的），也不要凭空造一个同行的人——那会让这条偏好
+        变成"有条件才生效"。
+        """
+        if isinstance(item, str):
+            subject, content = DEFAULT_SUBJECT, item
+        elif isinstance(item, dict):
+            subject, content = item.get("subject"), item.get("content")
+        else:
+            return None
+        cleaned_subject = clean_content(subject, MAX_SUBJECT_CHARS) or DEFAULT_SUBJECT
+        cleaned_content = clean_content(content, MAX_CONTENT_CHARS)
+        if not cleaned_content:
+            return None
+        return cleaned_subject, cleaned_content
+
+    @staticmethod
     def _clean(item: object) -> str:
-        """规范化一条。不合规（空的、太长的）返回空串，由调用方丢掉。"""
-        return clean_content(item, MAX_CONTENT_CHARS)
+        """只取内容那一半。留着是给别处单点清洗用。"""
+        pair = PreferenceService._clean_item(item)
+        return pair[1] if pair else ""
 
 
-def build_injection_block(preferences: list[str] | None,
+def render_extracted(items: object) -> list[str]:
+    """把抽出来的那一批（信封 / 备注那一格的形状：`[{"subject":…, "content":…}]`）
+    渲染成给人看的一串。裸字符串也收（老模型 / 老提示词）。
+
+    留痕用它，走的是与 PreferenceRecord.display_text 同一份 render_preference——
+    **本人只给内容、别人的带上是谁**，这样留痕里一眼能看出"这条记给谁了"。
+    """
+    if not isinstance(items, list):
+        return []
+    rendered: list[str] = []
+    for item in items:
+        if isinstance(item, str):
+            text = item.strip()
+        elif isinstance(item, dict):
+            text = render_preference(item.get("subject"), item.get("content") or "")
+        else:
+            continue
+        if text:
+            rendered.append(text)
+    return rendered
+
+
+def build_injection_block(belonging: list[str] | None,
+                          companions: list[str] | None = None,
                           episodes: list[str] | None = None,
                           episode_city: str | None = None) -> str:
     """把长期记忆原文拼成进提示词的那一段。**两条链共用这一份**（§2.2.6）。
 
-    偏好与场景（§2.4.5）两段，都进同一个位置。**两样都没有时返回空串**，
-    调用方据此跳过——不要拼一段"暂无长期记忆"塞进去，
-    那等于每轮都提醒模型"这里本来该有点什么"。
+    三段：**本人的偏好**、**同行的人的偏好**（§2.5.4 拆出来的）、**本城市发生过的场景**
+    （§2.4.5）。都进同一个位置。**三段都空时返回空串**，调用方据此跳过——
+    不要拼一段"暂无长期记忆"塞进去，那等于每轮都提醒模型"这里本来该有点什么"。
 
     场景那一段只在**本次这个城市**有东西时出现：取的时候就是按城市选的
     （§2.4.3），所以到这里一定同属一个城市，一行 `城市：A；B` 就够。
     """
-    preferences = preferences or []
+    belonging = belonging or []
+    companions = companions or []
     episodes = episodes or []
-    if not preferences and not episodes:
+    if not belonging and not companions and not episodes:
         return ""
     lines: list[str] = []
-    if preferences:
-        lines.append(f"【这个人的长期偏好】{'、'.join(preferences)}")
+    if belonging:
+        lines.append(f"【这个人的长期偏好】{'、'.join(belonging)}")
         lines.append("这些是他在过去某次说过的、关于**他自己**的偏好，不限于本趟。"
                      "回答与规划时都要照顾到。")
+    if companions:
+        lines.append(f"【同行的人的偏好】{'、'.join(companions)}")
+        # 这一条**没有代码兜底**，与 §2.2.6 的「表单优先」同类：系统不知道这一趟谁同行，
+        # 判不了，就只能写成一句给模型的话。
+        lines.append("这些是**同行的人**的，不是他的——每条前面写着是谁。"
+                     "**只在本趟确实有这个人时才生效**（他这次提到了这个人，"
+                     "或者这一趟本来就是这个组合）；不确定就别硬套，"
+                     "但也别默默丢掉，说一句你不确定。")
     if episodes:
         city = episode_city or "本次目的地"
         lines.append(f"【他去过的地方，提到过的事】{city}：{'；'.join(episodes)}")

@@ -17,6 +17,7 @@ from ..models.trip_plan_request import TripPlanRequest
 from ..clients.preference_store import SOURCE_FORM
 from ..models.weather_query_result import WeatherQueryResult
 from .hotel_anchor_service import HotelAnchorService
+from .preference_service import render_extracted
 from .requirement_analysis_service import RequirementAnalysisService
 
 
@@ -54,18 +55,19 @@ class PlannerInputBuilder:
         weather_result = context.weather_result
         hotel_result = context.hotel_result
         long_term = self._long_term_preferences(user_id)
+        long_term_companions = self._long_term_companions(user_id)
         # 场景**按这一趟的城市**取（§2.4.3）：拿的是 request.city，与下面检索景点用的是同一个。
         long_term_episodes = self._long_term_episodes(user_id, request.city)
         constraints = self._requirement_analysis_service.analyze(
-            request, long_term, long_term_episodes)
+            request, long_term, long_term_episodes, long_term_companions)
         self._record_preferences(constraints, user_id)
         self._record_episodes(constraints, user_id)
         self._validate_planning_inputs(attraction_result, weather_result, hotel_result)
         planning_notes = self._build_planning_notes(
             request, attraction_result, weather_result, hotel_result, constraints,
-            long_term, long_term_episodes)
+            long_term, long_term_episodes, long_term_companions)
         agent_traces = self._build_agent_traces(request, attraction_result, weather_result, hotel_result, constraints)
-        preference_trace = self._build_preference_trace(long_term, constraints)
+        preference_trace = self._build_preference_trace(long_term, long_term_companions, constraints)
         if preference_trace is not None:
             agent_traces.append(preference_trace)
         episode_trace = self._build_episode_trace(request, user_id, long_term_episodes, constraints)
@@ -109,12 +111,25 @@ class PlannerInputBuilder:
         )
 
     def _long_term_preferences(self, user_id: int | None) -> list[str]:
-        """这个人的长期偏好原文。没接服务 / 没登录 / 读不出来 → 空列表，规划照跑。"""
+        """**本人**的长期偏好原文。没接服务 / 没登录 / 读不出来 → 空列表，规划照跑。"""
         if self._preference_service is None or user_id is None:
             return []
         try:
-            return self._preference_service.list_for_injection(user_id)
+            return self._preference_service.list_belonging(user_id)
         except Exception:  # noqa: BLE001 - 偏好读不出来不该让整次规划挂掉
+            return []
+
+    def _long_term_companions(self, user_id: int | None) -> list[str]:
+        """**同行的人**的偏好，每条带着是谁（「老婆不能吃辣」，§2.5.4）。
+
+        与本人的分开取、分开传：注入时分两段写，混在一起模型就分不出哪条是谁的——
+        而"这条到底是不是他的"正是第五档要修的东西。
+        """
+        if self._preference_service is None or user_id is None:
+            return []
+        try:
+            return self._preference_service.list_companions(user_id)
+        except Exception:  # noqa: BLE001
             return []
 
     def _long_term_episodes(self, user_id: int | None, city: str | None) -> list[str]:
@@ -179,19 +194,22 @@ class PlannerInputBuilder:
         except Exception:  # noqa: BLE001
             pass
 
-    def _build_preference_trace(self, long_term: list[str],
+    def _build_preference_trace(self, long_term: list[str], companions: list[str],
                                 constraints: PlanningConstraints) -> AgentTrace | None:
         """注入留痕。**一条偏好都没有、也没抽出来新的时不写**：默认链路的留痕要与
         加这一档之前逐字一致，多一条都算差异（照 _build_anchor_trace 的规矩）。
 
         「注入了 N 条」是本档唯一能自动化证明注入真的发生了的痕迹（§2.2.9 判据 7）——
         不加这条，注入只能靠"答案看起来对"来判断，那不算判据。
+        第五档起本人与同行的人**分开报数**：那正是这一档要能一眼看出来的东西。
         """
-        extracted = list(constraints.extracted_preferences or [])
-        if not long_term and not extracted:
+        extracted = render_extracted(constraints.extracted_preferences)
+        if not long_term and not companions and not extracted:
             return None
         input_summary = f"长期偏好：{len(long_term)} 条" + (
             "（" + "、".join(long_term) + "）" if long_term else "")
+        if companions:
+            input_summary += f"；同行的人：{len(companions)} 条（{'、'.join(companions)}）"
         if extracted:
             output_summary = "本次新记下：" + "、".join(extracted)
         else:
@@ -313,7 +331,8 @@ class PlannerInputBuilder:
                               hotel_result: HotelSearchResult,
                               constraints: PlanningConstraints,
                               long_term: list[str] | None = None,
-                              long_term_episodes: list[str] | None = None) -> list[str]:
+                              long_term_episodes: list[str] | None = None,
+                              long_term_companions: list[str] | None = None) -> list[str]:
         """注意这里同时是**总览文案的输入**（planning_notes 会进 LlmNarrationService 的
         总览 prompt），所以长期偏好写到这儿就够了，不用再往文案那一层单独穿一次 user_id。
         """
@@ -335,6 +354,10 @@ class PlannerInputBuilder:
             # 长期偏好进这里，规划器和总览文案都能看到。**一条都没有时不写**：
             # 默认链路的备注要与加这一档之前逐字一致。
             notes.append("这个人的长期偏好：" + "、".join(long_term))
+        if long_term_companions:
+            # 第五档：同行的人**单独一行**，不并进上面那条。并进去就等于又混成
+            # "都是他的"了——那正是这一档要修的东西。行首写明是谁的，总览文案照这个说。
+            notes.append("同行的人的偏好（不是他的）：" + "、".join(long_term_companions))
         if long_term_episodes:
             # 场景同理，同一格（§2.4.5）。**写法上刻意与偏好那条并列**，
             # 让总览文案知道这是"上次发生过的事"，不是"这次要办的事"。

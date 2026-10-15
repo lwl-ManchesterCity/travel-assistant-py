@@ -1182,3 +1182,112 @@ def test_shouldKeepTheMemoryTraceOutOfTheStreamingEvents():
     pushed = [name for name, _ in events]
     assert "trace" not in pushed          # 记忆不留痕进流
     assert [t.agent_name for t in response.traces if t.agent_name == "MemoryService"]
+
+
+# ---------- 第五档：角色（docs/ASK_LONGTERM_MEMORY.md §2.5）----------
+#
+# 规则 13 那条「别人的整条不记」被撤掉了，改成**记下来、标出是谁**（§2.5.3）。
+# 这里守追问侧：信封里带 subject 的能落库、缺 subject 的兜「本人」、注入时分两段。
+
+def _answer_with_subject_preferences(items):
+    import json
+    return json.dumps({"intent": "answer", "answer": "好。", "preferences": items},
+                      ensure_ascii=False)
+
+
+def test_shouldRecordACompanionsPreferenceFromTheEnvelope():
+    """**这一档的核心**：以前「我老婆不能吃辣」整条不记，现在记，且标出是老婆的。"""
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    agent, _ = _preference_agent(store, [], answer=_answer_with_subject_preferences(
+        [{"subject": "老婆", "content": "不能吃辣"}]))
+
+    response = agent.ask(_ask_request(question="我老婆不能吃辣"), user_id=7)
+
+    assert [(row.subject, row.content) for row in store.list_for_user(7)] == [("老婆", "不能吃辣")]
+    # 回执**带上角色**（§2.5.6 补的那段）：库里那一格不写角色是为了去重（§2.5.2），
+    # 屏幕上这行必须看得出是谁的——裸给内容的话，本人说同一句话就长得一样了。
+    assert response.recorded_preferences == ["老婆不能吃辣"]
+
+
+def test_shouldDefaultToTheUserHimselfWhenTheEnvelopeOmitsTheSubject():
+    """**缺 subject 的按「本人」兜**（§2.5.5）——老模型只吐一串文本时也得分得清。"""
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    agent, _ = _preference_agent(store, [], answer=_answer_with_subject_preferences(
+        [{"content": "不吃辣"}, "怕吵"]))
+
+    agent.ask(_ask_request(), user_id=7)
+
+    assert [(row.subject, row.content) for row in store.list_for_user(7)] == [
+        ("本人", "不吃辣"), ("本人", "怕吵")]
+
+
+def test_shouldKeepBothTheOwnAndTheCompanionsVersionOfTheSameWords():
+    """同一句话挂在两个角色下是**两条**：去重键是三列（§2.5.2）。"""
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    agent, _ = _preference_agent(store, [], answer=_answer_with_subject_preferences(
+        [{"subject": "本人", "content": "不吃辣"}, {"subject": "老婆", "content": "不吃辣"}]))
+
+    agent.ask(_ask_request(), user_id=7)
+
+    assert sorted(row.subject for row in store.list_for_user(7)) == ["本人", "老婆"]
+
+
+def test_shouldInjectCompanionsInTheirOwnSegment():
+    """§2.5.4：同行的人**不在本人那一段里**。只给「不能吃辣」的话，
+    模型会当成用户自己的——那正是这一档要修的东西。"""
+    from langchain_core.messages import SystemMessage
+
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    store.add(7, "不吃辣", "chat")
+    store.add(7, "不能吃辣", "chat", "老婆")
+    agent, graph = _preference_agent(store, [])
+
+    agent.ask(_ask_request(), user_id=7)
+
+    block = graph.seen[0].content
+    assert isinstance(graph.seen[0], SystemMessage)
+    belonging_segment = block.split("【同行的人的偏好】")[0]
+    assert "不吃辣" in belonging_segment
+    assert "老婆" not in belonging_segment          # 本人那一段里不许出现她
+    assert "【同行的人的偏好】老婆不能吃辣" in block
+
+
+def test_shouldReportTheTwoCountsSeparatelyInTheTrace():
+    """留痕里本人与同行的人**分开报数**——这是这一档唯一能自动化看出
+    "分开了没有"的地方。"""
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    store.add(7, "不吃辣", "chat")
+    store.add(7, "不能吃辣", "chat", "老婆")
+    agent, _ = _preference_agent(store, [])
+
+    response = agent.ask(_ask_request(), user_id=7)
+
+    trace = [t for t in response.traces if t.agent_name == "MemoryService"][0]
+    assert "本人 1 条" in trace.input_summary
+    assert "同行的人 1 条" in trace.input_summary
+    assert "老婆不能吃辣" in trace.output_summary
+
+
+def test_shouldNotMentionCompanionsWhenThereAreNone():
+    from langchain_core.messages import SystemMessage
+
+    from travel_assistant.clients.preference_store import InMemoryPreferenceStore
+
+    store = InMemoryPreferenceStore()
+    store.add(7, "不吃辣", "chat")
+    agent, graph = _preference_agent(store, [])
+
+    agent.ask(_ask_request(), user_id=7)
+
+    assert isinstance(graph.seen[0], SystemMessage)
+    assert "同行的人的偏好" not in graph.seen[0].content

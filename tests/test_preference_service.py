@@ -33,7 +33,7 @@ def test_should_store_and_readBackTheFullList():
     result = service.record(1, ["不能吃辣", "不吃香菜"], SOURCE_CHAT)
 
     assert result.added == ["不能吃辣", "不吃香菜"]
-    assert service.list_for_injection(1) == ["不能吃辣", "不吃香菜"]
+    assert service.list_belonging(1) == ["不能吃辣", "不吃香菜"]
 
 
 def test_shouldKeepTheSourceSoWeCanTellWhereItCameFrom():
@@ -51,8 +51,8 @@ def test_shouldNotMixUpTwoUsers():
     service.record(1, ["不能吃辣"], SOURCE_CHAT)
     service.record(2, ["不吃香菜"], SOURCE_CHAT)
 
-    assert service.list_for_injection(1) == ["不能吃辣"]
-    assert service.list_for_injection(2) == ["不吃香菜"]
+    assert service.list_belonging(1) == ["不能吃辣"]
+    assert service.list_belonging(2) == ["不吃香菜"]
 
 
 # ---------- 判据 4：说两遍还是一条 ----------
@@ -65,7 +65,7 @@ def test_shouldNotStoreTheSameThingTwice():
 
     # 第二次**什么都不返回**——前端那行「已记住」只报新增的，重复说不该再弹一次。
     assert second.added == []
-    assert service.list_for_injection(1) == ["不能吃辣"]
+    assert service.list_belonging(1) == ["不能吃辣"]
 
 
 def test_shouldDedupeWithinASingleBatch():
@@ -83,7 +83,7 @@ def test_shouldTreatTheSameWordsFromTwoSourcesAsOneRow():
     again = service.record(1, ["对海鲜过敏"], SOURCE_CHAT)
 
     assert again.added == []
-    assert service.list_for_injection(1) == ["对海鲜过敏"]
+    assert service.list_belonging(1) == ["对海鲜过敏"]
 
 
 # ---------- 规范化 ----------
@@ -103,7 +103,7 @@ def test_shouldStripTrailingPunctuationSoItDoesNotForkTheRow():
     result = service.record(1, ["不吃辣。", "怕吵！！"], SOURCE_CHAT)
 
     assert result.added == ["怕吵"]
-    assert service.list_for_injection(1) == ["不吃辣", "怕吵"]
+    assert service.list_belonging(1) == ["不吃辣", "怕吵"]
 
 
 def test_shouldDropEntriesThatAreTooLong():
@@ -117,7 +117,7 @@ def test_shouldDropEntriesThatAreTooLong():
     result = service.record(1, [too_long, "不吃辣"], SOURCE_CHAT)
 
     assert result.added == ["不吃辣"]
-    assert service.list_for_injection(1) == ["不吃辣"]
+    assert service.list_belonging(1) == ["不吃辣"]
 
 
 def test_shouldKeepAnEntryRightAtTheLengthLimit():
@@ -139,7 +139,7 @@ def test_shouldDoNothingWhenThereIsNothingToStore():
 
     assert service.record(1, [], SOURCE_CHAT).added == []
     assert service.record(1, None, SOURCE_CHAT).added == []
-    assert service.list_for_injection(1) == []
+    assert service.list_belonging(1) == []
 
 
 def test_shouldDoNothingWithoutAUser():
@@ -157,7 +157,7 @@ def test_shouldTakeAtMostFiveEntriesFromOneBatch():
     result = service.record(1, [f"偏好{i}" for i in range(8)], SOURCE_CHAT)
 
     assert len(result.added) == MAX_PER_CALL
-    assert service.list_for_injection(1) == [f"偏好{i}" for i in range(MAX_PER_CALL)]
+    assert service.list_belonging(1) == [f"偏好{i}" for i in range(MAX_PER_CALL)]
 
 
 def test_shouldCountTheFiveLimitAfterCleaningNotEmptyBefore():
@@ -175,14 +175,14 @@ def test_shouldStopAtFiftyAndReportHowManyWereDropped():
     for batch in range(1, MAX_PER_USER // MAX_PER_CALL):
         service.record(1, [f"偏好{batch * MAX_PER_CALL + i}" for i in range(MAX_PER_CALL)],
                        SOURCE_CHAT)
-    assert len(service.list_for_injection(1)) == MAX_PER_USER
+    assert len(service.list_belonging(1)) == MAX_PER_USER
 
     overflow = service.record(1, ["再来一条", "还有一条"], SOURCE_CHAT)
 
     assert overflow.added == []
     assert overflow.dropped_for_cap == 2
     assert overflow.overflowed is True
-    assert len(service.list_for_injection(1)) == MAX_PER_USER
+    assert len(service.list_belonging(1)) == MAX_PER_USER
 
 
 def test_shouldStillDedupeWhenTheStoreIsFull():
@@ -218,3 +218,122 @@ def test_shouldReturnAnEmptyBlockWhenThereIsNothingToInject():
 
     assert build_injection_block([]) == ""
     assert build_injection_block(None) == ""
+
+
+# ---------- 第五档：角色（docs/ASK_LONGTERM_MEMORY.md §2.5）----------
+#
+# 这一档撤掉了「别人的整条不记」，改成**记下来并标出是谁**（§2.5.3）。
+# 这里守三件事：subject 参与去重、两条路都不丢、注入时分得开。
+
+def _item(subject: str | None, content: str) -> dict:
+    return {"subject": subject, "content": content} if subject else {"content": content}
+
+
+def test_shouldKeepTheSameWordsUnderTwoSubjectsApart():
+    """**本档最隐蔽的一处**（§2.5.2）：去重键是 (user_id, subject, content) 三列。
+    两列键之下「本人不吃辣」和「老婆不吃辣」会撞，后说的被 on conflict do nothing
+    **静默吞掉**，而界面上看起来"记了"。"""
+    service = _service()
+    first = service.record(1, [_item("本人", "不吃辣")], SOURCE_CHAT)
+    result = service.record(1, [_item("老婆", "不吃辣")], SOURCE_CHAT)
+
+    # 回执（added，见 §2.5.6 补的那段）也得跟存储同一个长相。**同一条内容两个角色、
+    # 两条回执必须分得开**——裸给内容的话这两行一模一样，用户会以为记重了。
+    assert first.added == ["不吃辣"]
+    assert result.added == ["老婆不吃辣"]
+    assert service.list_belonging(1) == ["不吃辣"]
+    assert service.list_companions(1) == ["老婆不吃辣"]
+
+
+def test_shouldStillDedupeTheSameWordsUnderTheSameSubject():
+    """同一个角色的同一句话，还是只存一条。"""
+    service = _service()
+    service.record(1, [_item("老婆", "不能吃辣")], SOURCE_CHAT)
+    again = service.record(1, [_item("老婆", "不能吃辣")], SOURCE_CHAT)
+
+    assert again.added == []
+    assert len(service._store.list_for_user(1)) == 1
+
+
+def test_shouldDefaultToTheUserHimselfWhenSubjectIsMissing():
+    """**缺 subject 的按「本人」兜**（§2.5.5）。宁可当成他本人的——第五档之前
+    所有条目本来也都是本人的——也不要凭空造一个同行的人出来，
+    那会让这条偏好变成"有条件才生效"。"""
+    service = _service()
+    service.record(1, [{"content": "不吃辣"}, "怕吵"], SOURCE_CHAT)
+
+    assert service.list_belonging(1) == ["不吃辣", "怕吵"]
+    assert service.list_companions(1) == []
+
+
+def test_shouldDefaultToTheUserHimselfWhenSubjectIsBlank():
+    service = _service()
+    service.record(1, [_item("   ", "不吃辣")], SOURCE_CHAT)
+
+    assert service.list_belonging(1) == ["不吃辣"]
+
+
+def test_shouldDropEntriesWithAnAbsurdlyLongSubject():
+    """角色那一格也卡长度：被污染的话，这条会被归到一段根本不存在的"同行的人"里，
+    从而**有条件地不生效**——而它可能是用户自己的偏好。"""
+    from travel_assistant.service.preference_service import MAX_SUBJECT_CHARS
+
+    too_long = "我" * (MAX_SUBJECT_CHARS + 1)
+    service = _service()
+    service.record(1, [{"subject": too_long, "content": "不吃辣"}], SOURCE_CHAT)
+
+    # 被削到空 → 兜成本人，而不是变成一个人名古怪的同行人。
+    assert service.list_belonging(1) == ["不吃辣"]
+    assert service.list_companions(1) == []
+
+
+def test_shouldSplitBelongingAndCompanions():
+    service = _service()
+    service.record(1, [
+        _item("本人", "不吃辣"),
+        _item("老婆", "不能吃辣"),
+        _item("你朋友", "对海鲜过敏"),
+    ], SOURCE_CHAT)
+
+    assert service.list_belonging(1) == ["不吃辣"]
+    assert service.list_companions(1) == ["老婆不能吃辣", "你朋友对海鲜过敏"]
+
+
+def test_shouldNotLeakAnotherUsersCompanions():
+    service = _service()
+    service.record(1, [_item("老婆", "不能吃辣")], SOURCE_CHAT)
+
+    assert service.list_companions(2) == []
+
+
+# ---------- 注入块：两段分得开 ----------
+
+
+def test_shouldBuildTwoSegmentsForBelongingAndCompanions():
+    """§2.5.4：本人与同行的人**分两段写**。混在一段里，模型就分不出哪条是谁的——
+    而"这条到底是不是他的"正是这一档要修的东西。"""
+    from travel_assistant.service.preference_service import build_injection_block
+
+    block = build_injection_block(["不吃辣"], ["老婆不能吃辣"])
+
+    assert "【这个人的长期偏好】不吃辣" in block
+    assert "【同行的人的偏好】老婆不能吃辣" in block
+    # 这一段里明说"不是他的"，并带上那条判不了的规矩（没有代码兜底，只能写给模型）。
+    assert "不是他的" in block
+    assert "本趟确实有这个人" in block
+
+
+def test_shouldOnlyRenderTheCompanionSegmentWhenThereAreCompanions():
+    """没有同行的人时**不出现那一段**——与"没有就不拼"同一条规矩。"""
+    from travel_assistant.service.preference_service import build_injection_block
+
+    block = build_injection_block(["不吃辣"], [])
+
+    assert "同行的人的偏好" not in block
+
+
+def test_shouldReturnAnEmptyBlockWhenThereIsOnlyAnEmptyCompanionList():
+    from travel_assistant.service.preference_service import build_injection_block
+
+    assert build_injection_block([], []) == ""
+    assert build_injection_block(None, None) == ""

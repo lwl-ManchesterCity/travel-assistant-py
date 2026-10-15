@@ -127,9 +127,9 @@ _SYSTEM_PROMPT = (
     "12. **本地库的答案要自己核对类别。** 检索永远会返回几条，返回了不等于对得上——"
     "用户问爬山却返回溶洞、问湖却返回博物馆，那就要说库里没有，"
     "不许因为「它是搜出来的」就把沾边的说成是用户要的。这条优先于「尽量给出答案」。\n"
-    "13. 用户这一句里露出的**关于他自己**的长期记忆，是**两个互斥的桶**——"
+    "13. 用户这一句里露出的长期记忆，是**两个互斥的桶**——"
     "一句话只进一个，**不许两边都填**：\n"
-    "    ① `preferences` —— **这个人是怎样的**（不限哪一趟）。"
+    "    ① `preferences` —— **这个人（或他同行的人）是怎样的**（不限哪一趟）。"
     "要记：「对海鲜过敏」「我不能吃辣」「不吃香菜」「预算敏感」「恐高」"
     "「带小孩出行」「喜欢安静」「腿脚不便」。\n"
     "    ② `episodes` —— **上次在这个城市发生过什么**（已经发生的事），一条写成"
@@ -144,14 +144,21 @@ _SYSTEM_PROMPT = (
     "      · 闲聊：「你好」「谢谢」「今天天气不错」。\n"
     "    **拿不准就不记。** 记错的那条会跟着他每一趟，而他根本不知道它在那儿。\n"
     "    `preferences` 那几格的规矩：\n"
-    "      只记**用户本人**的。同行的人自己什么口味、什么状况，不算他的："
-    "「我老婆不能吃辣」「我朋友对海鲜过敏」「我妈腿脚不好」都整条不记。\n"
-    "      别人的话**不许「去掉主语再记」**：下面要求你不带主语，而「老婆不能吃辣」"
-    "剥掉主语就是「不能吃辣」，跟用户本人说的**长得一模一样**，你分不出来，"
-    "他以后每一趟也就都被这么带着了——所以只能整条丢。\n"
-    "      分界看是**谁**：同行的人是谁，是他的情况（「带小孩出行」要记）；"
-    "同行的人**自己**的口味和状况，不是。\n"
-    "      一句话里可以有多条：「我不吃辣也不吃香菜」→ [\"不吃辣\",\"不吃香菜\"]。\n"
+    "      每条写成 **{\"subject\":\"本人\",\"content\":\"不吃辣\"}**："
+    "`subject` 是**这条偏好属于谁**。\n"
+    "      **用户本人写「本人」**；**同行的人也要记，写他说出口的那个称谓**——"
+    "「我老婆不能吃辣」→ {\"subject\":\"老婆\",\"content\":\"不能吃辣\"}，"
+    "「我朋友对海鲜过敏」→ {\"subject\":\"朋友\",\"content\":\"对海鲜过敏\"}，"
+    "「我妈腿脚不好」→ {\"subject\":\"我妈\",\"content\":\"腿脚不好\"}。\n"
+    "      称谓**照他说的原样写**，不要归一化：「老婆」和「妻子」就当两个词写着，"
+    "不要替他统一成一个——是不是同一个人你判不准，判错了两个人会并成一条。\n"
+    "      **`content` 里不要重复那个人**（写「不能吃辣」，不写「老婆不能吃辣」）——"
+    "是谁有 `subject` 那一格。\n"
+    "      分界看是**谁**：同行的人**是谁**、有没有这个人，是他自己的情况"
+    "（「带小孩出行」subject 写「本人」）；同行的人**自己**的口味和状况，subject 写那个人。\n"
+    "      一句话里可以有多条：「我不吃辣也不吃香菜」→ "
+    "[{\"subject\":\"本人\",\"content\":\"不吃辣\"},"
+    "{\"subject\":\"本人\",\"content\":\"不吃香菜\"}]。\n"
     "    `episodes` 的那条死规矩：**city 只许来自用户这一句的原话**——"
     "不许拿当前方案的城市，也不许拿上下文补。他在杭州的页面上说「上次那家酒店隔音差」，"
     "那个「上次」未必是杭州；猜错了，这条就**永远挂在错误的城市**下。"
@@ -256,7 +263,7 @@ class _Decision:
                  adjustment_prompt: str | None = None,
                  anchor_hint: str | None = None, anchor_day: int | None = None,
                  pin_hints: list[str] | None = None, pin_day: int | None = None,
-                 preferences: list[str] | None = None,
+                 preferences: list[dict] | None = None,
                  episodes: list[dict] | None = None):
         self.intent = intent
         self.answer = answer
@@ -325,8 +332,8 @@ class AskAgent:
             #
             # 也不改 create_agent(system_prompt=…)：那个参数在 create_agent 时
             # 就固化了，而 self._agent 是缓存的，按请求重建等于每轮把图重编译一遍。
-            preferences, episodes = self._injected_memory(user_id, city)
-            block = build_injection_block(preferences, episodes, city)
+            belonging, companions, episodes = self._injected_memory(user_id, city)
+            block = build_injection_block(belonging, companions, episodes, city)
             if block:
                 messages.append(SystemMessage(content=block))
             # 历史在前、当前这句在后。模型看到的是完整的多轮，工具调用由它自己决定
@@ -345,7 +352,7 @@ class AskAgent:
                            decision.adjustment_prompt or "", "pending")
         recorded = self._record_preferences(user_id, decision, context)
         self._record_episodes(user_id, decision, context)
-        self._record_memory_trace(context, user_id, city, preferences, episodes)
+        self._record_memory_trace(context, user_id, city, belonging, companions, episodes)
         response = AskResponse(
             answer=decision.answer,
             intent=decision.intent,
@@ -365,28 +372,30 @@ class AskAgent:
         return response
 
     def _injected_memory(self, user_id: int | None,
-                         city: str | None) -> tuple[list[str], list[str]]:
-        """这一轮要顶在最前的长期记忆：(偏好原文, **本城市**的场景原文)。
+                         city: str | None) -> tuple[list[str], list[str], list[str]]:
+        """这一轮要顶在最前的长期记忆：(**本人的**偏好, **同行的人的**偏好, 本城市的场景)。
 
-        两个都取回来是为了留痕——判据 2/3 要看的正是"注入了 N 条"；拼成提示词
-        那一步交给 build_injection_block。没接服务 / 没登录 → 两个空列表。
+        三份都取回来是为了留痕——判据要看的正是"注入了 N 条"；拼成提示词
+        那一步交给 build_injection_block。没接服务 / 没登录 → 三个空列表。
         """
         if user_id is None:
-            return [], []
-        preferences: list[str] = []
+            return [], [], []
+        belonging: list[str] = []
+        companions: list[str] = []
         episodes: list[str] = []
         if self._preference_service is not None:
-            preferences = _read_or_empty(
-                lambda: self._preference_service.list_for_injection(user_id))
+            belonging = _read_or_empty(lambda: self._preference_service.list_belonging(user_id))
+            companions = _read_or_empty(lambda: self._preference_service.list_companions(user_id))
         if self._episode_service is not None:
             episodes = _read_or_empty(lambda: self._episode_service.list_for_city(user_id, city))
-        return preferences, episodes
+        return belonging, companions, episodes
 
     def _record_memory_trace(self, context: AskContext, user_id: int | None, city: str | None,
-                             preferences: list[str], episodes: list[str]) -> None:
-        """这一轮的记忆留痕：偏好几条、**本城市**的场景几条。
+                             belonging: list[str], companions: list[str],
+                             episodes: list[str]) -> None:
+        """这一轮的记忆留痕：本人的几条、同行的人的几条、**本城市**的场景几条。
 
-        **登录了就写，两个都是 0 也写**——「换个城市 → 注入 0 条」只有写出来才验得了
+        **登录了就写，全是 0 也写**——「换个城市 → 注入 0 条」只有写出来才验得了
         （§2.4.7 判据 2）。这与规划链那条 `_build_preference_trace` 的触发条件不同：
         那条要保住"默认链路留痕逐字一致"，这条没有那份包袱（没登录就不写，
         而没登录时本来也碰不到记忆）。
@@ -394,10 +403,12 @@ class AskAgent:
         if user_id is None or (self._preference_service is None and self._episode_service is None):
             return
         where = city if city else "方案里没有城市"
+        injected = belonging + companions + episodes
         context.record(
             _MEMORY_TRACE_NAME, "注入长期记忆",
-            f"偏好 {len(preferences)} 条；{where} 的场景：{len(episodes)} 条",
-            "、".join(preferences + episodes) if (preferences or episodes) else "没有可注入的",
+            f"本人 {len(belonging)} 条；同行的人 {len(companions)} 条；"
+            f"{where} 的场景：{len(episodes)} 条",
+            "、".join(injected) if injected else "没有可注入的",
         )
 
     def _record_episodes(self, user_id: int | None, decision: _Decision,
@@ -552,22 +563,36 @@ class AskAgent:
         return cleaned
 
     @staticmethod
-    def _preferences(parsed: dict) -> list[str]:
-        """"规则 13 那一格。清洗照抄 _pin_hints：str / list 都收、strip、去重。
+    def _preferences(parsed: dict) -> list[dict]:
+        """规则 13 那一格：`[{"subject": "本人", "content": "不吃辣"}]`。
 
-        这里**只收字符串**，长度闸门与 5 条上限归 PreferenceService——它是两条链
-        共用的那一处，规矩写在那边才不会分叉。
+        收三种形状：**dict**（约定的）、**裸字符串**（老模型 / 老提示词只吐一串文本）、
+        以及把单个当成一个元素。
+
+        **`subject` 缺了就不填这一格**，由 PreferenceService 兜成「本人」——
+        兜底只许有一处，而它是两条链共用的那一处（§2.5.5）。长度闸门与 5 条上限同理。
         """
         raw = parsed.get("preferences")
-        if isinstance(raw, str):
+        if isinstance(raw, (str, dict)):
             raw = [raw]
         if not isinstance(raw, list):
             return []
-        cleaned: list[str] = []
+        cleaned: list[dict] = []
         for item in raw:
-            content = item.strip() if isinstance(item, str) else ""
-            if content and content not in cleaned:
-                cleaned.append(content)
+            if isinstance(item, str):
+                pair: dict = {"content": item.strip()}
+            elif isinstance(item, dict):
+                content = item.get("content")
+                if not isinstance(content, str):
+                    continue
+                pair = {"content": content.strip()}
+                subject = item.get("subject")
+                if isinstance(subject, str) and subject.strip():
+                    pair["subject"] = subject.strip()
+            else:
+                continue
+            if pair["content"] and pair not in cleaned:
+                cleaned.append(pair)
         return cleaned
 
     @staticmethod

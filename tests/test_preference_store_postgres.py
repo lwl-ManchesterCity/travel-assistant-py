@@ -143,3 +143,51 @@ def test_shouldSurviveContentWithPunctuationAndNewlines(store, user_id):
     assert store.add(user_id, content, SOURCE_CHAT) is True
 
     assert store.list_for_user(user_id)[0].content == content
+
+
+# ---------- 第五档：三列去重键（docs/ASK_LONGTERM_MEMORY.md §2.5.2）----------
+
+
+def test_shouldKeepTheSameContentUnderTwoSubjects(store, user_id):
+    """**本档的真 SQL 要害**：唯一键是 (user_id, subject, content) 三列，不是两列。
+
+    两列键之下，「本人不吃辣」和「老婆不吃辣」会撞——后说的被 on conflict do nothing
+    **静默吞掉**，而界面上看起来"记了"。这正是 §2.5.2 点名的那处隐蔽 bug。
+    """
+    assert store.add(user_id, "不吃辣", SOURCE_CHAT, "本人") is True
+    assert store.add(user_id, "不吃辣", SOURCE_CHAT, "老婆") is True
+
+    rows = store.list_for_user(user_id)
+    assert sorted((row.subject, row.content) for row in rows) == [
+        ("本人", "不吃辣"), ("老婆", "不吃辣")]
+
+
+def test_shouldStillDedupeWhenAllThreeColumnsMatch(store, user_id):
+    assert store.add(user_id, "不吃辣", SOURCE_CHAT, "老婆") is True
+    assert store.add(user_id, "不吃辣", SOURCE_FORM, "老婆") is False
+
+    assert len(store.list_for_user(user_id)) == 1
+
+
+def test_shouldDefaultToTheUserHimselfWhenNoSubjectIsGiven(store, user_id):
+    """不传 subject 时落库的是「本人」——列默认值是 '本人'，Python 那边缺省也是它。"""
+    assert store.add(user_id, "不吃辣", SOURCE_CHAT) is True
+
+    assert store.list_for_user(user_id)[0].subject == "本人"
+
+
+def test_shouldReadTheSubjectBack(store, user_id):
+    store.add(user_id, "不能吃辣", SOURCE_CHAT, "老婆")
+
+    assert store.list_for_user(user_id)[0].subject == "老婆"
+
+
+def test_shouldKeepOldRowsOnTheDefaultSubject(store, user_id):
+    """**判据 4**：改列之前在库里的那几条，subject 落到默认值「本人」。
+    （真库上跑迁移时实测过：改列后老数据的 subject 就是「本人」。）"""
+    with db.connection() as conn:
+        conn.execute(
+            "insert into preferences (user_id, content, source) values (%s, %s, %s)",
+            (user_id, "改列前就有的", SOURCE_CHAT))
+
+    assert store.list_for_user(user_id)[0].subject == "本人"

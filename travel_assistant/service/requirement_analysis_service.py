@@ -18,7 +18,7 @@ JSON 字段固定为：
   "wantsLandmarkCeremony": boolean,
   "prefersIndoorBackup": boolean,
   "extractedTags": string[],
-  "extractedPreferences": string[],
+  "extractedPreferences": [{"subject": string, "content": string}],
   "extractedEpisodes": [{"city": string, "content": string}]
 }
 字段含义：
@@ -31,20 +31,23 @@ extractedPreferences 与 extractedEpisodes 是**两个互斥的桶**：同一条
 **不许两边都写**。先看它是不是"上一次真实发生过的事"——是就进 episodes，
 不是再看它是不是"关于用户本人的"——是就进 preferences，都不是就都不进。
 
-extractedPreferences 从「额外要求」里挑出**关于用户本人**的长期偏好，会存下来、
-影响他以后每一趟。判断标准是「这个人的」还是「这一趟的」：
+extractedPreferences 从「额外要求」里挑出**长期偏好**（用户本人的，或他同行的人的），
+会存下来、影响他以后每一趟。判断标准是「这个人的」还是「这一趟的」：
   要挑（这个人的）：「对海鲜过敏」「不吃辣」「不吃香菜」「预算敏感」「恐高」
     「带小孩出行」「腿脚不便」「喜欢安静」。
   不挑（这一趟的）：「想去看升旗」「这次轻松点」「多留一天」「想去西湖」。
   **拿不准就按「这一趟的」不挑**——挑错的那条会跟着他每一趟，而他不知道它在那儿。
-  只挑**用户本人**的。同行的人自己什么口味、什么状况，不算他的：
-    「我老婆不能吃辣」「我朋友对海鲜过敏」「我妈腿脚不好」都整条不挑。
-  注意别人的话**不许「去掉主语再挑」**：下面要求你不带主语，而「老婆不能吃辣」
-    剥掉主语就是「不能吃辣」，跟用户本人说的**长得一模一样**，你分不出来，
-    他以后每一趟也就都被这么带着了——所以只能整条丢。
-  分界看是**谁**：同行的人是谁，是他的情况（「带小孩出行」要挑）；
-    同行的人**自己**的口味和状况，不是。
-  每条只写偏好本身，短，不超过十几个字，不要带主语，不要把整句话抄进来。
+  每条写成 {"subject":"本人","content":"不吃辣"}：`subject` 是**这条偏好属于谁**。
+    **用户本人写「本人」**；**同行的人也要挑，写他在备注里说的那个称谓**——
+    「我老婆不能吃辣」→ {"subject":"老婆","content":"不能吃辣"}，
+    「我朋友对海鲜过敏」→ {"subject":"朋友","content":"对海鲜过敏"}，
+    「我妈腿脚不好」→ {"subject":"我妈","content":"腿脚不好"}。
+    称谓**照他写的原样**，不要归一化（「老婆」「妻子」就当两个词写着，
+    是不是同一个人你判不准，判错了两个人会并成一条）。
+    **content 里不要重复那个人**（写「不能吃辣」，不写「老婆不能吃辣」）。
+  分界看是**谁**：同行的人**是谁**、有没有这个人，是他自己的情况
+    （「带小孩出行」subject 写「本人」）；同行的人**自己**的口味和状况，subject 写那个人。
+  每条只写偏好本身，短，不超过十几个字，不要把整句话抄进来。
   「偏好」那一栏里勾选的类型词（如「人文历史」「自然风景」）**不要挑**，
   那是他这一趟选的，不是他这个人的。
   没有就交空数组，不要为了填而填。
@@ -70,19 +73,24 @@ class RequirementAnalysisService:
 
     def analyze(self, request: TripPlanRequest,
                 long_term_preferences: list[str] | None = None,
-                episodes: list[str] | None = None) -> PlanningConstraints:
+                episodes: list[str] | None = None,
+                companions: list[str] | None = None) -> PlanningConstraints:
         """解析需求。
 
-        `long_term_preferences` / `episodes` 是这个人的长期记忆**原文**，由调用方
-        （PlannerInputBuilder）取好传进来。**这里不自己取**：留痕要写"注入了 N 条"，
-        而只有拿到同一个列表，那条留痕才真的证明了注入发生过（§2.2.9 判据 7）。
+        `long_term_preferences` / `episodes` / `companions` 是这个人的长期记忆**原文**，
+        由调用方（PlannerInputBuilder）取好传进来。**这里不自己取**：留痕要写
+        "注入了 N 条"，而只有拿到同一个列表，那条留痕才真的证明了注入发生过
+        （§2.2.9 判据 7）。
+
+        `companions` 是**同行的人的**偏好，每条带着是谁（「老婆不能吃辣」，§2.5.4）。
+        与本人的分开传，注入时分两段写——混在一起模型就分不出哪条是谁的。
 
         `episodes` 由调用方**按城市筛好**再传（§2.4.3）——这里不认识城市，
         也不该认识：它只管理解需求。
         """
         if self._llm_client.is_available():
             try:
-                return self._analyze_by_llm(request, long_term_preferences, episodes)
+                return self._analyze_by_llm(request, long_term_preferences, episodes, companions)
             except Exception:  # noqa: BLE001 - 与 Java 一致：任何解析失败都退回规则结果
                 fallback = self._analyze_by_rules(request)
                 fallback.analysis_source = "rule-fallback"
@@ -91,9 +99,11 @@ class RequirementAnalysisService:
 
     def _analyze_by_llm(self, request: TripPlanRequest,
                         long_term_preferences: list[str] | None = None,
-                        episodes: list[str] | None = None) -> PlanningConstraints:
+                        episodes: list[str] | None = None,
+                        companions: list[str] | None = None) -> PlanningConstraints:
         content = self._llm_client.chat(
-            _SYSTEM_PROMPT, self._build_user_prompt(request, long_term_preferences, episodes))
+            _SYSTEM_PROMPT,
+            self._build_user_prompt(request, long_term_preferences, episodes, companions))
         result = json.loads(content)
         extracted_episodes = self._read_episodes(result.get("extractedEpisodes"))
         constraints = PlanningConstraints(
@@ -114,7 +124,8 @@ class RequirementAnalysisService:
 
     def _build_user_prompt(self, request: TripPlanRequest,
                            long_term_preferences: list[str] | None = None,
-                           episodes: list[str] | None = None) -> str:
+                           episodes: list[str] | None = None,
+                           companions: list[str] | None = None) -> str:
         # **喂给模型的额外要求要先洗过**：里面混着策略服务自己追加的句子
         # （「整体控制预算，优先保留高价值景点」等）。它们是"这一次"的调节，
         # 存下来会变成"每一趟都强制压预算"（§2.2.4）。用户原话才进这一格。
@@ -133,7 +144,8 @@ class RequirementAnalysisService:
         # 在用户提示词里——同一次调用，位置只影响模型怎么读。
         # 这一段里还带着「表单优先」那条纪律（§2.2.6）。
         # 场景那一段的城市标签用 request.city：**调用方已经按它筛过了**（§2.4.3）。
-        block = build_injection_block(long_term_preferences or [], episodes or [], request.city)
+        block = build_injection_block(
+            long_term_preferences or [], companions or [], episodes or [], request.city)
         if block:
             lines.append(block)
         return "\n".join(lines)
@@ -184,8 +196,8 @@ class RequirementAnalysisService:
         return extracted_tags
 
     def _read_preferences(self, node: object, request: TripPlanRequest,
-                          episodes: list[dict] | None = None) -> list[str]:
-        """读 extractedPreferences，并挡掉两种**不该进来的回声**。
+                          episodes: list[dict] | None = None) -> list[dict]:
+        """读 extractedPreferences（`[{"subject": …, "content": …}]`），并挡掉两种回声。
 
         一、**表单勾选框的回声**。用户提示词里那行「偏好：人文历史、自然风景」是这一次
         选的类型，模型有可能顺手把它们当成"关于这个人的偏好"吐回来。那不是长期偏好
@@ -196,12 +208,46 @@ class RequirementAnalysisService:
         仍可能两边都填——规则拦不干净，而这一条漏了的表现是**同一句话被注入两遍**，
         且它是"上次发生的事"却挂在了"他这个人"名下、跟着他每一趟。
         两处都是**精确相等**判据：同一句原文才会撞上。
+
+        **`subject` 缺了就不填这一格**，由 PreferenceService 兜成「本人」——兜底只许
+        有一处，而它是两条链共用的那一处（§2.5.5）。
         """
         chosen = {item.strip() for item in (request.preferences or []) if item and item.strip()}
         already_episodes = {item["content"].strip() for item in (episodes or [])}
-        return [value for value in self._read_string_list(node)
-                if value.strip() and value.strip() not in chosen
-                and value.strip() not in already_episodes]
+        values: list[dict] = []
+        for item in self._read_preference_items(node):
+            content = item["content"]
+            if content in chosen or content in already_episodes:
+                continue
+            if item not in values:
+                values.append(item)
+        return values
+
+    def _read_preference_items(self, node: object) -> list[dict]:
+        """把那一格收成 `[{"subject": …, "content": …}]`。
+
+        收 dict（约定的）与**裸字符串**（老模型只吐一串文本）；裸字符串只填 content，
+        subject 留给 PreferenceService 兜。**只保证形状**——长度闸门与 5 条上限同理。
+        """
+        if not isinstance(node, list):
+            return []
+        values: list[dict] = []
+        for item in node:
+            if isinstance(item, str):
+                pair: dict = {"content": item.strip()}
+            elif isinstance(item, dict):
+                content = item.get("content")
+                if not isinstance(content, str):
+                    continue
+                pair = {"content": content.strip()}
+                subject = item.get("subject")
+                if isinstance(subject, str) and subject.strip():
+                    pair["subject"] = subject.strip()
+            else:
+                continue
+            if pair["content"]:
+                values.append(pair)
+        return values
 
     def _read_episodes(self, node: object) -> list[dict]:
         """读 extractedEpisodes：只收 `{city, content}` 都是非空字符串的那种条目。

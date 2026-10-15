@@ -4,22 +4,28 @@
 """
 
 from ..db import connection
-from .preference_store import PreferenceRecord
+from .preference_store import DEFAULT_SUBJECT, PreferenceRecord
 
 # 两处 select 的是同一组列，顺序也必须一致，_to_record 按位置取。
-_COLUMNS = "id, user_id, content, source, created_at"
+_COLUMNS = "id, user_id, content, source, subject, created_at"
 
 
 class PostgresPreferenceStore:
-    def add(self, user_id: int, content: str, source: str) -> bool:
-        # 靠 unique (user_id, content) 去重，不用先 select 再 insert：那样两个请求
+    def add(self, user_id: int, content: str, source: str,
+            subject: str = DEFAULT_SUBJECT) -> bool:
+        # 靠 unique (user_id, subject, content) 去重，不用先 select 再 insert：那样两个请求
         # 同时到会双写。`on conflict do nothing` 冲突时一行都不返回，fetchone() 拿到
         # None —— 这就是"已经有一条了"。
+        #
+        # **on conflict 后面那三列必须与表上的唯一键逐字对齐**：只写 (user_id, content)
+        # 而表上是三列键的话，冲突判据不一样，写不进去也看不出来。改成第五档的时候
+        # 这里和 schema.sql 是一起改的。
         with connection() as conn:
             row = conn.execute(
-                f"insert into preferences (user_id, content, source) values (%s, %s, %s) "
-                f"on conflict (user_id, content) do nothing returning {_COLUMNS}",
-                (user_id, content, source),
+                f"insert into preferences (user_id, content, source, subject) "
+                f"values (%s, %s, %s, %s) "
+                f"on conflict (user_id, subject, content) do nothing returning {_COLUMNS}",
+                (user_id, content, source, subject),
             ).fetchone()
         return row is not None
 
@@ -36,4 +42,5 @@ class PostgresPreferenceStore:
 
 def _to_record(row: tuple) -> PreferenceRecord:
     return PreferenceRecord(
-        id=row[0], user_id=row[1], content=row[2], source=row[3], created_at=row[4])
+        id=row[0], user_id=row[1], content=row[2], source=row[3], subject=row[4],
+        created_at=row[5])
