@@ -8,7 +8,7 @@
 下一次规划会自动带上，冲突时会当面指出来而不是顺着方案说「这家不错」。
 
 > 下面每个功能都配了实拍图，都是真跑出来的：上海 → 北京 3 天，接真模型与高德底图。
-> 全部产品图在 [`docs/images/`](docs/images/)，压成 webp 一共不到 1 MB。
+> 全部产品图在 [`docs/images/`](docs/images/)，压成 webp 一共 270 KB 出头。
 
 ## 功能
 
@@ -28,30 +28,30 @@
 
 **② 提交，等它跑**　约 30 秒。SSE 把「景点 → 天气 → 酒店 → 路线 → 生成 → 反思」推到进度条上。
 
-<p align="center"><img src="docs/images/generating.webp" width="560" alt="生成中：进度推到第 6 步"></p>
+<p align="center"><img src="docs/images/generating.webp" alt="生成中：进度推到第 6 步"></p>
 
 **③ 先看总览**　摘要、徽章、预算结余、通勤规模。摘要那段是模型写的，不是模板拼的。
 
-<p align="center"><img src="docs/images/result-overview.webp" width="860" alt="行程总览"></p>
+<p align="center"><img src="docs/images/result-overview.webp" alt="行程总览"></p>
 
 **④ 看钱花在哪**　每一格都写着自己怎么估出来的。同一屏右边是真底图，「住」那个图钉就是住宿锚点。
 
-<p align="center"><img src="docs/images/result-budget-map.webp" width="860" alt="预算明细 + 真实底图与住宿锚点"></p>
+<p align="center"><img src="docs/images/result-budget-map.webp" alt="预算明细 + 真实底图与住宿锚点"></p>
 
 **⑤ 最后翻每天**　每天一条时间轴、一段路线、三餐。最下面是这一轮的调整说明——反思提了什么、最后为什么这么定。
 
-<p align="center"><img src="docs/images/result-day1.webp" width="860" alt="每日行程"></p>
+<p align="center"><img src="docs/images/result-day1.webp" alt="每日行程"></p>
 
 <details>
 <summary>更多规划截图：第 2 天、当日路线分段与三餐</summary>
 
 **第 2 天**：按反思意见减掉了故宫
 
-<p align="center"><img src="docs/images/result-day2.webp" width="860" alt="第 2 天：按反思意见减掉了故宫"></p>
+<p align="center"><img src="docs/images/result-day2.webp" alt="第 2 天：按反思意见减掉了故宫"></p>
 
 **路线分段（高德）与三餐**
 
-<p align="center"><img src="docs/images/result-route-meals.webp" width="860" alt="当日路线分段与三餐"></p>
+<p align="center"><img src="docs/images/result-route-meals.webp" alt="当日路线分段与三餐"></p>
 
 </details>
 
@@ -61,7 +61,7 @@
 答不上就说答不上，不编。联网失败不整体失败，改用方案内数据作答并留一条 `failed` 留痕。
 SSE 推工具调用当进度条。说到新偏好会**顺手记下**，答案下面回一行「已记住」：
 
-<p align="center"><img src="docs/images/ask-remember.webp" width="860" alt="追问，顺手记住"></p>
+<p align="center"><img src="docs/images/ask-remember.webp" alt="追问，顺手记住"></p>
 
 ### 改方案
 
@@ -70,11 +70,11 @@ SSE 推工具调用当进度条。说到新偏好会**顺手记下**，答案下
 
 **① 先给确认卡**　把改动翻成人话——「住宿位置：天安门（第 2 天）」。点「算了」就当没说过。
 
-<p align="center"><img src="docs/images/ask-adjust-confirm.webp" width="860" alt="判出想改，先给确认卡"></p>
+<p align="center"><img src="docs/images/ask-adjust-confirm.webp" alt="判出想改，先给确认卡"></p>
 
 **② 点了才重算**　重算期间盖一层进度弹窗，不会偷偷改完再告诉你。
 
-<p align="center"><img src="docs/images/adjusting.webp" width="560" alt="确认后才重算"></p>
+<p align="center"><img src="docs/images/adjusting.webp" alt="确认后才重算"></p>
 
 ### 长期记忆
 
@@ -91,7 +91,7 @@ SSE 推工具调用当进度条。说到新偏好会**顺手记下**，答案下
 「太太和孩子也不能吃辣、爷爷不吃海鲜、太太还避香菜」——偏好不是躺在库里，
 是真进了提示词、真改了输出。记了哪些、要删哪条，点旅行助手右上角的「我的偏好」：
 
-<p align="center"><img src="docs/images/preferences-panel.webp" width="860" alt="我的偏好：列出与删除"></p>
+<p align="center"><img src="docs/images/preferences-panel.webp" alt="我的偏好：列出与删除"></p>
 
 ### 账号
 
