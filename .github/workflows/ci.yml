@@ -1,0 +1,48 @@
+name: tests
+
+# 两条长期分支 + 所有 PR。**推送前先红**，别等上线才发现。
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    # 三个 test_*_store_postgres.py 连不上库就整份 skip（不是 fail）。
+    # 起一个真库，让它们真的跑起来——真 SQL 是桩替不掉的那部分。
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: travel
+          POSTGRES_PASSWORD: travel
+          POSTGRES_DB: travel_assistant
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U travel -d travel_assistant"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      # 建表由 db.get_pool() 幂等跑 schema.sql，这里只要给一个能连上的空库。
+      TRAVEL_DB_DSN: postgresql://travel:travel@localhost:5432/travel_assistant
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # 这里**不加**阿里云镜像参数：GitHub 的 runner 在海外，直连 pypi 更快。
+      # requirements.txt 顶部那条镜像命令是给本机用的。
+      - name: 装依赖
+        run: pip install -r requirements.txt
+
+      - name: 跑测试
+        run: python -m pytest -q

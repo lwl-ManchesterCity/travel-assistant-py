@@ -18,6 +18,16 @@ pytest==9.1.1
 psycopg[binary,pool]==3.3.6
 bcrypt==5.0.0
 
+# 向量索引的**客户端**。注意：这里只要 chromadb，**不要 sentence-transformers**——
+#   kb/store.py 的 open_collection() 里 `import chromadb` 写在 try **外面**，
+#   所以缺了它抛的是 ModuleNotFoundError，而 ask_tools 那边只接住了 IndexNotBuilt
+#   （见 ask_tools.py:358），优雅提示会失效、异常直接穿透到工具外。
+#   装上它（约 35MB）之后，「索引没建」才会规规矩矩走成 IndexNotBuilt，
+#   模型收到的是「本地景点资料库还没建好，请只用方案内信息作答」。
+#   sentence-transformers（带 torch，约 800MB）与 BGE-M3 权重（约 2GB）**只在真要
+#   编码时才需要**，部署时可以不装——见 docs/DEPLOY.md §7。
+chromadb==1.5.9
+
 # 评测集专用（evals/judge.py 读 questions.yaml），不参与运行时。
 # PyYAML 本来靠 langchain 顺带装进来，但**靠传递依赖是碰运气**——显式钉住。
 PyYAML==6.0.3

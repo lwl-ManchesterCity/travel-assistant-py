@@ -1,0 +1,27 @@
+# 构建上下文要尽量小，更要紧的是**别把密钥和无关文件打进去**。
+
+# 凭据。镜像层是能被 `docker save` 导出、能被推到 registry 的，
+# 一旦 COPY 进去就等于把 key 写进了一个"删不掉"的地方。
+.env
+.env.*
+!.env.example
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+.git/
+.github/
+
+# 不进镜像的仓库内容：镜像只 COPY travel_assistant/ 与两个 data 文件。
+tests/
+evals/
+docs/
+scripts/
+data/chroma/
+_verify/
+*.log
+uvicorn-dev.log
+
+.DS_Store

@@ -225,7 +225,7 @@ travel_assistant/
   service/            planner_input_builder / requirement_analysis / trip_planning
                       / auth / preference / episode / hotel_anchor / intercity …
   static/             index.html + css/ + js/ + 字体 + 插画（FastAPI 挂在根路径）
-tests/                563 条，见下
+tests/                577 条，见下
 docs/                 设计稿与验收记录，见下；images/ 是 README 用的产品图
 scripts/              建库工具、视觉验收探针、结果页渲染
 evals/                追问链路的评测集：questions.yaml 题库 + judge.py 判分 + run.py 跑

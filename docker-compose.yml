@@ -1,0 +1,53 @@
+# 旅行助手 · 单机部署：`docker compose up -d --build`
+#
+# 密钥全在宿主机的 .env 里（已被 .gitignore 挡住），**不进镜像、也不进这个文件**。
+# 注意 /api/map/config 会把高德 JS key 发给前端（前端要拿它渲染地图），
+# 所以服务器上 .env 的权限要收到 600。
+#
+# 部署步骤与「先勘察再替换」的顺序见 docs/DEPLOY.md，**别直接 up**。
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: travel
+      # 不带默认值：忘了设就直接起不来，好过起一个空密码的库。
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?在 .env 里加一行 POSTGRES_PASSWORD=<自己定>}
+      POSTGRES_DB: travel_assistant
+      # 城市名是中文。编码在 initdb 时定死，之后再改要重建数据卷。
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U travel -d travel_assistant"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # 用 expose 而不是 ports：只给 compose 网络里的 app 用，不映射到宿主机，
+    # 免得 5432 被外网扫到（这台机器有公网 IP）。
+    expose:
+      - "5432"
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # 覆盖 .env 里那条本机 DSN（`postgresql:///travel_assistant` 走 unix socket，
+      # 容器里没有那个 socket）。放在 environment 里是为了让它**优先于** env_file——
+      # compose 的合并顺序是 env_file 先、environment 后。
+      TRAVEL_DB_DSN: postgresql://travel:${POSTGRES_PASSWORD}@db:5432/travel_assistant
+      SERVER_PORT: "8080"
+    ports:
+      # ⚠️ 宿主机端口先用 8080 试跑，**不要直接写 80**：
+      # Java 版可能还占着，而且 80 上多半有 Nginx。
+      # 跑通之后怎么切过去见 docs/DEPLOY.md §5。
+      - "8080:8080"
+    depends_on:
+      db:
+        # 等健康检查过再起，否则第一次启动会连不上库、建表失败。
+        condition: service_healthy
+
+volumes:
+  pgdata:
