@@ -224,10 +224,12 @@ def build_ask_tools(attraction_agent: AttractionAgent,
 
     @tool
     def get_attraction_detail(attraction_name: str = "") -> str:
-        """按名字取**本方案里**某个景点的明细：类别、地址、门票价、建议停留时长、有无坐标。
+        """按名字取**本方案里**某个景点的明细：类别、地址、建议停留时长、有无坐标。
         名字只要包含即可匹配；方案里没有这个名字时会回可选景点清单。
-        **它只读本方案**——要查方案外的景点（门票、开放时间、闭馆日、要不要预约），
-        改用 search_attractions_by_tag。"""
+        **它只读本方案，读不到真票价**——输出里那个「门票 X 元（按类别估算）」是当初
+        排行程时估的。用户问票价、开放时间、闭馆日、要不要预约时**一律改用
+        search_attractions_by_tag 查库**，**跟这个景点在不在方案里无关**；
+        拿那个估算值当票价答，就是答错了。"""
         context = current_ask_context()
         planned = [
             attraction

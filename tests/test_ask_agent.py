@@ -813,6 +813,29 @@ def test_shouldPutTheSecondHopIntoTheRuleText():
     assert "未查询到〈景点名〉的票价" in _SYSTEM_PROMPT
 
 
+def test_the_ticket_price_carve_out_lives_inside_branch_a():
+    """票价、开放时间、闭馆日**不管景点在不在方案里**都走查库那一支。
+
+    这条分叉原先是埋在 (c) 里的一句「景点在不在方案里都一样」，而 (c) 的开头又写着
+    「或**方案里没有的**景点」——于是景点**在**方案里时，模型读到的是 (a)。
+    `evals/questions.yaml` 第 12 题就是这么红的：裸问「灵隐寺门票多少钱」它乖乖查库答 30，
+    加个「它」变成多轮指代后，它改去读方案、答了方案里那个估算值 45。
+
+    所以这句话必须待在 **(a) 里面**——模型读到 (a) 的那一刻就得看见这个例外，
+    指望它回头去 (c) 里把两处拼起来是不行的。
+    """
+    from travel_assistant.agent.ask_agent import _SYSTEM_PROMPT
+
+    branch_a = _SYSTEM_PROMPT.split("（a）", 1)[1].split("（b）", 1)[0]
+    assert "票价、开放时间、闭馆日这三样一律走 (c) 查库" in branch_a
+    assert "跟这个景点在不在方案里无关" in branch_a
+    # 工具说明那边也得说清它读不到真票价，否则模型一看输出里有个数就抄了。
+    description = {tool.name: tool.description for tool in _agent([])._tools}[
+        "get_attraction_detail"]
+    assert "读不到真票价" in description
+    assert "跟这个景点在不在方案里无关" in description
+
+
 # ---------- 城市锁：search_attractions_by_tag 的 city 参数 ----------
 
 def _city_agent(monkeypatch, script, cities=("杭州", "北京", "上海", "广州")):
