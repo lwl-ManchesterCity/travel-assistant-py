@@ -30,7 +30,11 @@ from travel_assistant.kb.paths import (  # noqa: F401 - DATA_DIR/REPO_ROOT 是�
 VALID_CATEGORIES = ("自然风景", "人文历史", "美食购物", "城市漫游")
 
 # 4.1 约束：hours 先当字符串存，不做结构化（不分旺季淡季、不分时段）。
-HOURS_PATTERN = re.compile(r"^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$")
+# 形状只有两种：`09:00-17:00` 这种时段，和「全天开放」。
+# **「全天开放」必须收**：高德把全天写成 `00:00-24:00` / `24小时营业`，解析器统一归成
+# `amap_opentime.ALL_DAY` 那一个词（西湖、河坊街、什刹海这类全折在这一格上）。
+# 但只收这一个词——「全天」「24小时营业」这些原样写法照样拒，形状别放开。
+HOURS_PATTERN = re.compile(r"^(?:\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}|全天开放)$")
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 URL_PATTERN = re.compile(r"^https?://[^\s]+$")
 

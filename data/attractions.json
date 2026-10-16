@@ -197,7 +197,7 @@
     "duration_min": 180,
     "description": "世界文化遗产，主景区免费开放，环湖步道与十景适合安排大半天，晴天傍晚光线最好。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://hz.bendibao.com/tour/2023426/145270.shtm",
     "updated_at": "2026-10-10"
@@ -347,7 +347,7 @@
     "duration_min": 180,
     "description": "西湖姊妹湖，全域免费开放，游船与游乐设施另收费，人比西湖少，适合骑行环湖与带孩子。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "09:00-16:30",
     "closed_days": [],
     "source_url": "https://gs.ctrip.com/html5/you/sight/8/1477898.html",
     "updated_at": "2026-10-10"
@@ -370,7 +370,7 @@
     "duration_min": 180,
     "description": "西湖景区内的溪谷步道，全程免费，夏日林荫浓密是避暑首选，蚊虫较多需备驱蚊。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://gs.ctrip.com/html5/you/sight/17/16658.html",
     "updated_at": "2026-10-10"
@@ -417,7 +417,7 @@
     "duration_min": 180,
     "description": "世界遗产运河的杭州段，街区与拱宸桥免费，夜游游船另收费，傍晚灯光与货船同框很出片。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://gs.ctrip.com/html5/you/sight/Hangzhou14/135709.html",
     "updated_at": "2026-10-10"
@@ -586,7 +586,7 @@
     "duration_min": 180,
     "description": "老复兴路上的白塔公园，含南宋白塔与铁路遗存，园内大草坪适合亲子，江边可看日落。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://gs.ctrip.com/html5/you/sight/hangzhou14/5140832.html",
     "updated_at": "2026-10-10"
@@ -611,7 +611,7 @@
     "duration_min": 90,
     "description": "吴山脚下的清河坊古街，全程免费，灯笼夜景在傍晚十八点半后最美，商铺营业到二十二点。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://m.ctrip.com/html5/you/sight/linxiang2840/132386.html",
     "updated_at": "2026-10-10"
@@ -636,7 +636,7 @@
     "duration_min": 90,
     "description": "南宋都城中轴线的步行街，全天开放且免费，中山中路一侧老字号集中，适合边逛边吃。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://travelnews.qunar.com/qa_strategy/hangzhou-first-time-travel-guide",
     "updated_at": "2026-10-10"
@@ -663,7 +663,7 @@
     "duration_min": 90,
     "description": "运河边的清末民初老街，街区免费开放且商业化低，傍晚河岸灯光亮起后氛围最好。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://gs.ctrip.com/html5/you/sight/xuedoutemplechiangshometownxikouscenicspot2032148/144033.html",
     "updated_at": "2026-10-10"
@@ -810,7 +810,7 @@
     "duration_min": 180,
     "description": "杨公堤旁的水上森林与木栈道秘境，门票免费且人少，晨雾与白鹭是主要看点。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://gs.ctrip.com/html5/you/sight/hangzhou14/5140832.html",
     "updated_at": "2026-10-10"
@@ -1092,7 +1092,7 @@
     "duration_min": 180,
     "description": "什刹海一带免费开放，摇橹船与酒吧另收费。傍晚湖边最热闹，与南锣鼓巷、烟袋斜街相连。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://travelnews.qunar.com/qa_strategy/hangzhou-first-time-travel-guide",
     "updated_at": "2026-10-12"
@@ -1286,7 +1286,7 @@
     "duration_min": 120,
     "description": "老北京胡同与创意小店，全程免费。避开周末与节假日，否则人流极大，多数小店午后开门。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://m.ctrip.com/webapp/tnt/list?allianceid=6032594&sid=170732500&pagetype=city&citytype=dt&keyword=%E5%8D%97%E9%93%83%E9%BC%93%E5%B7%BF&id=1&pocount=1&pshowcode=Ticket2",
     "updated_at": "2026-10-12"
@@ -1333,7 +1333,7 @@
     "duration_min": 90,
     "description": "京味商业老街，街区免费全天开放。仿古观光车 50 元另收，傍晚灯笼亮起后氛围最好。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=53&keyword=%E5%89%8D%E9%97%A8%E5%A4%A7%E8%A1%97",
     "updated_at": "2026-10-12"
@@ -1357,7 +1357,7 @@
     "duration_min": 90,
     "description": "百年历史的繁华商业街，步行街免费。商场营业约 10:00-22:00，VR 展与大戏院演出另购票。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://opentravelguide.com/china/beijing/beijing/shopping/wangfujing-street",
     "updated_at": "2026-10-12"
@@ -1629,7 +1629,7 @@
     "duration_min": 120,
     "description": "由旧电子工业厂区改造的艺术区，园区免费。多数画廊 10:00-18:00 且周一闭馆，特展单独收费。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://www.wanderinchina.com/zh/destinations/beijing/798-art-district/",
     "updated_at": "2026-10-12"
@@ -1755,7 +1755,7 @@
     "duration_min": 120,
     "description": "中轴线上的老牌剧场，演出票另售。具体场次与票价需查当期官网，未核实到公开票务页面。",
     "ticket_price": null,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://www.pgm.org.cn/",
     "updated_at": "2026-10-12"
@@ -1804,7 +1804,7 @@
     "duration_min": 120,
     "description": "什刹海西海一带的水生湿地公园，免费开放。芦苇与水面适合傍晚散步，与后海西海连成片。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://www.beijing.gov.cn/fuwu/bmfw/bmzt/jxqlzn/shdw/202607/t20260713_4760288.html",
     "updated_at": "2026-10-12"
@@ -2063,7 +2063,7 @@
     "duration_min": 120,
     "description": "黄浦江畔的百年老建筑群，街区免费开放。夜间灯光是主要看点，与陆家嘴隔江相望。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://gs.ctrip.com/html5/you/sight/shanghai2/1416847.html",
     "updated_at": "2026-10-12"
@@ -2213,7 +2213,7 @@
     "duration_min": 180,
     "description": "临港的圆形人工湖景区，环湖免费开放。周边高校与湿地景观开阔，适合骑行或傍晚散步。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://www.shanghai.gov.cn/",
     "updated_at": "2026-10-12"
@@ -2287,7 +2287,7 @@
     "duration_min": 90,
     "description": "上海最知名的商业步行街，免费全天开放。周边老字号与商场餐饮密集，适合安排在行程末段补给。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://opentravelguide.com/china/beijing/beijing/shopping/wangfujing-street",
     "updated_at": "2026-10-12"
@@ -2313,7 +2313,7 @@
     "duration_min": 120,
     "description": "泰康路一带的创意园区与小巷弄堂，街区免费。多为设计店与咖啡馆，午后到傍晚氛围最好。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=321&keyword=%E7%94%B0%E5%AD%90%E5%9D%8A",
     "updated_at": "2026-10-12"
@@ -2336,7 +2336,7 @@
     "duration_min": 90,
     "description": "石库门改造的时尚街区，街区免费。夜里酒吧与餐厅热闹，与新天地仅几步之遥。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://gs.ctrip.com/html5/you/sight/linxiang2840/132386.html",
     "updated_at": "2026-10-12"
@@ -2386,7 +2386,7 @@
     "duration_min": 120,
     "description": "衡复风貌保护区的历史文化名街，街区免费。老洋房与梧桐成荫，适合慢走拍照，不必停留过久。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://m.ly.com/scenery_2/#/pages/list/list?cityId=321&keyword=%E6%AD%A6%E5%BA%B7%E8%B7%AF",
     "updated_at": "2026-10-12"
@@ -2412,7 +2412,7 @@
     "duration_min": 180,
     "description": "上海四大古镇之一，古镇主街区全天免费。课植园 20 元另付，傍晚亮灯后的河道夜景是亮点。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://zhujiajiao.com/",
     "updated_at": "2026-10-12"
@@ -2602,7 +2602,7 @@
     "duration_min": 120,
     "description": "川沙的古城墙公园，免费开放。人少清静，适合与川沙古镇一并安排。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://www.shanghai.gov.cn/",
     "updated_at": "2026-10-12"
@@ -2865,7 +2865,7 @@
     "duration_min": 180,
     "description": "广州北肺，山顶公园与摩星岭可俯瞰全城。整山门票免费，鸣春谷等园中园与索道另收费，全天开放。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://you.ctrip.com/sight/guangzhou152/6766-dianping160898209.html",
     "updated_at": "2026-10-12"
@@ -3065,7 +3065,7 @@
     "duration_min": 180,
     "description": "天河区的湿地公园，栈道湖泊与杉木芦苇景观。免费开放，适合清晨或傍晚散步。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://m.ctrip.com/webapp/you/gspoi/sight/152/0.html?poiId=14735",
     "updated_at": "2026-10-12"
@@ -3139,7 +3139,7 @@
     "duration_min": 120,
     "description": "百年前的英法租界，现存 150 余栋欧式建筑，全天免费开放。清晨或傍晚光线最佳，与十三行博物馆可一并逛。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://you.ctrip.com/sight/guangzhou152/11346/s3-d-p2.html",
     "updated_at": "2026-10-12"
@@ -3163,7 +3163,7 @@
     "duration_min": 90,
     "description": "西关骑楼改造的历史街区，街区全天免费。粤剧艺术博物馆与李小龙祖居在内，夜间餐饮热闹。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://travelnews.qunar.com/qa_strategy/guangzhou-citywalk-travel-accommodation-guide",
     "updated_at": "2026-10-12"
@@ -3187,7 +3187,7 @@
     "duration_min": 90,
     "description": "西关最老的商业步行街，全天免费开放。荔湾湖公园与粤剧艺术博物馆就在附近，夜里灯笼亮起氛围最好。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://m.ctrip.com/webapp/community/detail?articleId=300266947",
     "updated_at": "2026-10-12"
@@ -3210,7 +3210,7 @@
     "duration_min": 90,
     "description": "两千余年历史的商业步行街，全天免费。南越国宫署遗址与药洲遗址都在沿线，美食集中。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://travelnews.qunar.com/qa_strategy/guangzhou-citywalk-travel-accommodation-guide",
     "updated_at": "2026-10-12"
@@ -3325,7 +3325,7 @@
     "duration_min": 120,
     "description": "珠江新城中轴线的市民广场，音乐喷泉在固定时段开放。广场免费，夏季夜晚是市民纳凉首选。",
     "ticket_price": 0,
-    "hours": null,
+    "hours": "全天开放",
     "closed_days": [],
     "source_url": "https://gs.ctrip.com/html5/you/sight/huangshan120061/143742532.html",
     "updated_at": "2026-10-12"

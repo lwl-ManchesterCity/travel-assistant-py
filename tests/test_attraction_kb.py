@@ -12,6 +12,7 @@ import pytest
 from scripts.kb.build_kb import build, merge_skeleton
 from scripts.kb.kb_schema import (
     ATTRACTIONS_PATH,
+    HOURS_PATTERN,
     TAGS_PATH,
     ValidationIssue,
     load_tag_vocabulary,
@@ -24,6 +25,7 @@ from scripts.kb.normalize import (
     map_type_to_category,
     parse_opentime2,
     pick_candidate,
+    poi_to_skeleton,
 )
 
 
@@ -381,6 +383,33 @@ def test_merge_does_not_let_supplement_touch_derived_fields():
     assert merged["amap_poi_id"] == "B1"
 
 
+def test_merge_does_not_let_a_null_supplement_erase_a_derived_value():
+    """**补充值是 null 时不覆盖**：这份文件里 null 的意思是"第三层没查到"。
+
+    这正是 hours 空着 36 条的那个 bug：高德把「全天开放」写成 00:00-24:00，
+    离线那侧推得出来，第三层没查到、写了 null，然后在合并这一步把推出来的值盖了回去——
+    fixture 里明明有数据，重建出来却一个字节都不变。
+    """
+    skeleton = {"id": "hz-x", "amap_poi_id": "B1", "name": "南宋御街中山路步行街",
+                "tags": [], "hours": "全天开放", "closed_days": "周一闭馆"}
+    merged = merge_skeleton(skeleton, {"hours": None, "closed_days": None,
+                                       "ticket_price": None, "description": None})
+
+    assert merged["hours"] == "全天开放"
+    assert merged["closed_days"] == "周一闭馆"
+
+
+def test_merge_still_lets_a_real_supplement_value_win():
+    """反过来那一半也要钉住：补充**查到了**就以它为准（它是第三层的本意）。
+    0 与空串不算"没查到"——票价那个 0 是有效值，不能因为 falsy 就被跳过。"""
+    skeleton = {"id": "hz-x", "amap_poi_id": "B1", "name": "灵隐寺",
+                "tags": [], "hours": "全天开放", "ticket_price": None}
+    merged = merge_skeleton(skeleton, {"hours": "07:00-18:00", "ticket_price": 0})
+
+    assert merged["hours"] == "07:00-18:00"
+    assert merged["ticket_price"] == 0
+
+
 def test_merge_defaults_updated_at():
     merged = merge_skeleton({"id": "hz-x", "amap_poi_id": "B1", "name": "n", "tags": []}, None)
     assert merged["updated_at"] == "2026-10-10"
@@ -587,3 +616,63 @@ def test_build_skips_keywords_absent_from_specs():
         }
     }
     assert fixture_to_skeletons(fake_fixture, city="北京") == []
+
+
+# ---------- 全天开放：离线这条链原来把高德的写法当占位符扔了 ----------
+
+def _poi(**overrides) -> dict:
+    poi = {"id": "B0FFH1", "name": "杭州西湖风景名胜区", "location": "120.15,30.25",
+           "type": "风景名胜;风景名胜;国家级景点", "biz_ext": {}}
+    poi.update(overrides)
+    return poi
+
+
+def test_an_all_day_attraction_keeps_the_wording_instead_of_a_null():
+    """高德把全天开放写成 `00:00-24:00` 或 `24小时营业`，而 `parse_opentime2` 要的是
+    `HH:MM-HH:MM`，两格都解析不出来 → 以前 hours 存成 null。
+
+    西湖、河坊街、什刹海、南锣鼓巷这类全折在这一格上：实测 138 条里 36 条 hours 是空的，
+    其中 16 条名字带「公园 / 广场 / 街 / 湿地」。运行时那条链
+    （`amap_attraction._parse_opentime`）早就补了这层，离线这条漏了——
+    所以才会「网页上现查答得出来、库里却存着空」。
+    """
+    record = poi_to_skeleton(_poi(biz_ext={"opentime2": "周一至周日 00:00-24:00"}), "杭州")
+
+    assert record["hours"] == "全天开放"
+
+
+def test_the_literal_24_hours_wording_counts_too():
+    record = poi_to_skeleton(_poi(biz_ext={"open_time": "24小时营业"}), "杭州")
+
+    assert record["hours"] == "全天开放"
+
+
+def test_a_real_time_still_wins_over_the_all_day_placeholder():
+    """同一条里既有占位又有具体时段时，具体时段更准——别被「全天开放」盖掉。"""
+    poi = _poi(biz_ext={"opentime2": "周一至周日 00:00-24:00；北门开放时间:07:00-22:00"})
+
+    assert poi_to_skeleton(poi, "杭州")["hours"] == "07:00-22:00"
+
+
+def test_a_missing_opentime_is_still_a_null_not_a_made_up_all_day():
+    """别矫枉过正：两格**都没有**时还是 null，不许凭空写成「全天开放」。"""
+    assert poi_to_skeleton(_poi(), "杭州")["hours"] is None
+
+
+def test_the_schema_accepts_the_wording_the_parser_produces():
+    """两处不能各写各的：库里的形状校验必须收得下解析器产出的那个词。
+
+    不收的话，上面补好的那几十条会在建库时被校验器**整个打回**——兜底补了也白补。
+    """
+    from travel_assistant.clients.amap_opentime import ALL_DAY
+
+    assert HOURS_PATTERN.match(ALL_DAY), f"解析器产出 {ALL_DAY!r}，校验器却不认"
+
+
+@pytest.mark.parametrize("bad", ["全天", "24小时营业", "24小时"])
+def test_narrower_all_day_wordings_are_still_rejected(vocabulary, bad):
+    """只放行「全天开放」这一个词，别顺手把形状放开——「全天」「24小时营业」照样拒。"""
+    with pytest.raises(ValidationIssue) as exc:
+        validate_record(_record(hours=bad), vocabulary)
+
+    assert exc.value.field == "hours"

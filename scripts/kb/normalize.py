@@ -17,7 +17,7 @@ from typing import Any
 # 解析器本体 2026-10-16 搬到了运行时：追问侧要现查开放时间，而 scripts/ 是离线工具链的地盘，
 # 运行时反过来 import 它是错的方向（见 docs/ASK_LIVE_HOURS.md §3.1）。
 # 这里只是**原样再导出**——离线这条链与 tests/test_attraction_kb.py 的 import 一个字都不用改。
-from travel_assistant.clients.amap_opentime import parse_opentime2  # noqa: F401
+from travel_assistant.clients.amap_opentime import ALL_DAY, is_all_day, parse_opentime2  # noqa: F401
 
 # 4.3 受控词表里的「类型」，值与 data/tags.json 对齐。
 # 每个标签配一组「高德 type 末级词」——只匹配 type 的最后一段（高德 type 形如
@@ -232,6 +232,16 @@ def poi_to_skeleton(
     if hours is None:
         # open_time 是简版时段（实测覆盖 55%），作为 opentime2 缺失时的备份。
         hours, _ = parse_opentime2(biz_ext.get("open_time"))
+    if hours is None and (is_all_day(biz_ext.get("opentime2"))
+                          or is_all_day(biz_ext.get("open_time"))):
+        # **两格都空，不等于「没数据」**：高德把全天开放写成 `00:00-24:00`（或
+        # `24小时营业`），而上面两句走的 `parse_opentime2` 要的是 `HH:MM-HH:MM`，
+        # 于是把它当占位符跳过了——**西湖、河坊街、什刹海、南锣鼓巷这类全天开放的地方
+        # 全折在这一句上**（实测 138 条里 36 条 hours 是空的，其中 16 条名字带
+        # 「公园/广场/街/湿地」）。
+        # 运行时那条链 (`amap_attraction._parse_opentime`) 早就补了这层，离线这条漏了——
+        # 所以「网页上现查能答出来、库里却存着空」。改完必须**重新生成一遍** data/attractions.json。
+        hours = ALL_DAY
 
     record_id = _make_id(city, poi_id)
     if not record_id.split("-", 1)[1]:

@@ -55,7 +55,15 @@ def merge_skeleton(skeleton: dict, supplement: dict | None) -> dict:
         for field in SUPPLEMENTABLE_FIELDS:
             if field == "tags":
                 continue
-            if field in supplement:
+            # **补充值是 null 时不覆盖**。这份文件里 null 的定义是"第三层没查到"，
+            # 不是"这里就是空"——票价那一行的注释写着"缺失必须是 null，不许写 0"。
+            # 一个"不知道"不该盖掉骨架**已经离线推出来的**值。
+            #
+            # 这一条正是 hours 空了 36 条的原因：高德把"全天开放"写成 00:00-24:00，
+            # 离线那侧（normalize.poi_to_skeleton）推得出来，第三层没查到、
+            # 写了 null，然后在这里把推出来的值盖了回去——fixture 里明明有数据，
+            # 输出却一个字节都不变。closed_days 同一类（骨架也会推）。
+            if supplement.get(field) is not None:
                 merged[field] = supplement[field]
         # tags 是合并而不是覆盖：第二层推的属性标签（室内/博物馆）不该被第三层整份替换掉。
         # 必须在上面的循环里跳过 tags，否则先被覆盖成补充值，再合并时就没有基线了。
