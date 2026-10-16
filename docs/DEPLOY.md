@@ -1,227 +1,274 @@
-# 部署（Docker · 单机）
+# 部署（阿里云轻量 · systemd）
 
-**目标**：把 Python 版部署到 `8.148.254.183`，顶掉现在那里的 Java 版演示。
+**目标机**：`8.148.254.183`（阿里云轻量应用服务器，华南3·广州，实例 `Ubuntu-bnfy`）。
+**上线时间**：2026-10-16，顶掉原来的 Java 版演示。
 
-**这一版不含向量编码层**（sentence-transformers + BGE-M3 权重，约 2.8GB）。
-追问里「按标签查景点」会**优雅退化**——模型收到的是「本地景点资料库还没建好，
-这次查不了，请只用方案内已有的信息作答」（实测路径：`store.indexed_cities()` 抛
-`IndexNotBuilt` → `ask_tools.py:358` 接住）。其余链路（规划、方案内追问、改方案、
-长期记忆）全部正常。要补见 §7。
-
-> `chromadb` 本身**已经装**（约 35MB，见 `requirements.txt` 里的说明）——
-> 它是那道优雅退化能生效的前提。少了它抛的是 `ModuleNotFoundError`，
-> 而调用方只接住了 `IndexNotBuilt`，异常会直接穿透出去。别顺手删掉。
-
-> ## ⚠️ §1 一步都别跳
->
-> 你**不确定那台机器上现在跑着什么**。直接 `compose up` 有可能顶掉别人的东西、
-> 或者因为端口占用起不来。§1 全是只读命令，跑完把输出留着，再决定怎么动。
+> **这份文档是记录「实际是怎么做的」，不是「计划怎么做」。**
+> 原来那版写的是 Docker 方案（`Dockerfile` + `docker-compose.yml`），
+> 第一次上服务器勘察后发现这台机器**根本没装 Docker**，且内存只有 1.6 GiB，
+> 于是改成跟原 Java 版同构的 **systemd + venv** 路子。Docker 那几个文件仍留在仓库里
+> （别的机器上还能用），但**这台机器不用它们**，见 §7。
 
 ---
 
-## §1 勘察（只读，不改任何东西）
+## §0 现状速查
 
-```bash
-ssh <你的用户>@8.148.254.183
-
-# 1. 谁在占端口？重点看 80 / 443 / 8080
-sudo ss -lntp
-
-# 2. 跑着哪些容器？Java 版是不是其中一个、叫什么名字
-docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Ports}}\t{{.Status}}"
-
-# 3. 有没有 Nginx 在反代？它把 80 转给了谁
-nginx -v 2>&1
-sudo nginx -T 2>/dev/null | grep -nE "listen|server_name|proxy_pass|root"
-
-# 4. 有没有 systemd 托管的东西（Java 那套可能是 jar + unit）
-systemctl list-units --type=service --state=running | grep -iE "travel|trip|java|nginx|docker"
-
-# 5. 磁盘和内存
-df -h /; free -h
-
-# 6. Docker 版本——`docker compose`（v2，带空格）和 `docker-compose`（v1）不是一回事
-docker --version; docker compose version 2>&1 | head -1
-```
-
-**照输出对号入座**：
-
-| 看到什么 | 说明什么 | 怎么替换 |
-|---|---|---|
-| `docker ps` 里有个容器占着 `0.0.0.0:80->...` | Java 版是个容器，直接对外 | §5 停它，把 80 让给新服务 |
-| 80 上是 **Nginx**，`proxy_pass` 指向某个内部端口 | Java 版在 Nginx 后面 | §5 只改 `proxy_pass`，Nginx 别动 |
-| 80 上有 systemd 托管的 jar | Java 版是裸进程 | §5 先 `systemctl stop` 再切 |
-| 8080 已被占用 | 我们的默认宿主端口撞了 | §3 把 `docker-compose.yml` 里 `"8080:8080"` 换成别的（如 `"18080:8080"`） |
-| `df -h /` 剩余 < 5GB | 装不下检索层 | §7 先别做 |
-
----
-
-## §2 把代码和密钥传上去
-
-在**本机**：
-
-```bash
-cd /Users/lwl/Documents/langchain-旅游智能体/travel-assistant-py
-
-# 只传部署要的东西。.venv / data/chroma / _verify 都不传（见 .dockerignore 同理）。
-rsync -av --delete \
-  --exclude '.git' --exclude '.venv' --exclude '__pycache__' \
-  --exclude 'data/chroma' --exclude 'tests' --exclude 'evals' \
-  --exclude 'docs' --exclude 'scripts' --exclude '.env' \
-  ./  <你的用户>@8.148.254.183:~/travel-assistant-py/
-```
-
-在**服务器**上建 `.env`：
-
-```bash
-cd ~/travel-assistant-py
-cp .env.example .env
-chmod 600 .env          # 里面有真 key，且 /api/map/config 会把它发给前端
-vim .env                # 填下面这几项
-```
-
-**必须填的**：
-
-| 变量 | 填什么 |
+| 项 | 值 |
 |---|---|
-| `TRAVEL_LLM_API_KEY` | 通义（DashScope）的 key |
-| `AMAP_API_KEY` | 高德 **Web 服务** key |
-| `AMAP_WEB_JS_KEY` | 高德 **Web 端(JS API)** key——前端渲染地图用 |
-| `AMAP_SECURITY_JS_CODE` | 与之配套的安全密钥 |
-| `POSTGRES_PASSWORD` | **新加一行**，自己定一个强密码（只在 compose 内部用） |
-
-其余保持 `.env.example` 的默认值即可。`TRAVEL_DB_DSN` **不用改** ——
-`docker-compose.yml` 里会用 compose 网络里的地址覆盖它。
-
-> 高德那两个 key 是**两套不同的东西**，都要申请：Web 服务用于后端查 POI / 路线，
-> Web 端用于浏览器里画地图。少一个的表现是「页面能出方案但地图是空白」。
-
----
-
-## §3 起服务（先只在本机端口验证，不碰线上）
+| 代码 | `/opt/travel-assistant-py/` |
+| 解释器 | `/opt/travel-assistant-py/.venv/bin/python`（Python 3.10.12） |
+| 服务 | `systemd` 单元 `travel-assistant-py.service`，**监听 8082**，已 `enable` |
+| 对外 | nginx 占 80，`proxy_pass → 127.0.0.1:8082` |
+| 数据库 | PostgreSQL 14.24，`127.0.0.1:5432`，库 `travel_assistant`，角色 `travel` |
+| 密钥 | `/opt/travel-assistant-py/.env`（`chmod 600`，**不在仓库、不在镜像**） |
+| 日志 | `/opt/travel-assistant-py/logs/app.log`、`logs/app-error.log` |
+| 备份 | `/root/nginx-travel-assistant.conf.bak`（改 Nginx 前的原件） |
 
 ```bash
-cd ~/travel-assistant-py
-docker compose up -d --build
-docker compose ps                 # 两个都该是 running，db 要 healthy
-docker compose logs -f app        # Ctrl-C 退出，看有没有报错
-```
-
-**验证**（在服务器上，或从你的电脑）：
-
-```bash
-# 服务活着
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/
-# 期望 200
-
-# 建表成功（长期记忆那三张表在不在）
-docker compose exec db psql -U travel -d travel_assistant -c "\dt"
-# 期望看到 users / preferences / episodes / sessions
-
-# 真跑一次规划——这一步才验证得动高德与模型
-# 浏览器打开 http://8.148.254.183:8080/ ，走一遍完整流程
-```
-
-**这一步跑通了再往下。** 没跑通就看 `docker compose logs app`，
-最常见的两个原因：`.env` 里 key 没填对、或 8080 被占。
-
----
-
-## §4 让简历上那个地址指过来
-
-按 §1 的勘察结果选一条。**三条都只要一分钟，且都能回退。**
-
-**情况 A：Java 版是个容器占着 80**
-
-```bash
-docker stop <那个容器名>
-docker update --restart=no <那个容器名>      # 别让它开机自启又抢回 80
-# 然后把 docker-compose.yml 的端口从 "8080:8080" 改成 "80:8080"
-docker compose up -d app
-```
-
-**情况 B：Nginx 反代（最常见）**
-
-不动 Python 服务，只改 Nginx 的转发目标：
-
-```bash
-sudo vim /etc/nginx/conf.d/xxx.conf
-#   把 location / 里的 proxy_pass 改成 http://127.0.0.1:8080;
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-**情况 C：systemd 托管的 Java jar**
-
-```bash
-sudo systemctl stop <服务名> && sudo systemctl disable <服务名>
-# 再按情况 A 或 B 让 8080 对外
-```
-
-改完确认：
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://8.148.254.183/
-# 期望 200，且浏览器打开是新的界面（助手页 / 明亮度假风，不是旧的票据风）
+# 日常三连
+systemctl status travel-assistant-py
+tail -f /opt/travel-assistant-py/logs/app-error.log
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8082/
 ```
 
 ---
 
-## §5 回退（出事就照这个走）
+## §1 这台机器的约束（决定了方案长什么样）
 
-Python 版是**独立容器 + 独立库**，Java 版的东西一个字节都没改，
-所以回退就是「把它停掉、把原来的恢复回来」：
+| 约束 | 数值 | 影响 |
+|---|---|---|
+| 内存 | **1.6 GiB**（可用约 690 MiB） | 卡脖子的一条。**不能上向量检索层**（见 §6） |
+| Swap | 原为 **0**，现已加 `/swapfile` 2 GiB | 没它的话 `pip install` 会被 OOM 杀掉 |
+| 磁盘 | 40 G，已用 9.2 G | 够 |
+| Python | 系统只有 **3.10.12** | 依赖都声明 `>=3.10`，实测可用 |
+| Docker | **没装** | 所以换了 systemd 方案 |
+| 另一个项目 | `interview-coach`（Java + MySQL），MySQL 常驻占 ~360 MiB | **没动它**。内存真不够时它是最大的杠杆 |
 
-```bash
-cd ~/travel-assistant-py
-docker compose down                     # 停掉 app 和 db（数据卷 pgdata 保留）
-
-# 然后按 §4 的反向操作恢复：
-#   A：docker start <那个容器名> && docker update --restart=always <那个容器名>
-#   B：把 proxy_pass 改回去，nginx -t && systemctl reload nginx
-#   C：systemctl start <服务名>
-```
-
-**别跑 `docker compose down -v`** —— 那个 `-v` 会把 `pgdata` 数据卷一起删掉，
-用户账号和长期偏好全没。
+**同机还有别的项目**，任何操作前先 `ss -lntp` + `docker ps` 看一眼，别顶掉别人的东西。
 
 ---
 
-## §6 更新代码（以后每次发版）
+## §2 首次部署（已执行完毕，此节留作重装参考）
+
+### 2.1 加 swap（换机器必做，否则装依赖会被 OOM 杀）
+
+```bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+grep -q "^/swapfile" /etc/fstab || echo "/swapfile none swap sw 0 0" >> /etc/fstab
+sysctl -w vm.swappiness=10
+grep -q "^vm.swappiness" /etc/sysctl.conf || echo "vm.swappiness=10" >> /etc/sysctl.conf
+```
+
+`swappiness=10`：swap 只当兜底，别让常驻内存被换出去拖慢响应。
+
+### 2.2 传代码
+
+在**本机**仓库根目录：
+
+```bash
+rsync -az --delete \
+  --exclude '.git/' --exclude '.venv/' --exclude '__pycache__/' \
+  --exclude 'data/chroma/' --exclude 'tests/' --exclude 'evals/' \
+  --exclude 'scripts/' --exclude '.env' --exclude '_verify/' \
+  --exclude '.pytest_cache/' --exclude '.idea/' --exclude '*.log' \
+  ./ root@8.148.254.183:/opt/travel-assistant-py/
+```
+
+`.env` 单独传（它被上面排除掉了），传完立刻收权限：
+
+```bash
+scp .env root@8.148.254.183:/opt/travel-assistant-py/.env
+ssh root@8.148.254.183 'chmod 600 /opt/travel-assistant-py/.env'
+```
+
+> `chmod 600` 不是可选项：`/api/map/config` 会把高德前端 JS key 发给浏览器，
+> 这个 key 就在 `.env` 里。
+
+### 2.3 建 venv 装依赖
+
+```bash
+cd /opt/travel-assistant-py
+apt-get install -y python3.10-venv          # Ubuntu 22.04 默认没装
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/
+.venv/bin/pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
+```
+
+⚠️ 用**阿里云镜像**。海外源在这台机器上很慢。
+
+### 2.4 Postgres
+
+```bash
+apt-get install -y postgresql                # 装到 14.24
+CONF=/etc/postgresql/14/main/postgresql.conf
+sed -i "s/^#*shared_buffers *=.*/shared_buffers = 64MB/"        $CONF
+sed -i "s/^#*effective_cache_size *=.*/effective_cache_size = 256MB/" $CONF
+sed -i "s/^#*maintenance_work_mem *=.*/maintenance_work_mem = 32MB/" $CONF
+sed -i "s/^#*work_mem *=.*/work_mem = 2MB/"                     $CONF
+sed -i "s/^#*max_connections *=.*/max_connections = 20/"        $CONF
+systemctl restart postgresql
+```
+
+**默认参数是按大内存机器定的**（`shared_buffers=128MB` 起），1.6 GiB 的机器上必须压下来。
+
+建角色与库，密码**服务端生成、不回显**，直接写进 `.env`：
+
+```bash
+PGPASS=$(openssl rand -hex 16)
+su postgres -c "psql -c \"CREATE ROLE travel LOGIN PASSWORD '$PGPASS';\""
+su postgres -c "createdb -O travel travel_assistant"
+echo "TRAVEL_DB_DSN=postgresql://travel:${PGPASS}@127.0.0.1:5432/travel_assistant" >> /opt/travel-assistant-py/.env
+```
+
+> `settings.py` 里 `TRAVEL_DB_DSN` 的默认值是 `postgresql:///travel_assistant`（走 unix socket），
+> 容器里/换机器上都不适用，**必须显式覆盖**。
+
+### 2.5 systemd 单元
+
+`/etc/systemd/system/travel-assistant-py.service`：
+
+```ini
+[Unit]
+Description=Travel Assistant (Python/FastAPI)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/travel-assistant-py
+EnvironmentFile=/opt/travel-assistant-py/.env
+ExecStart=/opt/travel-assistant-py/.venv/bin/python -m travel_assistant.main
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/travel-assistant-py/logs/app.log
+StandardError=append:/opt/travel-assistant-py/logs/app-error.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl daemon-reload && systemctl enable --now travel-assistant-py
+```
+
+> `WorkingDirectory` 必须是仓库根：`travel_assistant/kb/paths.py` 里
+> `REPO_ROOT = Path(__file__).parents[2]`，`travel_assistant/` 与 `data/` 必须是兄弟目录。
+
+### 2.6 切 Nginx
+
+```bash
+CONF=$(readlink -f /etc/nginx/sites-enabled/travel-assistant.conf)   # 实为 sites-available 下的
+cp -a "$CONF" /root/nginx-travel-assistant.conf.bak
+sed -i 's|127\.0\.0\.1:8081|127.0.0.1:8082|g' "$CONF"
+nginx -t && systemctl reload nginx
+```
+
+**顺序很重要**：先把 nginx 指过来、验证通过，**再**停旧服务。
+反过来做的话中间那段时间线上是 502。
+
+### 2.7 停掉 Java 版
+
+```bash
+systemctl stop travel-assistant && systemctl disable travel-assistant
+```
+
+**只停不禁删**：jar、`/opt/travel-assistant/`、`travel-assistant.env` 原封不动，
+`systemctl start travel-assistant` 就能起回来（起回来后要把 nginx 改回 8081）。
+
+---
+
+## §3 以后每次发版
 
 ```bash
 # 本机
 git push origin develop
-# 服务器
-cd ~/travel-assistant-py && git pull        # 若当初用 rsync 传的，就重跑 §2 那条 rsync
-docker compose up -d --build
+
+# 服务器：重跑 §2.2 那条 rsync（或用 git pull），然后
+cd /opt/travel-assistant-py && .venv/bin/pip install -q -r requirements.txt
+systemctl restart travel-assistant-py
 ```
 
-改了 `data/attractions.json` 之类的运行时要读的文件，**必须 `--build`** ——
-它们是 `COPY` 进镜像的，不重建不会生效。
+改了 `data/attractions.json` 之类的运行时文件**也要重跑 rsync** —— 它们不在代码里自更新。
+改了 `requirements.txt` 才需要重跑 pip。
 
 ---
 
-## §7 之后补检索层（这次故意没上）
+## §4 回退
 
-要装的东西：`chromadb` + `sentence-transformers`（带 torch，约 800MB）
-+ BGE-M3 权重（约 2GB）。三处改动：
+**回退到 Java 版**（因为 nginx 一改就回去了，是最快的一条）：
 
-1. `requirements.txt` 加 `sentence-transformers`（`chromadb` 已经在里面了，
-   别重复加、也别删）。
-2. 把本机 `~/Documents/bge-m3/snapshots/master` 传到服务器，
-   `.env` 里加 `TRAVEL_EMBED_MODEL_PATH=<服务器上的路径>`。
-   ⚠️ 必须传**这一份完整权重**，不能用 HuggingFace 缓存那份——
-   那份有 7 个断链（原因见 `travel_assistant/kb/encoder.py` 顶部注释）。
-3. 在服务器上建索引：`docker compose exec app python -m scripts.kb.build_index`
-   （需要 `scripts/` 进镜像，见 §6 对 `--build` 的说明）。
+```bash
+cp -a /root/nginx-travel-assistant.conf.bak $(readlink -f /etc/nginx/sites-enabled/travel-assistant.conf)
+nginx -t && systemctl reload nginx
+systemctl start travel-assistant        # 它的单元还在，enabled 关掉了而已
+```
 
-代价：首次编码约 5.9s、常驻内存 +0.87GB。所以它不是免费的，
-只有真的要用「按标签语义查景点」才值得加。
+**Python 版本身出问题**：
+
+```bash
+systemctl restart travel-assistant-py
+journalctl -u travel-assistant-py -n 50      # 单元日志
+tail -50 /opt/travel-assistant-py/logs/app-error.log
+```
+
+数据库数据在 `/var/lib/postgresql/14/main`，**别删** —— 用户账号与长期偏好都在那儿。
 
 ---
 
-## 附：为什么镜像里没有 .env
+## §5 验证清单（部署/回退后照这个走一遍）
 
-镜像层可以被 `docker save` 导出来、也能被推到 registry，**一旦 COPY 进镜像，
-密钥就写进了一个不方便删掉的地方**（哪怕下一层删了，`docker history` 里还在）。
-所以 `.dockerignore` 明确排除了 `.env`，运行时靠 `env_file` 注入。
+```bash
+# 1. 服务活着
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8082/          # 期望 200
+
+# 2. 走公网（最终判据）
+curl -s http://8.148.254.183/ | grep -oE '<title>[^<]*</title>'          # 期望 <title>智能旅行助手</title>
+
+# 3. 建表成功
+psql "$(grep '^TRAVEL_DB_DSN=' /opt/travel-assistant-py/.env | cut -d= -f2-)" -c "\dt"
+# 期望 users / preferences / episodes / sessions 四张表
+
+# 4. 真跑一次完整流程——浏览器打开 http://8.148.254.183/ ，注册→出方案→追问
+```
+
+第 4 条**只能人工验**：它真调高德、真调模型，不是桩能替的。
+
+---
+
+## §6 已知限制：这台机器上检索层没上
+
+「追问里按标签查景点」这个工具**优雅退化**了 —— 模型收到的是
+「本地景点资料库还没建好（索引还没建：/opt/travel-assistant-py/data/chroma），
+这次查不了，请只用方案内已有的信息作答」，然后它会退回去联网查高德。
+**实测（2026-10-16）走通了这条路径，没有异常穿透。**
+
+不用它是**内存算不过来**：`sentence-transformers`（带 torch，约 800 MB）
++ BGE-M3 权重（约 2 GB），而本机可用内存不到 700 MiB。
+`chromadb` 本身**已经装了**（约 35 MB）——它是上面那条优雅退化能生效的前提：
+少了它抛的是 `ModuleNotFoundError`，而 `ask_tools.py:358` 只接住了 `IndexNotBuilt`，
+异常会直接穿透到工具外。**别顺手删掉 requirements.txt 里那行 chromadb。**
+
+要真上检索层，得先升配到 4 GiB 以上，步骤见仓库根 `requirements.txt` 顶部注释
+与 `travel_assistant/kb/encoder.py` 顶部注释（权重那份有 7 个断链，必须传完整权重）。
+
+---
+
+## §7 附：为什么这次没用 Docker
+
+仓库里有 `Dockerfile` / `docker-compose.yml` / `.github/workflows/ci.yml`，
+本机 `docker build` 与容器内 138 条景点库都验过。但这台服务器：
+
+1. **没装 Docker** —— 为它装一套 dockerd 要多占约 100 MiB 内存，而可用内存不到 700 MiB；
+2. 现有 Java 版就是 **jar + systemd + nginx** 的路子，跟着它走最省事、也最容易回退；
+3. 单机单服务，Docker 的隔离与编排收益在这里体现不出来。
+
+**Docker 那套没有删**，换机器（内存宽裕、要跑多服务）时仍然可用。
+
+---
+
+## 附：为什么服务器上没有把 `.env` 放进镜像/仓库
+
+`.env` 里是真 key，且 `/api/map/config` 会把它发给前端。
+`.gitignore` 挡住了入库，`.dockerignore` 挡住了进镜像，
+服务器上靠 systemd 的 `EnvironmentFile=` 在运行时注入，权限收到 600。

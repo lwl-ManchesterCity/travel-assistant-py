@@ -232,6 +232,34 @@ TRAVEL_LLM_TEMPERATURE  默认 0.2
 
 ---
 
+## 六、上服务器部署时撞见的一条（2026-10-16）
+
+部署过程见 `docs/DEPLOY.md`。真跑接口撞出来的，**没修**，记在这里。
+
+### 6.1 `accommodation` 声明可空，validator 却不许空
+
+`TripPlanRequest` 里这一格写的是 `accommodation: Optional[str] = None`，
+但 `_not_blank` 的第一个分支是 `if value is None or not value.strip(): raise`
+——**`None` 也照 raise**。（同一条 validator 还挂在 `city` 上，那个是真必填，看不出问题。）
+
+实测（本机 `TripPlanRequest(...)` 与线上 `POST /api/trips/plan` 都复现）：
+
+```json
+{"city":"杭州","startDate":"2026-11-01","endDate":"2026-11-03","budget":3000,"preferences":["美食"]}
+→ 400 VALIDATION_ERROR: ["accommodation: must not be blank"]
+```
+
+补上 `"accommodation":"酒店"` 就 200，链路本身完全正常。
+
+**前端碰不到**：`static/index.html` 里它是个 `<select>`，永远有值（默认「舒适型酒店」）。
+所以这是**只有直接调 API 才会撞上**的坑。
+
+**为什么这轮没动**：改法有两条——把 `accommodation` 从那条 validator 里摘掉，
+或把它改成真必填、去掉 `Optional`——**选哪条取决于「住宿偏好」算不算必填**，
+那是产品决定不是 bug 修复。要动之前先定这个。
+
+---
+
 ## 附：当前实际状态（核对于 2026-10-14，写这份文档时顺带核的）
 
 写文档时我照抄了一句旧记忆说「第二档未提交」，去核代码才发现是错的。记在这里免得再错：
