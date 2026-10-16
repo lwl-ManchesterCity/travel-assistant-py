@@ -235,7 +235,7 @@ data/                 景点资料、标签表；chroma/ 是本地生成的索�
 ## 测试
 
 ```bash
-.venv/bin/python -m pytest -q      # 563 passed
+.venv/bin/python -m pytest -q      # 577 passed
 ```
 
 全部是单元测试——喂死数据，**不调模型、不碰数据库**。真 SQL（unique 约束、`on conflict do nothing`）
@@ -267,12 +267,52 @@ data/                 景点资料、标签表；chroma/ 是本地生成的索�
 
 ## 设计文档
 
-`docs/` 下是各功能的设计稿与逐条验收记录，**改代码前先看这里**：
+`docs/` 下 29 篇，分三类（下表链接都相对 `docs/`）。**改代码前照着第一类来**；
+后两类讲的是过去的事，**查现状一律以代码为准**。
 
-| 文档 | 内容 |
-| --- | --- |
-| [`docs/ASK_LONGTERM_MEMORY.md`](docs/ASK_LONGTERM_MEMORY.md) | 登录、长期偏好、场景记忆（分档设计 + 判据 + 实机验收） |
-| [`docs/ASK_AGENT_DESIGN.md`](docs/ASK_AGENT_DESIGN.md) | 方案追问：工具、护栏、意图判定 |
-| [`docs/ADJUST_AGENT_DESIGN.md`](docs/ADJUST_AGENT_DESIGN.md) | 追问驱动改方案 |
-| [`docs/API.md`](docs/API.md) | 接口参考 |
-| [`docs/DESIGN_NOTES.md`](docs/DESIGN_NOTES.md) | 行为口径、设计取舍、验收记录 |
+### 一、常驻设计稿 —— 按模块找（14 篇）
+
+读者带着「我要改 X」来，从这张表进。
+
+| 模块 | 文档 | 讲什么 |
+| --- | --- | --- |
+| 规划链路 | [`PLANNER_SELECTION_DESIGN`](docs/PLANNER_SELECTION_DESIGN.md) | 先按位置串景点动线，酒店放末站 |
+| | [`INTERCITY_TRANSPORT_DESIGN`](docs/INTERCITY_TRANSPORT_DESIGN.md) | 城际大交通接进行程，重算预算与动线 |
+| | [`DESIGN_NOTES`](docs/DESIGN_NOTES.md) | 主链路的「为什么」总账：23 条行为口径 + 与常规写法不同的地方 |
+| 方案追问 | [`ASK_AGENT_DESIGN`](docs/ASK_AGENT_DESIGN.md) | 只读追问 agent：六个工具、护栏与留痕。**动提示词先看这篇** |
+| | [`ADJUST_AGENT_DESIGN`](docs/ADJUST_AGENT_DESIGN.md) | 判出改方案意图后，确认了才走改行程链路 |
+| | [`ASSISTANT_CHAT_DESIGN`](docs/ASSISTANT_CHAT_DESIGN.md) | 把追问抽成整屏助手页 + SSE 假流式 |
+| | [`ATTRACTION_PIN_DESIGN`](docs/ATTRACTION_PIN_DESIGN.md) | 点名「某天必去某景点」，强制排进那一天 |
+| 追问·记忆 | [`ASK_LONGTERM_MEMORY`](docs/ASK_LONGTERM_MEMORY.md) | 用户偏好长期记忆的五档落地 |
+| | [`ASK_MULTITURN_MEMORY`](docs/ASK_MULTITURN_MEMORY.md) | 多轮追问带什么历史、窗口留多大 |
+| | [`ASK_SCOPE_OPENING`](docs/ASK_SCOPE_OPENING.md) | 解城市锁与知识锁，让追问不限本方案 |
+| 景点库 | [`ATTRACTION_KB_DESIGN`](docs/ATTRACTION_KB_DESIGN.md) | 离线建表：schema 与 fixture → `attractions.json` 的流程 |
+| | [`ATTRACTION_RETRIEVAL_DESIGN`](docs/ATTRACTION_RETRIEVAL_DESIGN.md) | 检索侧：先按确定条件筛，筛完再交给向量排序 |
+| 前端 | [`FRONTEND_LANDING_V4`](docs/FRONTEND_LANDING_V4.md) | 明亮度假风，两页重做 |
+| 接口 | [`API`](docs/API.md) | 各端点的请求、响应与错误码 |
+
+### 二、逐次改动与复核（8 篇，带日期）
+
+回答的是「**当时**为什么这么改、踩了什么坑」。结论大多已并进上表对应那篇，
+这里留的是过程和判据。
+
+| 时间 | 文档 | 记了什么 |
+| --- | --- | --- |
+| 10-16 | [`ASK_LIVE_HOURS`](docs/ASK_LIVE_HOURS.md) | 开放时间接本地库与联网两层，并改掉规则 11 那条错划线 |
+| 10-16 | [`ASK_STABLE_KNOWLEDGE`](docs/ASK_STABLE_KNOWLEDGE.md) | 景点问题分两路：会变的查库、不会变的自答 |
+| 10-14 | [`AGENT_GAPS_20261014`](docs/AGENT_GAPS_20261014.md) | 盘点离「一个 agent 项目」还差的四件事 |
+| 10-13 | [`ASK_ATTRACTION_LOOKUP_FIX`](docs/ASK_ATTRACTION_LOOKUP_FIX.md) | 问具体景点查不到的根因与两处修法 |
+| 10-13 | [`KB_EXPANSION_HANDOFF`](docs/KB_EXPANSION_HANDOFF.md) | 给景点库补北上广三城的执行细则（结果见 `ATTRACTION_KB_DESIGN` 第 12 节） |
+| 10-12 | [`ATTRACTION_SELECTION_REVISION_20261012`](docs/ATTRACTION_SELECTION_REVISION_20261012.md) | 候选池取前 5、不编评分、中间天上限 3 |
+| 10-12 | [`DEFECT_REVIEW_20261010`](docs/DEFECT_REVIEW_20261010.md) | 复核出五个疑似缺陷并逐条定性（已全部关闭） |
+| 10-08 | [`FRONTEND_REDESIGN_PLAN`](docs/FRONTEND_REDESIGN_PLAN.md) | 前端重构总方案 —— ⚠️ **票据方向，已被 V4 取代** |
+
+### 三、前端反馈单（7 篇，票据时代）
+
+`docs/FRONTEND_FEEDBACK_*.md` 七篇（巨票配色、出票动效、着陆页减脂……）：当初下给
+执行前端重构的 agent 的反馈单。**随票据方向一起作废**，只作历史留存 ——
+现行视觉以 `FRONTEND_LANDING_V4` 为准。
+
+> 每篇开头都有一行 `状态：`，写着它走到哪一步了。但**状态行会过期**——
+> `ADJUST_AGENT_DESIGN` 就出现过正文说已落地、开头还写着「未开工」的情况。
+> 两者不符时以代码为准。
