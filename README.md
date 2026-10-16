@@ -225,29 +225,45 @@ travel_assistant/
   service/            planner_input_builder / requirement_analysis / trip_planning
                       / auth / preference / episode / hotel_anchor / intercity …
   static/             index.html + css/ + js/ + 字体 + 插画（FastAPI 挂在根路径）
-tests/                529 条，见下
+tests/                563 条，见下
 docs/                 设计稿与验收记录，见下；images/ 是 README 用的产品图
 scripts/              建库工具、视觉验收探针、结果页渲染
+evals/                追问链路的评测集：questions.yaml 题库 + judge.py 判分 + run.py 跑
 data/                 景点资料、标签表；chroma/ 是本地生成的索引，不入库
 ```
 
 ## 测试
 
 ```bash
-.venv/bin/python -m pytest -q      # 529 passed
+.venv/bin/python -m pytest -q      # 563 passed
 ```
 
 全部是单元测试——喂死数据，**不调模型、不碰数据库**。真 SQL（unique 约束、`on conflict do nothing`）
 由 `test_*_store_postgres.py` 三个文件单独守，它们要一个真的库。
 
-端到端验收另有一套探针：起真服务、连真库、调真模型，跑一次几分钟。**探针随仓库走**，
+端到端验收另有两样东西，都起真服务、连真库、调真模型，跑一次几分钟，**都在仓库里**，
 从仓库根跑：
 
 - `scripts/preference_probe.py` —— 长期记忆那几档的判据都在它里面
 - `scripts/opening_hours_probe.py` —— 追问侧「开放时间接两层」：本地库没命中要退到高德
-两层的分工是：单元测试证明**每个函数按写的做**，探针证明**整条链真的接通了**——
-后者能抓到前者抓不到的（HTTP 那条路上 `user_id` 有没有传到底、真库认不认那个唯一键、
-删掉之后是不是真的不再进提示词）。
+- `evals/run.py` —— 追问链路的**评测集**：40 道常驻题，跑完给一个分
+
+**探针和评测集不是一回事**，虽然两个都跑真模型：
+
+| | 题从哪来 | 什么时候跑 | 输出 |
+| --- | --- | --- | --- |
+| 探针 | 照着这次改动现编 | 改完那一刻，验机制通不通 | ✅ 全过 / ❌ N 条没过 |
+| 评测集 | 常驻题库，不随改动走 | 每次动提示词前后各跑一次 | `38/40 过`，**能和上一次比** |
+
+三层的分工：单元测试证明**每个函数按写的做**，探针证明**整条链真的接通了**，
+评测集证明**答出来的东西对不对、这次比上次好不好**。前两层全绿的时候，
+「规则 11 现在 45 行、模型少读了一段」这种事它们一个都抓不到——只有评测集能。
+
+评测集的跑法和判分规则见 `evals/run.py` 与 `evals/judge.py` 的文件头。
+它给的是**一个分**，所以动提示词应当改前改后各跑一次，把两个数记进 commit message。
+
+> **改工具名时**：`evals/judge.py` 里的 `TOOL_NAMES` 要跟着改。
+> 题库里把工具名写错会让那条断言**静默失效**（判过，但压根没跑）。
 
 ## 设计文档
 

@@ -18,6 +18,10 @@ pytest==9.1.1
 psycopg[binary,pool]==3.3.6
 bcrypt==5.0.0
 
+# 评测集专用（evals/judge.py 读 questions.yaml），不参与运行时。
+# PyYAML 本来靠 langchain 顺带装进来，但**靠传递依赖是碰运气**——显式钉住。
+PyYAML==6.0.3
+
 # 探针专用（scripts/visual_acceptance.py、scripts/motion_evidence.py），不参与运行时而未固定。
 # 装完还要 `playwright install chromium`（浏览器二进制默认落在 ~/Library/Caches/ms-playwright）。
 #   uv pip install -p .venv/bin/python --index-url https://mirrors.aliyun.com/pypi/simple/ playwright
