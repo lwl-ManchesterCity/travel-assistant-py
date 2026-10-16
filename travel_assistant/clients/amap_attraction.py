@@ -9,6 +9,7 @@ from ..models.attraction_query import AttractionQuery
 from ..models.location import Location
 from ..models.provider_metadata import ProviderMetadata
 from .amap_http import build_candidate_urls, fetch_json
+from .amap_opentime import ALL_DAY, is_all_day, parse_opentime2
 from .base import AttractionClient
 from .local_attraction import InMemoryAttractionClient
 
@@ -133,6 +134,7 @@ class AmapAttractionClient(AttractionClient):
         location = self._parse_location(self._safe_string(poi.get("location"), ""))
         type_ = self._safe_string(poi.get("type"), "城市景点")
         category = self._map_type_to_category(type_)
+        hours, closed_days = self._parse_opentime(poi)
         return Attraction(
             # POI id 一直就在手上（`_contains_poi_by_id` 拿它去重），只是以前没往上传。
             id=self._safe_string(poi.get("id"), None),
@@ -145,6 +147,8 @@ class AmapAttractionClient(AttractionClient):
             rating=self._parse_rating(poi),
             image_url=self._parse_photo_url(poi),
             ticket_price=self._infer_ticket_price(category),
+            hours=hours,
+            closed_days=closed_days,
         )
 
     def _is_valid_attraction_poi(self, poi: dict) -> bool:
@@ -256,6 +260,32 @@ class AmapAttractionClient(AttractionClient):
                 except ValueError:
                     return None
         return None
+
+    def _parse_opentime(self, poi: dict) -> tuple[str | None, list[str] | None]:
+        """高德 POI → `(hours, closed_days)`，拿不到就是 `(None, None)`——不编默认值。
+
+        形状与 `_parse_rating` 一致。`opentime2` 一个字段里同时含开放时段与闭馆日
+        （覆盖率实测 ~66%，见 docs/ASK_LIVE_HOURS.md §2.1），所以两格都从它出。
+
+        **空的时候给 `None` 而不是 `[]`**：`[]` 在 JSON 里会被读成"确认没有闭馆日"，
+        而 `(None, [])` 实际的意思是"高德没给"。两种含义不该长得一样。
+        """
+        biz_ext = poi.get("biz_ext")
+        if not isinstance(biz_ext, dict):
+            return None, None
+        hours, closed_days = parse_opentime2(biz_ext.get("opentime2"))
+        if hours is None:
+            # `open_time` 是简版时段（实测覆盖 ~55%），`opentime2` 缺失时的兜底。
+            # 与 normalize.py 那条离线链同一条口径：简版里没有闭馆日，所以只取 hours。
+            hours, _ = parse_opentime2(biz_ext.get("open_time"))
+        if hours is None and (is_all_day(biz_ext.get("opentime2")) or is_all_day(biz_ext.get("open_time"))):
+            # **「全天开放」是答案，不是空值。** `parse_opentime2` 会把它当占位跳过，
+            # 于是"高德说了、而且是全天"变成一句「未给出」——白云山那次就栽在这。
+            # 只有在真没取到时段时才用它：opentime2 里同时有 00:00-24:00 与具体时段时，
+            # 具体时段才是更准的那个（parse_opentime2 已经优先取了它）。
+            # 注意与离线那条链**有意分叉**：KB 的 hours 要的是结构化时段，追问侧要的是答案。
+            hours = ALL_DAY
+        return hours, closed_days or None
 
     def _safe_string(self, value: object, default: str | None) -> str | None:
         if value is None:

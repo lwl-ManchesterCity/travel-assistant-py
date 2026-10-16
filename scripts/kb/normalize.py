@@ -14,6 +14,11 @@ import re
 from pathlib import Path
 from typing import Any
 
+# 解析器本体 2026-10-16 搬到了运行时：追问侧要现查开放时间，而 scripts/ 是离线工具链的地盘，
+# 运行时反过来 import 它是错的方向（见 docs/ASK_LIVE_HOURS.md §3.1）。
+# 这里只是**原样再导出**——离线这条链与 tests/test_attraction_kb.py 的 import 一个字都不用改。
+from travel_assistant.clients.amap_opentime import parse_opentime2  # noqa: F401
+
 # 4.3 受控词表里的「类型」，值与 data/tags.json 对齐。
 # 每个标签配一组「高德 type 末级词」——只匹配 type 的最后一段（高德 type 形如
 # 「风景名胜;公园广场;公园」，末级才是真正的细分类型），不再对整串做 in匹配。
@@ -57,15 +62,9 @@ INDOOR_KEYWORDS: tuple[str, ...] = (
     "博物馆", "展览馆", "美术馆", "图书馆", "艺术馆", "博物院", "纪念馆",
 )
 
-_CLOSED_DAY_ORDER: tuple[str, ...] = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
-# 时段分隔符实测有五种写法：半角 -、全角 –(U+2013)/―(U+2015)、波浪 ~、至。
-# 漏掉全角会让「周二–周日 09:00–17:00」整条解析失败——实测中国丝绸博物馆与良渚博物院都栽在这里。
-_TIME_RANGE = re.compile(r"(\d{1,2}:\d{2})\s*[-–—―~至]\s*(\d{1,2}:\d{2})")
-_CLOSED_DAY = re.compile(r"(周[一二三四五六日天])")
-
-# 高德把「全天开放」写成 00:00-24:00。它不是开放时段，是占位——
-# 存进hours 会让追问「几点关门」得到一个荒谬答案。实测 27/30 条是这个值。
-_ALL_DAY_PLACEHOLDER = ("00:00-24:00", "0:00-24:00", "00:00-24:00 ")
+# 开放时间那套（_CLOSED_DAY_ORDER / _TIME_RANGE / _ALL_DAY_PLACEHOLDER）与 parse_opentime2
+# 一起搬到了 travel_assistant.clients.amap_opentime，见顶部那条 import。
+# 顺带丢掉了 _CLOSED_DAY：定义了但全库没有任何地方用过，死代码不跟着搬。
 
 # 与travel_assistant/clients/amap_attraction.py 的 _is_valid_attraction_poi 同一套排除口径。
 # 除此之外还排除交通设施与生活服务：实测「楼观台」首条返回「起名馆」、
@@ -125,111 +124,6 @@ def derive_tags(type_: str, name: str, category: str) -> list[str]:
             tags.append(tag)
             break
     return tags
-
-
-def parse_opentime2(raw: Any) -> tuple[str | None, list[str]]:
-    """从 biz_ext.opentime2 抽 (hours, closed_days)。
-
-    第 0 步实测：opentime2 在杭州样本里覆盖 90%，内容形如
-    「周二至周日 09:00-17:00开放 最晚进入16:30； 周一 全天不开放(遇法定节假日正常开放…)」。
-    它同时含时段与闭馆日，所以 hours 与 closed_days 都能从这里拿，不必联网。
-
-    返回的 hours 必须是 HH:MM-HH:MM：取第一个完整时段，并剔除「最晚进入16:30」这类
-    干扰项——它也是 HH:MM-HH:MM 形状但不是开放时段。
-    """
-    if not isinstance(raw, str):
-        return None, []
-    text = raw.strip()
-    if not text or text == "[]":
-        return None, []
-
-    # 先把「最晚进入16:30」「停止入园16:00」这类干扰短语整段剥掉。
-    # 它们的形状也是 HH:MM-HH:MM，不剥掉会被当成开放时段——实测三个博物馆的
-    # 「周二–周日 09:00–17:00开放 最晚进入16:30」整段都因此被跳过，hours 变null。
-    text = re.sub(r"最晚[^；;，,]*", " ", text)
-    text = re.sub(r"(停止入园|停止进入|停止售票|最晚售票)[^；;，,]*", " ", text)
-
-    hours: str | None = None
-    closed_days: list[str] = []
-
-    for clause in re.split(r"[；;]", text):
-        clause = clause.strip()
-        if not clause:
-            continue
-        # 一个子句可能同时含时段与闭馆日（「周二至周日 09:00-17:00 周二 全天不开放」），
-        # 所以这里不整段跳过，只把闭馆关键词之后的部分切掉，剩下的照常找时段。
-        for closing in re.finditer(r"(不开放|闭馆|闭园|全天关闭|停止开放|休息)", clause):
-            before = clause[: closing.start()]
-            after = clause[closing.end():]
-            closed_days.extend(_closed_days_in(before))
-            clause = before
-            clause = f"{clause} {after}".strip() if after.strip() else clause
-            if hours is None:
-                match = _TIME_RANGE.search(clause)
-                if match:
-                    candidate = f"{_pad(match.group(1))}-{_pad(match.group(2))}"
-                    if candidate not in _ALL_DAY_PLACEHOLDER:
-                        hours = candidate
-            break
-
-        if hours is None:
-            match = _TIME_RANGE.search(clause)
-            if match:
-                candidate = f"{_pad(match.group(1))}-{_pad(match.group(2))}"
-                if candidate not in _ALL_DAY_PLACEHOLDER:
-                    hours = candidate
-
-    closed_days = list(dict.fromkeys(closed_days))
-    closed_days.sort(key=lambda day: _CLOSED_DAY_ORDER.index(day) if day in _CLOSED_DAY_ORDER else 99)
-    return hours, closed_days
-
-
-def _closed_days_in(before: str) -> list[str]:
-    """从闭馆关键词**之前**的那段文字里取星期。
-
-    只取紧邻的那几个，不能把整句的星期都算进来：「周二至周日 09:00-17:00 周二 全天不开放」
-    里「周二至周日」是开放区间，只有最后那个「周二」是闭馆日。
-
-    做法：先剥掉尾部的时段与日期，剩下的若整段都是「星期+分隔符」的组合就全收；
-    否则从右往左逐个星期吃，撞上「至」或非星期内容就停。
-    """
-    tail = before.rstrip()
-    # 剥掉尾部的前缀词与时段日期：「…周一 全天」→「…周一」。
-    # 「全天」必须剥：闭馆关键词是「全天不开放」时，before 的尾巴是「全天」而不是星期，
-    # 不剥就会挡住后面真正要取的那个星期。
-    while True:
-        stripped = re.sub(
-            r"(?:[\d:：/\-–—―~年月日号第.\s]+|(?:全天|每天|全年|全日|节假日|法定节假日)+)$",
-            "",
-            tail,
-        )
-        if stripped == tail:
-            break
-        tail = stripped
-    if not tail:
-        return []
-
-    # 整段都是星期列表（「周一、周三」「周一,周三至周日」）——直接全收。
-    if re.fullmatch(r"(?:周[一二三四五六日天]\s*[、,，/]?\s*)+", tail):
-        return ["周日" if day == "周天" else day for day in re.findall(r"周[一二三四五六日天]", tail)]
-
-    # 否则只从右往左吃紧邻的星期，撞上「至」停：「周二至周日」里的周日是区间右端。
-    days: list[str] = []
-    remainder = tail
-    while True:
-        match = re.search(r"周[一二三四五六日天]$", remainder)
-        if not match:
-            break
-        days.append("周日" if match.group() == "周天" else match.group())
-        remainder = remainder[: match.start()].rstrip()
-        if remainder.endswith("至") or remainder.endswith("-") or not remainder:
-            break
-    return days
-
-
-def _pad(time_str: str) -> str:
-    hour, _, minute = time_str.partition(":")
-    return f"{int(hour):02d}:{minute}"
 
 
 def _parse_location(raw: Any) -> dict[str, float] | None:

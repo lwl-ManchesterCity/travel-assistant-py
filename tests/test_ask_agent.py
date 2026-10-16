@@ -671,6 +671,148 @@ def test_shouldTreatNonListHistoryAsEmptyInsteadOfCrashing():
     assert request.history == []
 
 
+# ---------- 第二跳：本地库没命中就联网查（docs/ASK_LIVE_HOURS.md §3.5） ----------
+
+class _NamedAttractionAgent(_StubAttractionAgent):
+    """按名字联网查那条路的桩：`search`（发现式）照旧，`find_by_name` 返回事先给的那一条。"""
+
+    def __init__(self, found=None, error=None):
+        super().__init__()
+        self._found = found
+        self._error = error
+        self.asked = []
+
+    def find_by_name(self, city, name):
+        self.asked.append((city, name))
+        if self._error:
+            raise self._error
+        return self._found
+
+
+def _second_hop_agent(script, found=None, error=None):
+    stub = _NamedAttractionAgent(found=found, error=error)
+    agent = AskAgent(_StubLlmClient(True), stub, _StubWeatherAgent(None), _StubHotelAgent())
+    agent._get_agent = lambda: _ScriptedGraph(agent._tools, script, _answer_json("答。"))
+    return agent, stub
+
+
+def _online_trace(response):
+    traces = [t for t in response.traces if t.agent_name == "search_attractions"]
+    assert traces, f"没有记到联网那一笔留痕：{_names(response.traces)}"
+    return traces[-1]
+
+
+def test_shouldAnswerHoursFromTheOnlineHopWithTheAttractionNameFilledIn():
+    """本地库没命中 → 再发一次联网，把景点名填进去，文本里带出开放时间与闭馆日。"""
+    found = Attraction(name="越秀公园", category="自然风景", address="解放北路988号",
+                       hours="06:00-22:00", closed_days=["周一"])
+    agent, stub = _second_hop_agent(
+        [("search_attractions", {"attraction_name": "越秀公园"})], found=found)
+
+    trace = _online_trace(agent.ask(_ask_request("越秀公园几点关门", city="广州")))
+
+    assert stub.asked == [("广州", "越秀公园")]
+    assert "开放 06:00-22:00" in trace.output_summary
+    assert "闭馆 周一" in trace.output_summary
+    assert "最接近" not in trace.output_summary
+
+
+def test_shouldNotPutAnInferredTicketPriceOnTheOnlinePath():
+    """联网那条路的票价是 `_infer_ticket_price` 按类别估的，不是真门票——不许进给模型看的文本。"""
+    found = Attraction(name="越秀公园", hours="06:00-22:00", ticket_price=60)
+    agent, _ = _second_hop_agent(
+        [("search_attractions", {"attraction_name": "越秀公园"})], found=found)
+
+    trace = _online_trace(agent.ask(_ask_request("越秀公园几点关门", city="广州")))
+
+    assert "60" not in trace.output_summary
+
+
+def test_shouldFlagWhenAmapOnlyFoundTheClosestName():
+    """高德没有同名时返回"最接近的那个"，工具要留痕，别让模型当成就是它。"""
+    found = Attraction(name="广州塔", hours="09:00-22:00")
+    agent, _ = _second_hop_agent(
+        [("search_attractions", {"attraction_name": "广州塔旋转餐厅"})], found=found)
+
+    trace = _online_trace(agent.ask(_ask_request("广州塔旋转餐厅几点关门", city="广州")))
+
+    assert "最接近" in trace.output_summary
+
+
+def test_shouldSayOnlineMissedTooWhenNeitherLayerHasIt():
+    """两层都没有：联网那条路的措辞要与本地库那条区分得开。"""
+    agent, _ = _second_hop_agent(
+        [("search_attractions", {"attraction_name": "广州塔旋转餐厅"})], found=None)
+
+    trace = _online_trace(agent.ask(_ask_request("广州塔旋转餐厅几点关门", city="广州")))
+
+    assert trace.status == "not_found"
+    assert "联网也没查到" in trace.output_summary
+
+
+def test_shouldKeepTheZeroArgumentSearchPathByteIdentical():
+    """不填名字：照旧做发现式检索，且**一次都不碰**按名字查那条路。"""
+    agent, stub = _second_hop_agent([("search_attractions", {})])
+
+    trace = _online_trace(agent.ask(_ask_request("杭州还有什么值得去的")))
+
+    assert stub.asked == []
+    assert trace.output_summary == "高德景点检索到 2 个候选\n候选：河坊街（街区，上城区）"
+
+
+def test_shouldTellTheModelThereIsASecondHopWhenTheCityIsNotIndexed(monkeypatch):
+    """城市不收录 = 本地库这一层没命中，**不是"答案不存在"**——要说清还有下一跳。"""
+    agent = _kb_agent(monkeypatch,
+                      [("search_attractions_by_tag", {"attraction_name": "大熊猫基地"})],
+                      cities=("杭州", "北京", "上海", "广州"))
+
+    trace = _kb_trace(agent.ask(_ask_request("大熊猫基地几点关门", city="成都")))
+
+    assert trace.status == "not_found"
+    assert "可以再用 search_attractions 联网查一次" in trace.output_summary
+
+
+def test_shouldRenderAllDayAsIsInsteadOfOpenAllDay():
+    """「全天开放」本身就是一句完整的话，别拼成「开放 全天开放」。"""
+    found = Attraction(name="白云山", hours="全天开放")
+    agent, _ = _second_hop_agent(
+        [("search_attractions", {"attraction_name": "白云山"})], found=found)
+
+    trace = _online_trace(agent.ask(_ask_request("白云山几点关门", city="广州")))
+
+    assert "｜全天开放｜" in trace.output_summary
+    assert "开放 全天开放" not in trace.output_summary
+
+
+def test_shouldSearchTheCityTheModelAsksForOnTheSecondHop():
+    """方案在上海、问成都的景点：第二跳要按**成都**查。
+
+    少了 city 这一格的话，它会拿方案城市上海去查高德，返回一条上海的"最接近"，
+    用户问成都却答出一个上海景点。
+    """
+    found = Attraction(name="成都大熊猫繁育研究基地", hours="07:30-17:00")
+    agent, stub = _second_hop_agent(
+        [("search_attractions", {"attraction_name": "大熊猫基地", "city": "成都"})], found=found)
+
+    agent.ask(_ask_request("成都大熊猫基地几点关门", city="上海"))
+
+    assert stub.asked == [("成都", "大熊猫基地")]
+
+
+def test_shouldPutTheSecondHopIntoTheRuleText():
+    """客观点那一支的"两层"是写在规则里的，模型不看到就不会发第二次调用。"""
+    from travel_assistant.agent.ask_agent import _SYSTEM_PROMPT
+
+    assert "再用 search_attractions 联网查一次" in _SYSTEM_PROMPT
+    assert "两层都没给到才说没有" in _SYSTEM_PROMPT
+    # 「检索命中」≠「这一格有值」：库里 20~30% 的行开放时间是空的，
+    # 这句把"该不该收手"从"有没有命中"挪到"这一格有没有值"。
+    assert "「检索命中」不等于「这一格有值」" in _SYSTEM_PROMPT
+    # 两层都没给到时，答复的说法。
+    assert "未查询到〈景点名〉的开放时间" in _SYSTEM_PROMPT
+    assert "未查询到〈景点名〉的票价" in _SYSTEM_PROMPT
+
+
 # ---------- 城市锁：search_attractions_by_tag 的 city 参数 ----------
 
 def _city_agent(monkeypatch, script, cities=("杭州", "北京", "上海", "广州")):

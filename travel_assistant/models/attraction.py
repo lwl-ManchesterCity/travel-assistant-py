@@ -19,3 +19,11 @@ class Attraction(CamelModel):
     rating: Optional[float] = None
     image_url: Optional[str] = None
     ticket_price: int = 0
+    # 开放时间与闭馆日（2026-10-16 加，见 docs/ASK_LIVE_HOURS.md §3.2）：
+    # 高德 `biz_ext.opentime2` 一直返回它们，只是以前运行时没读。
+    # 与本地库那两格**同名同形**（`kb/retrieve.py` 的 hours / closed_days），工具层排版共用一套说法。
+    # **追问链不读方案里这两格**：本地库那层是查证过、带 source_url 的，高德这层是原始 POI 文本，
+    # 两者打架时该赢的是前者（同文档 §五第 2 条）。加它们只是让新生成的方案带上，
+    # 前端原样回传整份方案，能穿过一轮往返。
+    hours: Optional[str] = None
+    closed_days: Optional[list[str]] = None

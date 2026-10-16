@@ -4,9 +4,12 @@
 
 - 读方案的三个（`get_plan_overview` / `get_day_plan` / `get_attraction_detail`）可以带定位参数，
   但参数只用来在**已生成的方案内部**找东西，找不到就返回"方案里没有"，绝不外发请求；
-- 联网的三个（`search_attractions` / `query_weather` / `recommend_hotels`）零参数，
-  城市、日期、预算、住宿偏好一律从上下文里的原始请求取——这几个值让模型自己填就会被编造，
-  与 agent/data_tools.py 里那三个取数工具是同一条约定；
+- 联网的三个里，`query_weather` / `recommend_hotels` 零参数：城市、日期、预算、住宿偏好
+  一律从上下文里的原始请求取——这几个值让模型自己填就会被编造，
+  与 agent/data_tools.py 里那三个取数工具是同一条约定。
+  `search_attractions` **有意破例多一格 `attraction_name`**（见下一条同一条理由）：
+  城市、偏好那些编不得，而"问的是哪个景点"是模型才知道、从上下文取不出来的判断。
+  **不填时行为一字不变**，照旧按原始请求做发现式检索；
 - 查本地库的一个（`search_attractions_by_tag`）**有意破例让模型填参数**：`tags`、`attraction_name`
   与 `city`，因为"筛哪个词""问的是哪个景点""问的是哪个城市"正是要模型做的判断，从上下文取不出来。
   `city` 不填就退回方案城市（老行为一字不变）——**它是"查别的城市的景点"那条路的口子**，
@@ -19,6 +22,7 @@
 
 from langchain_core.tools import BaseTool, tool
 
+from ..clients.amap_opentime import ALL_DAY
 from ..kb import (
     KB_CITIES,
     IndexNotBuilt,
@@ -100,6 +104,25 @@ def _attractions_text(result) -> str:
         for attraction in (result.attractions or [])[:_LIST_LIMIT]
     )
     return f"{result.summary}\n候选：{names or '无'}"
+
+
+def _attraction_hours_text(attraction) -> str:
+    """按名字联网查到的那**一条**：名称｜类别｜地址｜开放｜闭馆。
+
+    只在按名字查那条路上打——发现式检索一次 10 条，每条挂开放时间是噪声。
+
+    **不打票价**：这条路回来的 `ticket_price` 是 `_infer_ticket_price` 按类别估的，
+    不是高德的真实门票（高德的 `cost` 混着餐饮人均与住宅房价，见 docs/ASK_LIVE_HOURS.md §五）。
+    写进给模型看的文本就会被当成事实转述出去。
+    """
+    closed = _join([str(day) for day in (attraction.closed_days or [])])
+    # 「全天开放」本身就是一句完整的话，别再拼成「开放 全天开放」。
+    opening = attraction.hours if attraction.hours == ALL_DAY else f"开放 {attraction.hours or '未给出'}"
+    return (
+        f"{attraction.name}｜{attraction.category or '未分类'}｜{attraction.address or '地址未给出'}"
+        f"｜{opening}"
+        f"｜闭馆 {closed or '无'}"
+    )
 
 
 def _kb_list_text(value, empty: str = "未收录") -> str:
@@ -233,11 +256,46 @@ def build_ask_tools(attraction_agent: AttractionAgent,
         return text
 
     @tool
-    def search_attractions() -> str:
-        """按原始请求的城市与偏好重新检索候选景点（含名称、类别、地址）。
-        只在方案里查不到需要的信息时才用；无需参数，查询条件取自本次追问携带的原始请求。"""
+    def search_attractions(attraction_name: str = "", city: str = "") -> str:
+        """联网检索景点，两种用法。
+        ① 不填景点名：按原始请求的城市与偏好检索**一批**候选景点（含名称、类别、地址）。
+        ② 填了景点名：只查**这一个**景点，返回它的地址与**开放时间、闭馆日**——
+        问「某个景点几点关门」而本地库没给到这一格（或这个城市不收录）时走这条。
+        名字填「越秀公园」这样的景点名，不要连问句一起填。
+        city 只在填了景点名、且问的是**别的城市**时才填（填「成都」）；不填就是本次行程的城市。
+        不填景点名时 city 不起作用。"""
         context = current_ask_context()
-        summary = f"城市={context.request.city}，偏好={'、'.join(context.request.preferences or [])}"
+        plan_city = context.request.city or ""
+        named = (attraction_name or "").strip()
+        if named:
+            # 模型没指定就用方案城市（老行为一字不变）；指定了就用它——
+            # 与 search_attractions_by_tag 那条同一条口径：问别的城市要填 city。
+            # 少了这一格的话，方案在上海、问成都的景点时，第二跳会拿**上海**去查高德，
+            # 返回一条上海的"最接近"，用户问成都却答出一个上海景点。
+            city = (city or "").strip() or plan_city
+            summary = f"城市={city}，景点名={named}"
+            try:
+                attraction = attraction_agent.find_by_name(city, named)
+            except Exception as exception:  # noqa: BLE001 - 联网失败要留在轨迹里，让模型改用方案内数据作答
+                text = f"联网查「{named}」失败：{exception}"
+                context.record("search_attractions", "按名字联网查景点", summary, text, status="failed")
+                return text
+            if attraction is None:
+                # 与本地库那条路的措辞要能区分开，否则模型分不清是库没有还是联网也没有。
+                text = f"联网也没查到「{named}」这个景点"
+                context.record("search_attractions", "按名字联网查景点", summary, text, status="not_found")
+                return text
+            text = _attraction_hours_text(attraction)
+            if (attraction.name or "").strip() != named:
+                # 高德在没有同名时返回"最接近的那个"（amap_attraction.find_attraction_by_name
+                # 里 `exact = [...] or candidates`），问「广州塔旋转餐厅」可能返回「广州塔」。
+                # **不做硬过滤**：`用户原词 in POI名` 会把「陈家祠」vs「陈家祠堂」这类简称误杀。
+                # 把判断交给模型，与规则 12（返回了不等于对得上，自己要核）同一条思路。
+                text = f"高德只搜到名字最接近的「{attraction.name}」，不确定是不是你要找的。\n{text}"
+            context.record("search_attractions", "按名字联网查景点", summary, text)
+            return text
+        # 发现式那条路不看 city：它取的就是本次行程的城市，行为一字未变。
+        summary = f"城市={plan_city}，偏好={'、'.join(context.request.preferences or [])}"
         try:
             result = attraction_agent.search(context.request)
         except Exception as exception:  # noqa: BLE001 - 联网失败要留在轨迹里，让模型改用方案内数据作答
@@ -300,8 +358,12 @@ def build_ask_tools(attraction_agent: AttractionAgent,
                           "请只用方案内已有的信息作答", "failed")
 
         if city and city not in cities:
+            # 「库没收录」≠「答案不存在」：**只报本地库这一层的结果**，并指出还有下一跳。
+            # 末句若只说"本地库答不了"，模型会把它读成最终结论、不再走联网那次
+            # （见 docs/ASK_LIVE_HOURS.md §3.7.1）。下一跳走不走由规则 11 定，
+            # 不在工具里替模型下结论。
             return missed(f"本地景点资料库目前只有{'、'.join(cities)}，没有{city}的景点，"
-                          "这个城市的景点问题本地库答不了")
+                          "本地库这边答不了——可以再用 search_attractions 联网查一次")
 
         unknown = [tag for tag in picked if tag not in vocabulary_words()]
         if unknown:

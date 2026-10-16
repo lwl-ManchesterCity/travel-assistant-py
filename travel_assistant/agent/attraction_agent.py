@@ -21,6 +21,15 @@ class AttractionAgent:
             provider=self._attraction_client.get_metadata(),
         )
 
+    def find_by_name(self, city: str, name: str) -> Attraction | None:
+        """按名字查**单个**景点，查不到返回 None。
+
+        走 client 的 `find_attraction_by_name`（`clients/base.py` 里的可选能力，
+        基类默认返回 None，所以本地/规则那几个兜底 provider 不会因为这条路报错）。
+        收在 agent 上而不是让工具直接拿 client：与其余工具一致，都是「工具 → agent → client」。
+        """
+        return self._attraction_client.find_attraction_by_name(city, name)
+
     def _search_attractions(self, request: TripPlanRequest) -> list[Attraction]:
         query = AttractionQuery(city=request.city, preferences=request.preferences)
         candidate_attractions = self._attraction_client.find_attractions(query)

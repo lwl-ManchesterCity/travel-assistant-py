@@ -61,6 +61,9 @@ class Container:
     llm_client: LlmClient
     trip_planning_service: TripPlanningService
     ask_agent: AskAgent
+    # 追问链把它裹进工具里，手上不留引用；验收探针要单独按名字查一个景点
+    # （挑「本地库没有、高德给得出开放时间」的靶子），所以在这里也露一格。
+    attraction_agent: AttractionAgent
     auth_service: AuthService
     preference_service: PreferenceService
     episode_service: EpisodeService
@@ -155,6 +158,7 @@ def build_container(settings: Settings | None = None) -> Container:
         llm_client=llm_client,
         trip_planning_service=TripPlanningService(trip_adjustment_agent, loop_planning_agent),
         ask_agent=ask_agent,
+        attraction_agent=attraction_agent,
         auth_service=auth_service,
         preference_service=preference_service,
         episode_service=episode_service,

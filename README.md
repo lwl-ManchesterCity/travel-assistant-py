@@ -241,8 +241,10 @@ data/                 景点资料、标签表；chroma/ 是本地生成的索�
 由 `test_*_store_postgres.py` 三个文件单独守，它们要一个真的库。
 
 端到端验收另有一套探针：起真服务、连真库、调真模型，跑一次几分钟。**探针随仓库走**，
-在 `scripts/preference_probe.py`（长期记忆那几档的判据都在它里面），
-从仓库根跑：`.venv/bin/python scripts/preference_probe.py`。
+从仓库根跑：
+
+- `scripts/preference_probe.py` —— 长期记忆那几档的判据都在它里面
+- `scripts/opening_hours_probe.py` —— 追问侧「开放时间接两层」：本地库没命中要退到高德
 两层的分工是：单元测试证明**每个函数按写的做**，探针证明**整条链真的接通了**——
 后者能抓到前者抓不到的（HTTP 那条路上 `user_id` 有没有传到底、真库认不认那个唯一键、
 删掉之后是不是真的不再进提示词）。
