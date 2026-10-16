@@ -6,6 +6,8 @@
 编出来的数直接进了决策，页面上也分不出来。
 """
 
+from types import SimpleNamespace
+
 from travel_assistant.agent.planner_agent import PlannerAgent
 from travel_assistant.clients.amap_attraction import AmapAttractionClient
 from travel_assistant.models.attraction import Attraction
@@ -100,3 +102,52 @@ def test_to_attraction_leaves_the_two_fields_none_without_biz_ext():
     attraction = _client()._to_attraction(poi)
     assert attraction.hours is None
     assert attraction.closed_days is None
+
+
+# ---------- 按名字查一个景点：同名的空壳 vs 数据齐全的近似名 ----------
+
+# 空壳：名字精确对得上，但**一个有用字段都没有**（没有 biz_ext → 没评分、没开放时间）。
+_SHELL = {"id": "B0SHELL", "name": "白云山", "location": "113.30,23.18",
+          "type": "风景名胜;风景名胜;城市漫游"}
+# 真景点：名字更长，数据齐全。以前它连候选都进不了——`exact` 那一步只留完全同名的。
+_RICH = {"id": "B0RICH", "name": "广州市白云山风景名胜区", "location": "113.30,23.19",
+         "type": "风景名胜;风景名胜;国家级景点",
+         "biz_ext": {"rating": "4.6", "opentime2": "周一至周日 06:00-21:00"}}
+
+
+def _by_name_client(pois: list[dict]) -> AmapAttractionClient:
+    client = _client()
+    client._amap = SimpleNamespace(mock_response=None)
+    client._fetch_poi_response = lambda city, name: {"pois": pois}
+    return client
+
+
+def test_a_data_rich_near_match_beats_an_empty_shell_with_the_exact_name():
+    """问「白云山」时高德会同时给回两条：一条**同名但全空**的重复 POI，一条名字更长、
+    数据齐全的真景点。以前「同名优先」会选中空壳，于是「白云山几点关门」答不出来——
+    而数据就在隔壁那条里。真机复现于 2026-10-16（见 docs/ASK_LIVE_HOURS.md §七）。
+    """
+    picked = _by_name_client([_SHELL, _RICH]).find_attraction_by_name("广州", "白云山")
+
+    assert picked.name == "广州市白云山风景名胜区"
+    assert picked.hours == "06:00-21:00"
+
+
+def test_an_exact_match_with_data_still_wins_over_a_near_match():
+    """别矫枉过正：同名那条**有数据**时它仍然是首选——「同名优先」这条规矩没被推翻。"""
+    rich_exact = {"id": "B0EXACT", "name": "白云山", "location": "113.30,23.18",
+                  "type": "风景名胜;风景名胜;国家级景点",
+                  "biz_ext": {"rating": "4.2", "opentime2": "周一至周日 06:00-21:00"}}
+
+    picked = _by_name_client([rich_exact, _RICH]).find_attraction_by_name("广州", "白云山")
+
+    assert picked.name == "白云山"
+    assert picked.rating == 4.2
+
+
+def test_when_every_candidate_is_a_shell_the_exact_one_is_still_returned():
+    """全都是空壳时退回原样——有总比没有强，别把「找不到」当答案。"""
+    picked = _by_name_client([_SHELL]).find_attraction_by_name("广州", "白云山")
+
+    assert picked is not None
+    assert picked.name == "白云山"

@@ -18,6 +18,16 @@ log = logging.getLogger(__name__)
 _PATH = "/v3/place/text"
 
 
+def _has_data(attraction: Attraction) -> bool:
+    """这条记录有没有**用得上的**内容。
+
+    高德会返回一类重复 POI：名字对、坐标也有，但 `biz_ext` 整个是空的——没评分、也没开放
+    时间（真机例子：「白云山」，类别只有「城市漫游」，地址写成「白云区白云区」）。
+    判"值不值得选"就看这两样：只有名字和坐标的记录，答不了"几点关门"，补搜也补不出东西。
+    """
+    return attraction.rating is not None or bool(attraction.hours)
+
+
 class AmapAttractionClient(AttractionClient):
 
     def __init__(self, amap: AmapSettings, fallback_client: InMemoryAttractionClient):
@@ -54,7 +64,13 @@ class AmapAttractionClient(AttractionClient):
         if not candidates:
             return None
         exact = [a for a in candidates if a.name == name] or candidates
-        return max(exact, key=lambda a: a.rating if a.rating is not None else 0.0)
+        # **别因为名字精确就选空壳。** 同名的那撮里可能混着上面说的那种重复 POI——
+        # 名字对得上，却一个有用字段都没有；而真景点（「广州市白云山风景名胜区」）
+        # 数据齐全，只因名字不是**完全相等**，被上一行 `exact` 筛掉了。
+        # 所以先把有数据的挑出来；同名的全是空壳时，回到全部候选里再找一遍——
+        # 那才是有数据那条真正待的地方。
+        rich = [a for a in exact if _has_data(a)] or [a for a in candidates if _has_data(a)]
+        return max(rich or exact, key=lambda a: a.rating if a.rating is not None else 0.0)
 
     def get_metadata(self) -> ProviderMetadata:
         return ProviderMetadata(
